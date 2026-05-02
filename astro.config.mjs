@@ -8,7 +8,7 @@ export default defineConfig({
     starlight({
       title: 'Helia',
       description:
-        'Apprends le développement web avec Helia, le guide francophone gratuit qui te mène de zéro à dev compétent — 17 axes, 5 parcours immersifs, 280 termes, 32 pièges réels.',
+        'Apprends le développement web avec Helia : guide francophone gratuit, de zéro à dev compétent. 17 axes, 5 parcours immersifs, 280 termes.',
       locales: {
         root: { label: 'Français', lang: 'fr' },
       },
