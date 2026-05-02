@@ -10,6 +10,23 @@ import PersonaSwitcher from './PersonaSwitcher.astro';
 <ClientRouter />
 
 <!--
+  Anti-flash blanc à la navigation :
+  meta color-scheme indique au browser de respecter le mode système
+  pour les éléments natifs (scrollbars, focus rings, bg par défaut).
+  Le style inline force le bg color de <html> dès le 1er paint, avant
+  même que le CSS externe n'arrive. Couvre les 3 cas : auto, light, dark.
+-->
+<meta name="color-scheme" content="light dark" />
+<style is:inline>
+  html { background-color: #0a0a0d; color: #ffffff; }
+  @media (prefers-color-scheme: light) {
+    html { background-color: #ffffff; color: #0a0a0d; }
+  }
+  html[data-theme='light'] { background-color: #ffffff; color: #0a0a0d; }
+  html[data-theme='dark']  { background-color: #0a0a0d; color: #ffffff; }
+</style>
+
+<!--
   Critical CSS inline (anti-FOUC) — positionne immédiatement les triggers
   flottants Cmd+K et persona-switcher pour éviter qu'ils apparaissent
   en haut-gauche (flux par défaut) avant que le CSS principal n'arrive.
