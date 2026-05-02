@@ -82,8 +82,12 @@ const ACTIONS = [
   <kbd class="cmdk-trigger-kbd"><span class="cmdk-trigger-mod">⌘</span>K</kbd>
 </button>
 
-<style>
-  /* === Trigger flottant === */
+<style is:global>
+  /* === Trigger flottant ===
+     `is:global` est nécessaire car la liste de résultats est rendue dynamiquement
+     via document.createElement() en JS — ces éléments n'héritent pas du scoping
+     CSS Astro, donc les sélecteurs scopés ne matchent rien. Tous les sélecteurs
+     ici sont préfixés `.cmdk-*` pour éviter toute collision. */
   .cmdk-trigger {
     display: inline-flex;
     align-items: center;
@@ -201,15 +205,15 @@ const ACTIONS = [
   }
 
   .cmdk-section {
-    margin-top: 0.6rem;
+    margin-top: 1.1rem;
   }
-  .cmdk-section:first-child { margin-top: 0.2rem; }
+  .cmdk-section:first-child { margin-top: 0.3rem; }
 
   .cmdk-section-title {
-    padding: 0.35rem 0.6rem;
-    font-size: 0.68rem;
+    padding: 0.25rem 0.6rem 0.5rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.09em;
+    letter-spacing: 0.1em;
     color: var(--sl-color-gray-2);
     font-weight: 700;
     display: flex;
@@ -227,7 +231,7 @@ const ACTIONS = [
     display: flex;
     align-items: center;
     gap: 0.7rem;
-    padding: 0.55rem 0.6rem;
+    padding: 0.55rem 0.65rem;
     cursor: pointer;
     text-decoration: none;
     color: inherit;
@@ -238,6 +242,30 @@ const ACTIONS = [
     font: inherit;
     border-radius: 0.4rem;
     transition: background 80ms ease, border-color 80ms ease;
+  }
+
+  .cmdk-browse-hint {
+    margin-top: 1.2rem;
+    padding: 0.85rem 1rem;
+    font-size: 0.78rem;
+    color: var(--sl-color-gray-2);
+    text-align: center;
+    border-top: 1px dashed var(--sl-color-gray-5);
+    background: var(--sl-color-gray-7, transparent);
+    border-radius: 0.4rem;
+  }
+  .cmdk-browse-hint-icon {
+    display: inline-block;
+    margin-right: 0.3rem;
+    opacity: 0.7;
+    animation: cmdkBounce 1.5s ease-in-out infinite;
+  }
+  @keyframes cmdkBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(2px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cmdk-browse-hint-icon { animation: none; }
   }
   .cmdk-item:hover { background: var(--sl-color-gray-6); }
   .cmdk-item[aria-selected='true'] {
@@ -584,27 +612,44 @@ const ACTIONS = [
   // === Renderer principal ===
   let currentSearchToken = 0;
 
+  function appendBrowseHint(container: HTMLElement, axesCount: number) {
+    const hint = document.createElement('div');
+    hint.className = 'cmdk-browse-hint';
+    hint.innerHTML = `<span class="cmdk-browse-hint-icon">↓</span> Tape pour chercher dans les ${axesCount} axes, 280 termes et 32 pièges`;
+    container.appendChild(hint);
+  }
+
   async function renderResults(container: HTMLElement, query: string, statusEl: HTMLElement | null) {
     const data = getData();
     const all = buildAllItems(data);
-    const filtered = filterAndSort(all, query);
 
-    // Section "Récent" — visible seulement quand pas de query
-    let displayItems: Array<CmdkItem & { _indices?: number[] }> = [];
     if (!query.trim()) {
-      const recents = loadRecents();
+      // ÉTAT VIDE : on n'affiche QUE Actions + Récent (3 max) + Raccourcis.
+      // Les 17 axes ne sont PAS dumpés ici, on invite à taper pour les trouver.
+      const actionItems = all.filter((i) => i.section === 'Actions');
+      const shortcutItems = all.filter((i) => i.section === 'Raccourcis');
+      const recents = loadRecents().slice(0, 3);
       const recentItems = recents
         .map((path) => all.find((i) => i.href === path))
         .filter((x): x is CmdkItem => Boolean(x))
         .map((it) => ({ ...it, section: 'Récent' }));
-      displayItems = [...recentItems, ...all];
-    } else {
-      displayItems = filtered;
+
+      const displayItems = [...actionItems, ...recentItems, ...shortcutItems];
+      const grouped = groupBySection(displayItems);
+      const ORDER = ['Actions', 'Récent', 'Raccourcis'];
+      const ordered: typeof grouped = {};
+      for (const k of ORDER) if (grouped[k]) ordered[k] = grouped[k];
+
+      renderItems(container, ordered, statusEl);
+      appendBrowseHint(container, data.axes.length);
+      currentSearchToken++;
+      return;
     }
 
-    const grouped = groupBySection(displayItems);
-    // Ordre des sections
-    const ORDER = ['Actions', 'Récent', 'Raccourcis', 'Axes', 'Résultats du contenu'];
+    // ÉTAT AVEC QUERY : recherche complète sur tout
+    const filtered = filterAndSort(all, query);
+    const grouped = groupBySection(filtered);
+    const ORDER = ['Actions', 'Raccourcis', 'Axes', 'Résultats du contenu'];
     const ordered: typeof grouped = {};
     for (const k of ORDER) if (grouped[k]) ordered[k] = grouped[k];
     for (const [k, v] of Object.entries(grouped)) if (!ordered[k]) ordered[k] = v;
@@ -614,7 +659,7 @@ const ACTIONS = [
     // Pagefind asynchrone — n'écrase pas si query a changé
     if (query.trim().length >= 2) {
       const token = ++currentSearchToken;
-      const pfResults = await fetchPagefind(query, displayItems);
+      const pfResults = await fetchPagefind(query, filtered);
       if (token !== currentSearchToken) return;
       if (pfResults.length) {
         ordered['Résultats du contenu'] = pfResults;

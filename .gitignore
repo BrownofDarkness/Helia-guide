@@ -42,3 +42,6 @@ coverage/
 
 # Pagefind (généré au build)
 **/pagefind/
+
+# Claude Code (config locale, permissions, mémoire personnelle)
+.claude/
