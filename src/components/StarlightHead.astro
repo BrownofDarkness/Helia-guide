@@ -8,6 +8,41 @@ import PersonaSwitcher from './PersonaSwitcher.astro';
 
 <Default><slot /></Default>
 <ClientRouter />
+
+<!--
+  Critical CSS inline (anti-FOUC) — positionne immédiatement les triggers
+  flottants Cmd+K et persona-switcher pour éviter qu'ils apparaissent
+  en haut-gauche (flux par défaut) avant que le CSS principal n'arrive.
+  Caché par défaut, révélé quand le CSS principal a chargé via une transition opacity.
+-->
+<style is:inline>
+  #cmdk-trigger,
+  #persona-switcher {
+    position: fixed;
+    right: 1.25rem;
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+  #cmdk-trigger { bottom: 1.25rem; }
+  #persona-switcher { bottom: 4.25rem; z-index: 49; }
+  /* Une fois le CSS principal chargé, .cmdk-loaded est ajouté à <html>
+     et révèle les triggers. */
+  html.cmdk-loaded #cmdk-trigger,
+  html.cmdk-loaded #persona-switcher { opacity: 1; }
+</style>
+<script is:inline>
+  // Marque la racine comme "CSS chargé" dès que le DOM est prêt.
+  // L'attribut hidden initial évite le FOUC, le fade-in fait le reste.
+  if (document.readyState !== 'loading') {
+    document.documentElement.classList.add('cmdk-loaded');
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      document.documentElement.classList.add('cmdk-loaded');
+    });
+  }
+</script>
+
 <ProgressTracker />
 <CommandPalette />
 <PersonaSwitcher />
