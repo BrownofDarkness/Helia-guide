@@ -1,0 +1,34 @@
+---
+/**
+ * Composant Term — terme du glossaire avec tooltip.
+ *
+ * Au survol, affiche la définition courte. Au clic, ouvre la page glossaire
+ * sur l'entrée correspondante.
+ *
+ * Usage :
+ *   <Term>closure</Term>             ← clé déduite du contenu
+ *   <Term k="closure">closures</Term>← affichage différent de la clé
+ */
+
+import { glossaire, canonicalKey } from '../data/glossaire';
+
+interface Props {
+  k?: string;
+}
+
+const { k } = Astro.props;
+const html = await Astro.slots.render('default');
+const text = html.replace(/<[^>]*>/g, '').trim();
+const key = canonicalKey(k ?? text);
+const entry = glossaire[key];
+const tooltip = entry?.short ?? `Terme à documenter : ${key}`;
+---
+
+<a
+  class="term"
+  href={`/glossaire/#${key}`}
+  title={tooltip}
+  aria-describedby="glossary-hint"
+>
+  <slot />
+</a>

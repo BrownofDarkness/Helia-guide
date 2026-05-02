@@ -1,0 +1,77 @@
+<!-- Page volontairement mal codée — c'est le canevas à REFAIRE -->
+<!-- Lance Lighthouse dessus pour voir l'état initial. -->
+<html>
+<head>
+<title>cafe</title>
+<style>
+body { font-family: arial; margin: 0; padding: 0; }
+#tt { background: #aaa; color: #ccc; padding: 20px; font-size: 12px; }
+#tt #t { color: #ddd; font-size: 28px; }
+#mn { background: #555; padding: 10px; }
+#mn span { color: #999; padding: 0 15px; cursor: pointer; }
+#hero { background: url('/hero.jpg') no-repeat center; background-size: cover; height: 400px; }
+#sec1 { padding: 30px; background: #fff; }
+#sec1 .t { color: #bbb; font-size: 16px; font-weight: normal !important; }
+#sec1 div { display: inline-block; width: 30%; padding: 10px; }
+#feedback { padding: 30px; }
+#feedback input { padding: 8px; border: 1px solid #ddd; width: 100%; margin: 5px 0; }
+#feedback button { background: #888; color: #aaa; padding: 10px 20px; border: 0; cursor: pointer; }
+#feedback button:focus { outline: none !important; }
+#bug { animation: shake 0.5s infinite; padding: 20px; background: yellow; color: white; }
+@keyframes shake { 0% { transform: translateX(0); } 50% { transform: translateX(5px); } 100% { transform: translateX(0); } }
+#footer { background: black; color: #555; padding: 20px; font-size: 11px; }
+img { max-width: 100%; }
+</style>
+</head>
+<body>
+
+<div id="tt">
+  <div id="t">Cafe Emeraude</div>
+  Le café qui tourne tout seul depuis 1952
+</div>
+
+<div id="mn">
+  <span onclick="document.getElementById('sec1').scrollIntoView()">Nos cafés</span>
+  <span onclick="document.getElementById('feedback').scrollIntoView()">Contact</span>
+</div>
+
+<div id="hero">
+  <img src="/cafe.jpg" />
+</div>
+
+<div id="sec1">
+  <div class="t">Notre offre</div>
+  <div>
+    <img src="/cafe1.jpg" />
+    <div>Café Robusta</div>
+    <div>Le classique reconstituant</div>
+  </div>
+  <div>
+    <img src="/cafe2.jpg" />
+    <div>Espresso</div>
+    <div>Le coup de fouet matinal</div>
+  </div>
+  <div>
+    <img src="/cafe3.jpg" />
+    <div>Latte</div>
+    <div>La douceur réconfortante</div>
+  </div>
+</div>
+
+<div id="bug">⚠️ Pensez à venir nous voir avant la fermeture !!!</div>
+
+<div id="feedback">
+  <div class="t">Inscrivez-vous à notre lettre d'information</div>
+  <input placeholder="Votre nom" />
+  <input placeholder="Votre email" />
+  <input placeholder="Votre numéro de téléphone" />
+  <textarea placeholder="Votre message"></textarea>
+  <button>Envoyer</button>
+</div>
+
+<div id="footer">
+  © 2026 Cafe Emeraude
+</div>
+
+</body>
+</html>

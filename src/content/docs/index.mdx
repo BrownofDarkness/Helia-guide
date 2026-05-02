@@ -1,0 +1,115 @@
+---
+title: Helia
+description: Helia — guide francophone du développeur web. 17 axes, 5 parcours immersifs, de zéro à compétent.
+template: splash
+hero:
+  title: Helia
+  tagline: Guide francophone du développeur web — 17 axes, 5 parcours immersifs, un projet réel à suivre du premier titre HTML au déploiement en production.
+  actions:
+    - text: Démarrer
+      link: /00-preambule/
+      icon: right-arrow
+      variant: primary
+    - text: Voir les 5 parcours
+      link: /fil-rouge/
+      icon: open-book
+    - text: Comment lire ce guide
+      link: /00-preambule/conventions/
+      icon: information
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import ScenarioPicker from '../../components/ScenarioPicker.astro';
+import ProgressOverview from '../../components/ProgressOverview.astro';
+import AxesRoadmap from '../../components/AxesRoadmap.astro';
+
+<ProgressOverview />
+
+## Le guide en chiffres
+
+<CardGrid>
+  <Card title="17 axes" icon="list-format">
+    Des fondations (matériel, réseau, algorithmie) à la carrière, en passant par le frontend, le backend, la sécurité et le DevOps.
+  </Card>
+  <Card title="5 parcours fil rouge" icon="random">
+    Marie, Hugo, Sami, Léa et Yanis construisent chacun un vrai projet. Tu choisis celui qui te ressemble — tu peux changer à tout moment.
+  </Card>
+  <Card title="280 termes de glossaire" icon="document">
+    Tous les mots techniques expliqués, accessibles d'un survol depuis n'importe quelle page.
+  </Card>
+  <Card title="18 exercices guidés" icon="pencil">
+    Chaque axe se conclut par un projet — canevas + correction commentée pour pratiquer plutôt que regarder.
+  </Card>
+  <Card title="32 pièges réels" icon="warning">
+    Les vrais bugs rencontrés en construisant ce guide — Symptôme · Cause · Fix · Leçon. Pour t'épargner des heures de débogage.
+  </Card>
+</CardGrid>
+
+<ScenarioPicker />
+
+## Pourquoi ce guide ?
+
+La plupart des ressources d'apprentissage du dev web sont **fragmentées** : un tuto HTML ici, une vidéo React là, une formation Python ailleurs. Au bout de 6 mois, tu sais 50 trucs sans savoir comment ils s'assemblent.
+
+**Ce guide rassemble tout en un parcours cohérent** : du « comment fonctionne un ordinateur » jusqu'au déploiement en production, en passant par l'analyse, la sécurité, l'accessibilité, le DevOps et la carrière.
+
+Trois différences avec ce que tu as déjà vu :
+
+| Différence | Ce que ça change |
+|------------|------------------|
+| **Un personnage qui code avec toi** | Tu vois pourquoi tu apprends `Flexbox` aujourd'hui — pour aligner les cartes produits de Lina |
+| **Multi-langages backend** | Trois parcours — Node/TS (Hono), Python (Django/Flask/FastAPI), PHP (Laravel/Symfony) — choisis le tien |
+| **Tout 2026** | React 19, Next.js 16, Vue 3.6, Svelte 5, Astro 6, Postgres 17, Hono, Drizzle, Better Auth — pas de tuto périmé |
+
+## Comment progresser
+
+<CardGrid>
+  <Card title="🌱 Débutant complet" icon="seedling">
+    Linéaire : axe 1 → 2 → 3 → … → 17. Compte 6 à 9 mois temps plein, 12 à 24 mois en partiel.
+  </Card>
+  <Card title="🌿 Reconversion ou junior" icon="rocket">
+    Modulaire dès l'axe 4. Saute aux sujets qui te manquent (analyse, sécu, DevOps, soft skills).
+  </Card>
+  <Card title="🌳 Senior" icon="star">
+    Référence ciblée. Lis ce qui te manque (cadrage stratégique, IA appliquée, RGPD by design, axe 17 carrière).
+  </Card>
+</CardGrid>
+
+<AxesRoadmap />
+
+## Par où commencer maintenant
+
+<CardGrid>
+  <LinkCard
+    title="📖 Préambule"
+    href="/00-preambule/"
+    description="Méthode, durée, philosophie du guide, et choix de ton fil rouge initial."
+  />
+  <LinkCard
+    title="🧭 Comment lire ce guide"
+    href="/00-preambule/conventions/"
+    description="Les conventions visuelles en 2 minutes : badges de niveau, scénarios, glossaire."
+  />
+  <LinkCard
+    title="🏁 Axe 1 — Fondations informatiques"
+    href="/01-fondations/"
+    description="Si tu démarres : matériel, OS, ligne de commande, données, algorithmie. Indispensables."
+  />
+  <LinkCard
+    title="📚 Glossaire complet"
+    href="/glossaire/"
+    description="260+ termes techniques expliqués en une phrase. Consultable depuis n'importe quelle page (mots soulignés)."
+  />
+</CardGrid>
+
+## À qui s'adresse ce guide ?
+
+- **Débutants complets** — tu n'as jamais codé, ce guide est ton point d'entrée. Suis-le linéairement.
+- **Devs en reconversion** — tu as une base technique (autre métier IT, formation courte) — pioche les axes qui te manquent.
+- **Juniors** — combler les lacunes typiques : analyse, sécurité, DevOps, soft skills, carrière.
+- **Devs confirmés** — référence sur les sujets 2026 (IA appliquée, edge, RGPD, accessibilité).
+
+---
+
+> Bonne lecture 🌱 — et n'oublie pas : **construis publiquement**. Pousse ton code sur GitHub dès l'axe 4. Ton portfolio se construit pendant l'apprentissage, pas après.

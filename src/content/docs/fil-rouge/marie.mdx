@@ -1,0 +1,87 @@
+---
+title: 🥖 Marie · La Boulangerie de Lina
+description: Marie, en reconversion, aide sa sœur Lina à mettre sa boulangerie artisanale en ligne. E-commerce local et chaleureux.
+sidebar:
+  order: 1
+  label: Marie
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Le pitch
+
+**Marie**, 32 ans, ex-prof d'histoire en reconversion. Sa **sœur Lina** tient une petite boulangerie artisanale dans le 11ᵉ arrondissement de Paris. Le bouche-à-oreille marche bien, mais Lina perd des clients qui *« passent en vélo et ne savent pas si elle est ouverte »*. Marie se propose de faire le site.
+
+Elle débute en code, mais elle a **un mois de congés** devant elle et un compte GitHub fraîchement créé.
+
+## Le projet : « La Boulangerie de Lina »
+
+| | |
+|---|---|
+| **Type** | Site e-commerce local + click & collect |
+| **Cible** | Habitants du quartier (4-5 km autour) |
+| **Volume** | ~ 30-50 commandes/jour à l'objectif |
+| **Stack frontend** | Astro pour la vitrine, React pour le panier |
+| **Stack backend** | Hono (Node 24) |
+| **Base de données** | Postgres + Drizzle |
+| **Auth** | Better Auth (email + magic link) |
+| **Paiement** | Stripe |
+| **Hébergement** | Vercel + Neon |
+
+## L'arc narratif (axes 5 à 8)
+
+### Axe 5 — Vitrine HTML / CSS
+
+| Sous-axe | Épisode |
+|---|---|
+| 5.1 HTML | Marie maquette la page d'accueil, la liste des produits, la page de contact. Premier piège : `<div>` partout, des textes sans hiérarchie. Lina ne retrouve pas son téléphone. |
+| 5.2 CSS | Marie aligne les cartes produits avec Flexbox. Découvre Grid pour la galerie. Apprend les variables CSS pour les couleurs de la boulangerie (or et brun). |
+| 5.3 Accessibilité | Une amie de Lina, malvoyante, n'arrive pas à lire les prix. Marie corrige les contrastes et les labels. |
+
+### Axe 6 — JavaScript
+
+| Sous-axe | Épisode |
+|---|---|
+| 6.1 JS essentiel | Le bouton « Ajouter au panier » ne fait rien. Marie écrit ses premières fonctions, manipule le DOM, gère l'état du panier en mémoire. |
+| 6.2 Async | Le formulaire de contact envoie l'email, mais l'utilisateur n'a aucun feedback pendant 3 secondes. Marie découvre `fetch` + `await` + état loading. |
+| 6.3 APIs navigateur | Le panier disparaît au refresh. Marie persiste avec `localStorage`. Plus tard : géolocalisation pour suggérer les boutiques proches. |
+| 6.4 TypeScript | Le panier accepte des produits sans prix → bug en prod. Marie ajoute des types. Plus jamais. |
+
+### Axe 7 — Frameworks frontend
+
+| Sous-axe | Épisode |
+|---|---|
+| 7.1 Concepts communs | La page panier est devenue un nid à bugs. Marie comprend pourquoi les frameworks existent. |
+| 7.2 React | Migration progressive : la page panier en React, le reste reste en Astro. |
+| 7.3 Alternatives | Marie évalue Vue et Svelte pour Lina. Garde React parce qu'elle a déjà investi le temps. |
+| 7.4 Méta-frameworks | Lina veut un blog des recettes. Marie ajoute Next.js pour le SSR + le SEO. |
+| 7.5 Outils de build | Le bundle initial passe de 280 KB à 80 KB. Lighthouse remonte de 67 à 94. |
+| 7.6 Design systems | Marie pose Tailwind v4 + 3 composants partagés (Button, Card, Input). |
+
+### Axe 8 — Backend
+
+| Sous-axe | Épisode |
+|---|---|
+| 8.0 Concepts communs | Lina veut voir ses commandes en temps réel. Il faut un vrai backend, plus juste localStorage. |
+| 8.1 Node + Hono | Marie écrit l'API : `POST /orders`, `GET /orders/:id`. Première migration de schéma. |
+| 8.2 Auth + sécu | Inscription clients, magic link Better Auth, cookie HttpOnly + SameSite. |
+| 8.3 Backoffice | Lina se connecte sur `/admin`, voit ses commandes du jour, change le statut « prêt à retirer ». |
+
+## Incidents naturels qu'on rencontre plus loin
+
+- **Axe 12 sécu** : un client malveillant tente d'injecter du JS dans le formulaire commentaire ; Marie comprend ce qu'est XSS.
+- **Axe 13 perf** : Lina ajoute 50 photos de pains. Le LCP grimpe à 6 s. Marie convertit en AVIF + `srcset`.
+- **Axe 13 a11y** : RGAA reste à valider — Marie passe axe-core et corrige 4 violations.
+- **Axe 14 DevOps** : pipeline GitHub Actions, déploiement Vercel sur push.
+- **Axe 16** : pour le **temps réel** (chat avec Lina) et le **mobile PWA**, Marie bascule sur le parcours **Léa** plus complet sur ce sujet.
+
+## Pourquoi Marie te conviendrait
+
+- Tu aimes les **histoires personnelles** plutôt que les abstractions corporate.
+- Tu es **débutant total** et tu veux un personnage qui débute aussi.
+- Tu es à l'aise avec un projet **local et concret** (e-commerce de quartier).
+- Tu n'as pas l'ambition d'aller toucher au real-time ou à l'IA tout de suite.
+
+<Aside type="tip">
+À tout moment, tu peux basculer sur un autre parcours via les onglets en haut de chaque page — tu ne « perds » rien. Le contenu technique est le même, seul l'angle narratif change.
+</Aside>

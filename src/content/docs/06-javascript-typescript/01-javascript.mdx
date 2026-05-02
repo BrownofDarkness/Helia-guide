@@ -1,0 +1,493 @@
+---
+title: 6.1 — JavaScript essentiel
+description: Types, scope, closures, prototypes, this, modules — les fondamentaux à maîtriser avant les frameworks.
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Level from '../../../components/Level.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+<Level value="débutant" reading="40 min" prereq="axe 5 (HTML/CSS) lu" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="2">
+La vitrine de Lina est en ligne. Mais quand on clique sur **« Ajouter au panier »**, il ne se passe rien — pour l'instant c'est juste un `<button>` décoratif. Marie ouvre son éditeur, crée son premier fichier `panier.js`, et apprend à écrire des fonctions. Elle va vite découvrir un piège : son panier de 3 croissants ne se met pas à jour comme prévu. Pourquoi ? Bienvenue en JavaScript.
+</Scenario>
+
+<Scenario parcours="B" episode="2">
+Le planning de Studio Pulse s'affiche. Mais **personne ne peut filtrer** par type de cours. Les élèves doivent scroller jusqu'à trouver « yoga prénatal vendredi 10h ». Hugo veut ajouter des boutons « Yoga / Pilates / Méditation » qui filtrent la liste en live. C'est son entrée en JavaScript.
+</Scenario>
+
+<Scenario parcours="C" episode="2">
+Sami a 200 produits affichés. Mais **la recherche tapante n'existe pas**, le filtre allergènes non plus, le panier non plus. Ce sont les fondations de l'expérience GreenBox. Sami se met à JavaScript en sachant qu'il devra écrire propre dès le départ — ce code finira en prod dans 6 semaines.
+</Scenario>
+
+<Scenario parcours="D" episode="2">
+Le feed de CoupDeMain est statique. Léa sait que pour rendre une plateforme communautaire **vivante**, il faut du JavaScript : filtres, recherche, ouverture de modale pour répondre à une demande. Elle commence par les bases, en sachant qu'elle reviendra plus tard pour le temps réel et le multi-utilisateur.
+</Scenario>
+
+<Scenario parcours="E" episode="2">
+Yanis code le board kanban statique. Maintenant il faut que **les tâches se déplacent**, **se créent**, **se filtrent**. Il ouvre `board.js`. Il sait qu'il refera tout en React après — mais maîtriser le JavaScript de base avant le framework est non-négociable, c'est ce que son tech lead lui a martelé.
+</Scenario>
+
+> 🎯 **Objectif** : maîtriser le langage JS au point que tu sais ce qui se passe quand un framework fait sa magie. Sans ça, React et compagnie restent des boîtes noires.
+
+<Aside type="tip" title="Niveau de maîtrise visé — 1ère lecture vs maîtrise totale">
+Cet axe couvre **tout** ce qu'un dev JS senior doit connaître. Pour passer à l'axe 7 (frameworks), tu n'as pas besoin de tout maîtriser à 100 % :
+
+- **🟢 À solidifier maintenant** (avant l'axe 7) : types primitifs/objets, `let`/`const`, fonctions classiques + arrow, `map/filter/reduce`, destructuring, modules ES, optional chaining `?.`. Ce sont les **outils du quotidien**.
+- **🟡 À comprendre globalement** (familiarité, pas maîtrise) : closures, hoisting, `var` vs `let` (pour lire le code legacy).
+- **🟠 À survoler** (tu reviendras dessus plus tard quand tu en auras besoin) : prototypes, `this` dans tous ses contextes, classes héritées.
+
+**Si « closures » te résiste après 30 min, passe à 6.2.** Les closures redeviendront évidentes après quelques mois de pratique React. Ne te bloque pas ici.
+</Aside>
+
+<ObjectiveList items={[
+  "Distinguer types primitifs vs objets, par valeur vs par référence",
+  "Maîtriser var vs let vs const, hoisting, TDZ",
+  "Écrire et expliquer une closure",
+  "Comprendre prototype, this, classes",
+  "Manier map, filter, reduce sans hésitation",
+  "Importer/exporter avec les modules ES"
+]} />
+
+> 💡 **Termes glossaire** utilisés dans cette section : <Term>closure</Term>, <Term>hoisting</Term>, <Term>prototype</Term>. Survole-les pour la définition rapide.
+
+## Types primitifs vs objets
+
+JavaScript a **7 types primitifs** + objets.
+
+| Primitif | Exemple |
+|----------|---------|
+| `string` | `"hello"`, `'hello'`, `` `hello ${name}` `` |
+| `number` | `42`, `3.14`, `Infinity`, `NaN` |
+| `boolean` | `true`, `false` |
+| `undefined` | variable non initialisée |
+| `null` | absence intentionnelle |
+| `symbol` | identifiant unique (avancé) |
+| `bigint` | `42n` (entiers > 2⁵³) |
+
+Tout le reste est un **objet** : tableaux (`[]`), fonctions, dates, regex, classes…
+
+### Par valeur vs par référence
+
+Les **primitifs sont copiés** :
+
+```js
+let a = 5;
+let b = a;
+b = 10;
+console.log(a);  // 5 — a n'a pas bougé
+```
+
+Les **objets sont partagés par référence** :
+
+```js
+const a = { count: 5 };
+const b = a;
+b.count = 10;
+console.log(a.count);  // 10 — a et b pointent au même objet
+```
+
+C'est la cause de **bugs classiques** : passer un objet à une fonction qui le modifie sans le copier.
+
+```js
+function reset(obj) {
+  obj.count = 0;   // modifie l'original !
+}
+
+const data = { count: 5 };
+reset(data);
+console.log(data.count);  // 0
+```
+
+**Solution moderne** :
+
+```js
+// Spread pour copier
+const copie = { ...original };
+
+// Tableau
+const copieTab = [...original];
+
+// Profondeur arbitraire
+const profondCopie = structuredClone(original);  // depuis Node 17 / browsers récents
+```
+
+## Égalité — `==` vs `===`
+
+```js
+1 == "1"        // true  ← coercion implicite
+1 === "1"       // false ← compare aussi le type
+null == undefined  // true
+null === undefined // false
+```
+
+**Règle absolue** : utilise **toujours `===`** (et `!==`). Les seules exceptions justifiées sont rares (genre tester `null` ou `undefined` en une fois : `value == null`).
+
+## var, let, const
+
+```js
+var x = 1;     // ❌ ancienne syntaxe, scope fonction
+let y = 2;     // ✅ scope bloc, réassignable
+const z = 3;   // ✅ scope bloc, NON réassignable
+```
+
+### Le piège classique de `var`
+
+```js
+for (var i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 100);
+}
+// affiche : 3, 3, 3 (var fuit hors du for)
+
+for (let i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 100);
+}
+// affiche : 0, 1, 2 (let est par bloc)
+```
+
+**`var` n'a aucun usage en code moderne.** N'écris que `let` et `const`.
+
+### `const` ne fige pas l'objet
+
+```js
+const arr = [1, 2, 3];
+arr.push(4);    // OK, le contenu peut muter
+arr = [];       // ❌ erreur, on réassigne la variable
+```
+
+Si tu veux figer l'objet :
+
+```js
+Object.freeze(arr);
+```
+
+## Hoisting et TDZ
+
+```js
+console.log(a);  // undefined  (var hoisted)
+var a = 5;
+
+console.log(b);  // ReferenceError (TDZ)
+let b = 5;
+```
+
+`let` et `const` existent dans la zone temporellement morte (TDZ) avant leur déclaration. Tu ne peux pas y accéder. C'est sain.
+
+## Functions
+
+### 3 syntaxes
+
+```js
+// Function declaration (hoisted)
+function add(a, b) { return a + b; }
+
+// Function expression (pas hoisted)
+const add = function(a, b) { return a + b; };
+
+// Arrow function (pas hoisted, lexical this)
+const add = (a, b) => a + b;
+const add = (a, b) => { return a + b; };
+```
+
+### Différence clé : `this`
+
+Dans une fonction classique, `this` dépend de **comment** la fonction est appelée. Dans une arrow, `this` est **lexical** (capturé à la définition).
+
+```js
+class Counter {
+  count = 0;
+
+  // ❌ "this" perdu si on passe la méthode comme callback
+  incrementBad() { this.count++; }
+
+  // ✅ "this" reste l'instance
+  incrementGood = () => { this.count++; };
+}
+
+const c = new Counter();
+const fn = c.incrementBad;
+fn();  // erreur : this est undefined
+```
+
+**Règle pratique** : pour les **callbacks** et les **méthodes passées en référence**, utilise une arrow.
+
+## Closures
+
+Une **closure** = une fonction qui capture des variables de son scope englobant, et qui **garde l'accès** même après que le scope soit terminé.
+
+```js
+function counter() {
+  let count = 0;
+  return {
+    increment: () => ++count,
+    get: () => count,
+  };
+}
+
+const c = counter();
+c.increment();  // 1
+c.increment();  // 2
+c.get();        // 2
+// "count" est devenu privé : impossible d'y accéder de l'extérieur
+```
+
+Toute fonction en JS qui utilise une variable d'un scope parent crée une closure. C'est l'**équivalent du privé** en POO.
+
+## Prototypes et classes
+
+JavaScript est **prototype-based**. Chaque objet a un `__proto__` qui pointe vers un autre objet (sa "classe parente").
+
+### Syntaxe classique (à connaître mais peu utilisée)
+
+```js
+function Animal(name) {
+  this.name = name;
+}
+Animal.prototype.speak = function() {
+  return `${this.name} fait du bruit`;
+};
+
+const a = new Animal('Rex');
+a.speak();  // "Rex fait du bruit"
+```
+
+### Syntaxe `class` (sucre syntaxique moderne)
+
+```js
+class Animal {
+  constructor(name) {
+    this.name = name;
+  }
+
+  speak() {
+    return `${this.name} fait du bruit`;
+  }
+
+  // Champ privé (depuis 2022)
+  #secret = 'caché';
+
+  // Méthode statique
+  static create(name) {
+    return new Animal(name);
+  }
+}
+
+class Dog extends Animal {
+  speak() {
+    return `${this.name} aboie`;
+  }
+}
+
+const rex = new Dog('Rex');
+rex.speak();  // "Rex aboie"
+```
+
+<Aside type="note" title="POO classique vs fonctionnelle">
+JavaScript permet les deux. Les frameworks frontend modernes (React, Vue Composition API) ont **largement abandonné les classes** au profit de fonctions + closures + composition. Mais comprendre `this` et `prototype` reste utile pour lire du code existant.
+</Aside>
+
+## Tableaux — les méthodes essentielles
+
+```js
+const nums = [1, 2, 3, 4, 5];
+
+// Transformation (renvoie un nouveau tableau)
+nums.map(n => n * 2);                    // [2, 4, 6, 8, 10]
+nums.filter(n => n > 2);                 // [3, 4, 5]
+nums.flatMap(n => [n, n * 10]);          // [1, 10, 2, 20, ...]
+
+// Réduction
+nums.reduce((acc, n) => acc + n, 0);     // 15
+nums.reduce((acc, n) => Math.max(acc, n), -Infinity);  // 5
+
+// Recherche
+nums.find(n => n > 3);                   // 4
+nums.findIndex(n => n > 3);              // 3
+nums.includes(2);                        // true
+nums.some(n => n < 0);                   // false
+nums.every(n => n > 0);                  // true
+
+// Tri (mute le tableau original — attention !)
+[...nums].sort((a, b) => b - a);         // copie, puis tri décroissant
+
+// Itération
+nums.forEach(n => console.log(n));
+
+// Concaténation
+[...nums, 6, 7];                         // immutable
+nums.concat([6, 7]);
+
+// Création
+Array.from({ length: 5 }, (_, i) => i);  // [0, 1, 2, 3, 4]
+Array(3).fill(0);                        // [0, 0, 0]
+```
+
+### `for…of` vs `for…in`
+
+```js
+const arr = ['a', 'b', 'c'];
+
+for (const value of arr) console.log(value);  // 'a', 'b', 'c' ✅
+
+for (const key in arr) console.log(key);      // '0', '1', '2' ⚠ pour objets
+```
+
+**Règle** : `for…of` pour itérer une valeur, `for…in` pour les clés d'un objet (rare).
+
+## Destructuration
+
+```js
+// Tableau
+const [a, b, c] = [1, 2, 3];
+const [first, ...rest] = [1, 2, 3, 4];   // rest = [2, 3, 4]
+
+// Objet
+const { name, age } = { name: 'Alice', age: 30 };
+
+// Renommer
+const { name: prenom } = { name: 'Alice' };
+
+// Valeur par défaut
+const { theme = 'light' } = options;
+
+// Imbriqué
+const { user: { email } } = data;
+
+// Dans les paramètres de fonction
+function greet({ name, age = 0 }) {
+  return `${name}, ${age} ans`;
+}
+```
+
+## Spread et rest
+
+```js
+// Spread (étaler)
+const merged = [...arr1, ...arr2];
+const cloned = { ...obj };
+const updated = { ...obj, age: 31 };
+
+// Rest (rassembler)
+function sum(...nums) {                  // nums est un tableau
+  return nums.reduce((a, b) => a + b, 0);
+}
+
+const { a, ...rest } = { a: 1, b: 2, c: 3 };  // rest = { b: 2, c: 3 }
+```
+
+## Modules ES
+
+### Export
+
+```js
+// nommé
+export const PI = 3.14;
+export function double(x) { return x * 2; }
+
+// default (un seul par fichier)
+export default class App {}
+
+// ré-exporter
+export { foo, bar } from './other.js';
+```
+
+### Import
+
+```js
+import App from './app.js';                    // default
+import { PI, double } from './math.js';        // nommés
+import { PI as Pi } from './math.js';          // renommer
+import * as Math from './math.js';             // tout dans un namespace
+import './side-effect.js';                     // juste exécuter le fichier
+
+// Dynamique (lazy)
+const module = await import('./heavy.js');
+```
+
+### CommonJS — l'ancien
+
+```js
+// CommonJS (Node legacy)
+const express = require('express');
+module.exports = { foo, bar };
+```
+
+**Préfère ESM** dans tous les projets modernes (`"type": "module"` dans `package.json`).
+
+## Optional chaining et nullish coalescing
+
+```js
+// Optional chaining (?.)
+user?.profile?.email                  // undefined si user ou profile est null/undefined
+
+// Avec appel
+user?.greet?.()                        // appelle greet si elle existe
+
+// Avec index
+arr?.[0]                               // arr[0] si arr existe
+
+// Nullish coalescing (??)
+const name = input ?? 'Anonyme';       // 'Anonyme' SI input est null ou undefined
+                                        // (différent de || qui réagit aux falsy : '', 0, false)
+
+const port = process.env.PORT ?? 3000; // ✅
+const port = process.env.PORT || 3000; // ⚠ "0" deviendrait 3000
+```
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu as `const arr = [1, 2, 3]; arr.push(4); console.log(arr);`. Que se passe-t-il ?"
+  options={[
+    'Erreur : on ne peut pas modifier un const',
+    'arr est [1, 2, 3, 4] — const fige la référence, pas le contenu',
+    'arr est [1, 2, 3] — push est ignoré',
+    'arr est [4]'
+  ]}
+  answerIndex={1}
+  explanation="const empêche la RÉASSIGNATION de la variable, pas la mutation de son contenu. Pour figer le contenu : Object.freeze(arr) (mais c'est rare en pratique)."
+/>
+
+<Quiz
+  question="Quelle ligne affiche [1, 2, 3] ?"
+  options={[
+    'console.log([1,2,3].forEach(n => n))',
+    'console.log([1,2,3].map(n => n))',
+    'console.log([1,2,3].filter(n => true))',
+    'Les options 2 et 3 affichent toutes les deux [1, 2, 3]'
+  ]}
+  answerIndex={3}
+  explanation="map(n => n) fait une copie identique, filter(n => true) garde tout. forEach renvoie undefined. C'est utile à savoir pour copier rapidement un tableau."
+/>
+
+<Quiz
+  question="`const port = process.env.PORT || 3000`. Quel piège ?"
+  options={[
+    'Aucun, c\'est correct',
+    'Si PORT vaut "0" (chaîne falsy en boolean), port devient 3000 au lieu de 0',
+    'Cela ne compile pas',
+    '|| ne marche pas avec les variables d\'env'
+  ]}
+  answerIndex={1}
+  explanation="|| réagit à toute valeur falsy : '', 0, false, null, undefined. Si PORT='0', il sera remplacé par 3000. Préfère ?? qui ne réagit qu'à null et undefined : process.env.PORT ?? 3000."
+/>
+
+## Pour aller plus loin
+
+- *Eloquent JavaScript* — Marijn Haverbeke (gratuit en ligne)
+- *You Don't Know JS Yet* — Kyle Simpson (gratuit, sur GitHub)
+- *MDN — Référence JavaScript* — incontournable
+- *JavaScript.info* — tutoriel exhaustif
+
+---
+
+**Suite** : [6.2 — Asynchronisme](/06-javascript-typescript/02-async/) — Promises, async/await, event loop.

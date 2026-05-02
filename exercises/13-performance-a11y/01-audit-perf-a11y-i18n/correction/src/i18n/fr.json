@@ -1,0 +1,46 @@
+{
+  "skipToMain": "Aller au contenu principal",
+  "lang": { "label": "Langue" },
+  "nav": { "menu": "Menu", "offers": "Offres", "contact": "Contact" },
+  "hero": {
+    "title": "La livraison gourmande, partout en ville",
+    "subtitle": "Plats frais, livrés en moins de 30 minutes. Aujourd'hui : 0 frais de livraison.",
+    "cta": "Commander"
+  },
+  "menu": {
+    "title": "Notre menu de la semaine",
+    "items": {
+      "thai": "Bowl thaï",
+      "calzone": "Pizza calzone",
+      "truffle": "Burger truffe",
+      "caesar": "Salade César",
+      "apple": "Tarte aux pommes",
+      "smoothie": "Smoothie mangue"
+    },
+    "addAria": "Ajouter {item} au panier"
+  },
+  "cart": {
+    "empty": "Panier vide",
+    "one": "1 article",
+    "many": "{count} articles",
+    "label": "Panier"
+  },
+  "contact": {
+    "title": "Recevez nos offres",
+    "emailLabel": "Adresse email",
+    "emailHelp": "On ne le partage avec personne.",
+    "emailErrorEmpty": "Veuillez saisir votre adresse email.",
+    "emailErrorInvalid": "Le format de l'adresse email est invalide.",
+    "submit": "S'inscrire"
+  },
+  "modal": {
+    "title": "Commande confirmée",
+    "body": "Merci pour votre commande !",
+    "close": "Fermer"
+  },
+  "cookies": {
+    "message": "Ce site utilise des cookies pour améliorer votre expérience.",
+    "accept": "OK"
+  },
+  "footer": { "lastUpdate": "Dernière mise à jour : {date}" }
+}

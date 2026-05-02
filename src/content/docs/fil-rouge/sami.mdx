@@ -1,0 +1,90 @@
+---
+title: 🥬 Sami · GreenBox
+description: Sami, ex-ingénieur reconverti, lance son épicerie zéro-déchet livrée en vélo. E-commerce moderne complet.
+sidebar:
+  order: 3
+  label: Sami
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Le pitch
+
+**Sami**, 35 ans, ex-ingénieur télécom qui a quitté son CDI pour lancer son projet : **GreenBox**, une épicerie zéro-déchet livrée en vélo dans Paris intra-muros. 200 produits secs et frais, créneaux de livraison de 2h, retour des bocaux pour la consigne.
+
+Sami a déjà des bases techniques (Python pro, mais pas le web), un budget contraint, **6 mois de runway** et l'ambition de tenir au moins 2 ans.
+
+## Le projet : « GreenBox »
+
+| | |
+|---|---|
+| **Type** | E-commerce alimentaire avec créneaux de livraison locale |
+| **Cible** | Foyers parisiens engagés (25-55 ans) |
+| **Volume** | 50 commandes/jour à 6 mois, 200 à 1 an |
+| **Stack frontend** | Next.js 16 (SSR pour SEO produit) |
+| **Stack backend** | Hono sur Cloudflare Workers (edge) |
+| **Base de données** | Neon (Postgres serverless) + Drizzle |
+| **Auth** | Better Auth |
+| **Paiement** | Stripe Checkout |
+| **Hébergement** | Cloudflare Pages + Neon |
+| **Stockage images** | Cloudflare R2 |
+
+## L'arc narratif (axes 5 à 8)
+
+### Axe 5 — Vitrine
+
+| Sous-axe | Épisode |
+|---|---|
+| 5.1 HTML | Sami structure le catalogue : 8 catégories, ~ 200 produits, avec données structurées schema.org (SEO produit). |
+| 5.2 CSS | Grid responsive pour le catalogue (3 colonnes desktop, 1 mobile). Variables CSS pour le mode sombre. |
+| 5.3 A11y | Sami vise WCAG 2.2 AA dès la V1 : contrastes, navigation clavier, captures écran lecteur. |
+
+### Axe 6 — JS / TS
+
+| Sous-axe | Épisode |
+|---|---|
+| 6.1 JS | Filtres : par catégorie, par allergène, par origine France. Tri par prix / par bilan carbone. |
+| 6.2 Async | Recherche tapante (debounce 300 ms), création panier serveur sans bloquer l'UI. |
+| 6.3 APIs navigateur | Géolocalisation pour pré-remplir l'adresse, IntersectionObserver pour lazy load des images. |
+| 6.4 TypeScript | Sami type tout dès le début : produit, panier, commande, créneau. Zéro `any`. |
+
+### Axe 7 — Frameworks
+
+| Sous-axe | Épisode |
+|---|---|
+| 7.1 Concepts communs | Sami choisit React pour la stack robuste + écosystème mûr. |
+| 7.2 React | Composants : ProductCard, CartDrawer, DeliverySlots, CheckoutForm. |
+| 7.3 Alternatives | Pas de switch — focus sur la livraison. |
+| 7.4 Next.js | SSR pour les pages produit (SEO Google Shopping), ISR pour le catalogue. |
+| 7.5 Build | Bundle initial sous 80 KB grâce au RSC + code splitting. |
+| 7.6 Design system | Tailwind v4 + ses tokens custom (verts naturels, palette accessible). |
+
+### Axe 8 — Backend
+
+| Sous-axe | Épisode |
+|---|---|
+| 8.0 Concepts communs | API REST sur l'edge : produits, panier, commandes, créneaux de livraison. |
+| 8.1 Node + Hono | Hono sur Cloudflare Workers : latence < 50 ms partout en France. Drizzle + Neon serverless. |
+| 8.2 Auth + sécu | Better Auth + RGPD strict (anonymisation IP, opt-in email). |
+| 8.3 Stripe | Stripe Checkout, webhook signé, gestion de la TVA, factures PDF générées via Resend. |
+
+## Incidents naturels qu'on rencontre plus loin
+
+- **Axe 12 sécu** : tentative XSS dans une note de commande. CSP + échappement systématique sauvent la mise.
+- **Axe 12 RGPD** : Sami choisit **Plausible** plutôt que Google Analytics pour ne pas avoir à gérer le bandeau cookies.
+- **Axe 13 perf** : Black Friday, +5× de trafic. Le LCP reste sous 1,5 s grâce à l'edge + ISR.
+- **Axe 13 a11y** : audit RGAA + WCAG 2.2 AA validé par un freelance externe.
+- **Axe 14 DevOps** : pipeline GitHub Actions + Cloudflare Pages preview par PR + alerte Sentry.
+- **Axe 17.6 éthique** : empreinte carbone de l'app mesurée et publiée. Sami pousse la sobriété (pas d'auto-play vidéo, images optimisées).
+- **Axe 16** : pour la **PWA mobile** des livreurs vélo, Sami pioche dans le parcours **Léa** ou **Marie**.
+
+## Pourquoi Sami te conviendrait
+
+- Tu te projettes en **indie hacker** ou **fondateur tech**.
+- La **durabilité** te motive concrètement (sobriété numérique, RGPD strict, bilan carbone).
+- Tu veux comprendre l'**edge computing** (Cloudflare Workers) au-delà du buzzword.
+- Tu veux un parcours qui couvre **vraiment** un e-commerce sérieux : multi-tenant, multi-créneau, multi-zone de livraison.
+
+<Aside type="tip">
+Sami est le parcours le plus proche d'un **vrai SaaS B2C 2026** : edge, sobriété, conformité. Si tu vises un job indie hacker / fondateur, c'est lui.
+</Aside>

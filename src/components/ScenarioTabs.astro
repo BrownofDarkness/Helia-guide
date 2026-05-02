@@ -1,0 +1,51 @@
+---
+/**
+ * Composant ScenarioTabs — sélecteur de parcours fil rouge en haut de page.
+ *
+ * À placer en haut des pages qui contiennent au moins un <Scenario>.
+ * Persiste le choix en localStorage et applique la classe sur <html>
+ * pour filtrer côté client les blocs Scenario non choisis.
+ *
+ * Usage :
+ *   <ScenarioTabs />
+ */
+---
+
+<nav class="scenario-tabs" aria-label="Choisis ton parcours fil rouge">
+  <span class="scenario-tabs-label">Parcours :</span>
+  <button type="button" class="scenario-tab" data-parcours="A" title="Marie aide sa sœur Lina à mettre sa boulangerie en ligne">🥖 Marie</button>
+  <button type="button" class="scenario-tab" data-parcours="B" title="Hugo digitalise le studio de yoga d'Inès">🧘 Hugo</button>
+  <button type="button" class="scenario-tab" data-parcours="C" title="Sami lance GreenBox, son épicerie zéro-déchet">🥬 Sami</button>
+  <button type="button" class="scenario-tab" data-parcours="D" title="Léa crée CoupDeMain, plateforme d'entraide entre voisins">🤝 Léa</button>
+  <button type="button" class="scenario-tab" data-parcours="E" title="Yanis développe Tasky pour son association sportive">📋 Yanis</button>
+  <a class="scenario-tabs-help" href="/fil-rouge/">Découvrir les parcours</a>
+</nav>
+
+<script is:inline>
+  // 1) Synchroniser le parcours stocké avec <html data-parcours>
+  //    pour que le CSS filtre correctement DÈS le premier paint.
+  (function syncOnLoad() {
+    const choice = localStorage.getItem('fil-rouge') || 'A';
+    document.documentElement.dataset.parcours = choice;
+  })();
+</script>
+
+<script>
+  // 2) Click handlers pour les onglets — défini une seule fois par page.
+  function activateTab(parcours: string) {
+    localStorage.setItem('fil-rouge', parcours);
+    document.documentElement.dataset.parcours = parcours;
+    document.querySelectorAll<HTMLButtonElement>('.scenario-tab').forEach((b) => {
+      b.classList.toggle('active', b.dataset.parcours === parcours);
+      b.setAttribute('aria-pressed', String(b.dataset.parcours === parcours));
+    });
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.scenario-tab').forEach((btn) => {
+    btn.addEventListener('click', () => activateTab(btn.dataset.parcours!));
+  });
+
+  // État initial
+  const current = document.documentElement.dataset.parcours || 'A';
+  activateTab(current);
+</script>

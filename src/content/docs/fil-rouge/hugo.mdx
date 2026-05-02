@@ -1,0 +1,87 @@
+---
+title: 🧘 Hugo · Studio Pulse
+description: Hugo, en reconversion, digitalise le studio de yoga de sa cousine Inès. Planning, abonnements, paiement Stripe.
+sidebar:
+  order: 2
+  label: Hugo
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Le pitch
+
+**Hugo**, 28 ans, ex-commercial. Sa **cousine Inès** vient d'ouvrir **Studio Pulse**, un studio de yoga + Pilates dans le centre de Lyon. Pour l'instant elle gère les inscriptions sur **un Google Sheet partagé** — chaos garanti dès qu'il y a 3 cours par jour.
+
+Hugo se forme au code en parallèle de sa formation ressources humaines. Il propose à Inès de coder son site avec espace membre + réservations en ligne.
+
+## Le projet : « Studio Pulse »
+
+| | |
+|---|---|
+| **Type** | Site vitrine + plateforme de réservation + abonnements |
+| **Cible** | Adultes 25-55, pratiquants réguliers |
+| **Volume** | ~ 200 membres actifs, 40 cours/semaine |
+| **Stack frontend** | Next.js 16 (App Router) |
+| **Stack backend** | Next.js API Routes + Hono pour les workers |
+| **Base de données** | Postgres + Drizzle |
+| **Auth** | Better Auth (email + Google OAuth) |
+| **Paiement** | Stripe Subscriptions (carnets de cours) |
+| **Hébergement** | Vercel |
+
+## L'arc narratif (axes 5 à 8)
+
+### Axe 5 — Vitrine
+
+| Sous-axe | Épisode |
+|---|---|
+| 5.1 HTML | Hugo structure : présentation studio, planning des cours, profils des profs, page tarifs. |
+| 5.2 CSS | Grid pour le planning hebdo, Flexbox pour les cards profs. Ambiance végétale (verts doux + cream). |
+| 5.3 A11y | Le formulaire de contact n'a pas de label visible. Hugo corrige et passe l'audit axe-core. |
+
+### Axe 6 — JS / TS
+
+| Sous-axe | Épisode |
+|---|---|
+| 6.1 JS | Le calendrier filtre par type (yoga / Pilates / méditation). Premier état dynamique. |
+| 6.2 Async | Inscription en ligne : `POST` vers une API factice, gestion d'erreur, feedback à l'utilisateur. |
+| 6.3 APIs navigateur | Date.now() + Intl pour formater les dates. Web Notifications pour rappels (J-1 du cours). |
+| 6.4 TypeScript | Hugo type le créneau : `{ id, day, hour, type, instructor, capacity, booked }`. Plus de bug de capacité dépassée. |
+
+### Axe 7 — Frameworks
+
+| Sous-axe | Épisode |
+|---|---|
+| 7.1 Concepts communs | Hugo passe au framework : trop d'état partagé entre planning, panier de réservations, profil. |
+| 7.2 React | Composants planning, créneau, carnet de cours, profil membre. |
+| 7.3 Alternatives | Hugo regarde Vue et Svelte mais Inès lit déjà des tutos React → on garde React. |
+| 7.4 Next.js | App Router + Server Components pour le planning indexé Google. SEO local renforcé. |
+| 7.5 Build | Optimisation des images des profs : -60 % de poids. |
+| 7.6 Design system | Tailwind v4 + Radix UI pour les modales de réservation accessibles. |
+
+### Axe 8 — Backend
+
+| Sous-axe | Épisode |
+|---|---|
+| 8.0 Concepts communs | Réserver un créneau = transaction (vérifier capacité → ajouter → décrémenter places restantes). Atomicité. |
+| 8.1 Node + Hono | API : `POST /bookings`, gestion concurrence (deux clients qui réservent la dernière place en même temps). |
+| 8.2 Auth + sécu | Magic link, OAuth Google, RBAC (élève / prof / admin). |
+| 8.3 Stripe | Abonnement mensuel ou carnet 10 cours. Webhook idempotent pour la confirmation. Hugo galère 2 jours sur la signature webhook. |
+
+## Incidents naturels qu'on rencontre plus loin
+
+- **Axe 9 SQL** : Inès veut un classement des élèves les plus assidus. Hugo apprend les fenêtrages SQL.
+- **Axe 12 sécu** : un payload bizarre dans le champ « note allergie ». Hugo découvre l'injection SQL — sa requête paramétrée a sauvé la mise.
+- **Axe 13 perf** : la page tarifs est lente sur mobile 4G. Hugo paresse-charge les images de cours et passe le LCP de 4 s à 1,3 s.
+- **Axe 14 DevOps** : pipeline CI Vercel + Neon branch DB par PR.
+- **Axe 16** : pour le **streaming live** d'un cours en visio, Hugo bascule sur le parcours **Léa** (real-time).
+
+## Pourquoi Hugo te conviendrait
+
+- Tu aimes l'univers **bien-être / services / réservation**.
+- Tu veux toucher à **Stripe Subscriptions** (compétence très valorisée).
+- Tu veux comprendre les enjeux de **concurrence DB** (overbooking) très tôt.
+- Tu es à l'aise avec une stack **Next.js full-stack** plutôt que Astro + backend séparé.
+
+<Aside type="tip">
+Le plus formateur de ce parcours : la **gestion de la concurrence** sur les réservations. Beaucoup de devs juniors ne savent pas gérer ça. Hugo va te le montrer en pratique.
+</Aside>

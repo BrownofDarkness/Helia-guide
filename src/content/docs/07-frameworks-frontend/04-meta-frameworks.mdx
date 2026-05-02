@@ -1,0 +1,443 @@
+---
+title: 7.4 — Méta-frameworks
+description: Next.js, Nuxt, SvelteKit, Remix — SSR, SSG, ISR, RSC, edge. Comprendre les modes de rendu.
+sidebar:
+  order: 4
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="9">
+Lina veut un blog de recettes — pour le SEO local. Marie sait que <Term>SSR</Term> ou <Term>SSG</Term> est obligatoire (Google n'indexe pas bien le JS-only). Elle choisit Astro pour le blog (statique, parfait pour des recettes peu changeantes) et garde sa vitrine + panier en React. Le blog s'indexe en quelques jours sur Google.
+</Scenario>
+
+<Scenario parcours="B" episode="8">
+Studio Pulse a besoin de pages SEO pour chaque cours (« Yoga prénatal Lyon »). Hugo migre tout en Next.js 16 App Router : pages SSR pour le SEO, Server Actions pour les réservations. Les espaces membres restent client-side avec authentification cookie.
+</Scenario>
+
+<Scenario parcours="C" episode="9">
+Sami doit indexer 200 fiches produit sur Google Shopping. <Term>SSR</Term> avec ISR (revalidation toutes les 6h) sur Cloudflare Pages : ses pages se génèrent côté serveur, sont mises en cache edge, et l'index Google les digère parfaitement. Bundle initial 0 JS sur les pages catalogue (RSC).
+</Scenario>
+
+<Scenario parcours="D" episode="9">
+CoupDeMain doit être **installable comme PWA**. Léa choisit Next.js 16 + manifeste PWA. App Router lui permet de pré-rendre la page d'accueil (SEO), tout en gardant le feed live en client-side avec Server Components pour l'initial fetch.
+</Scenario>
+
+<Scenario parcours="E" episode="9">
+Yanis migre Tasky en Next.js 16 + Server Actions. Pour créer une tâche : `'use server'` sur la fonction, plus besoin d'API REST séparée. Vraiment plus simple. Il déploie sur Fly.io en multi-région.
+</Scenario>
+
+> 🎯 **Objectif** : choisir lucidement entre rendu côté serveur, statique, hybride, edge — et utiliser Next.js (le plus répandu) en confiance.
+
+<ObjectiveList items={[
+  "Distinguer CSR, SSR, SSG, ISR, edge rendering — et savoir quand chacun est pertinent",
+  "Naviguer dans la structure App Router de Next.js",
+  "Connaître Nuxt, SvelteKit, Remix et leurs équivalents",
+  "Comprendre les server actions et la différence avec une API REST classique",
+  "Choisir entre Vercel, Netlify, Render, Cloudflare pour héberger"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 6 lu" />
+
+
+## Pourquoi un méta-framework ?
+
+Un framework pur (React, Vue) résout l'**UI**. Mais il te laisse choisir tout le reste : routing, SSR, data fetching, déploiement, optimisation des images, métadonnées, sitemap…
+
+Un **méta-framework** intègre tout ça :
+
+| Sous-jacent | Méta-framework |
+|-------------|----------------|
+| React | **Next.js** (Vercel) — dominant |
+| React (alternative SPA-first) | **TanStack Start** (basé Vinxi + Vite, file-based routing typé) |
+| Vue | **Nuxt** |
+| Svelte | **SvelteKit** |
+| React (focus loaders/actions) | **Remix** |
+| Solid | **SolidStart** |
+| Astro | (Astro **est** son propre méta-framework) |
+
+## Les 5 modes de rendu
+
+C'est **le concept clé** à maîtriser.
+
+<Diagram
+  caption="Les 5 modes de rendu — qui produit le HTML, quand"
+  code={`
+    flowchart TD
+      CSR["CSR<br/>Client-Side Rendering<br/>HTML vide → JS dans le navigateur génère tout"]
+      SSR["SSR<br/>Server-Side Rendering<br/>HTML généré au serveur À CHAQUE requête"]
+      SSG["SSG<br/>Static Site Generation<br/>HTML généré au BUILD, servi tel quel"]
+      ISR["ISR<br/>Incremental Static Regeneration<br/>SSG + revalidation périodique"]
+      Edge["Edge rendering<br/>SSR mais sur un edge node proche de l'utilisateur"]
+  `}
+/>
+
+### CSR — Client-Side Rendering
+
+```
+1. Navigateur reçoit un HTML vide + un gros bundle JS
+2. JS s'exécute, fetch les données, génère le DOM
+3. L'utilisateur voit quelque chose
+```
+
+✅ Simple à mettre en place.
+❌ **Mauvais SEO** (Google voit du vide initial).
+❌ **Lent** au premier affichage (LCP).
+
+C'est ce que fait une SPA pure (Create React App, Vite + React).
+
+### SSR — Server-Side Rendering
+
+```
+1. Requête → serveur génère le HTML complet → renvoyé au client
+2. Le client affiche le HTML immédiatement
+3. JS s'hydrate ensuite pour rendre interactif
+```
+
+✅ SEO parfait.
+✅ LCP rapide.
+❌ Charge serveur à chaque requête.
+❌ Latence de génération.
+
+### SSG — Static Site Generation
+
+```
+1. Au BUILD : on pré-génère toutes les pages en HTML
+2. À la requête : on sert le fichier statique depuis un CDN
+```
+
+✅ **Plus rapide possible** (CDN).
+✅ Coût d'hébergement minimal.
+❌ Données figées au build → pas adapté à du contenu très dynamique.
+
+Idéal pour : blogs, marketing, docs (ce site est en SSG).
+
+### ISR — Incremental Static Regeneration
+
+```
+1. Comme SSG, mais avec revalidation périodique (ex. toutes les 60 s)
+2. La 1re requête après expiration déclenche la regen
+```
+
+```ts
+// Next.js
+export const revalidate = 60;   // regénère après 60 s
+```
+
+✅ Compromis SSG + données fraîches.
+✅ Tient des milliers de pages.
+
+### Edge rendering
+
+SSR exécuté sur un **edge node** (Cloudflare Workers, Vercel Edge Functions) proche de l'utilisateur.
+
+✅ Latence très faible (~10 ms vs 100+ ms pour un serveur centralisé).
+✅ Auto-scale mondial.
+❌ Limites techniques (pas tous les modules Node, taille du bundle, durée d'exécution).
+
+### Choisir
+
+| Type de page | Mode idéal |
+|--------------|-----------|
+| Blog statique | SSG |
+| Marketing | SSG |
+| Liste produits e-commerce | ISR ou SSR |
+| Dashboard admin perso | SSR |
+| Page de profil utilisateur | SSR ou Edge |
+| App temps réel (chat) | CSR ou hybride |
+
+## Next.js — App Router
+
+Depuis Next 13+, l'**App Router** (dossier `app/`) remplace le Pages Router (dossier `pages/`). Tout ce qui suit est en App Router.
+
+### Next.js 16 — ce qui change en 2026
+
+- **Turbopack devient le bundler par défaut** (Webpack n'est plus l'option principale).
+- L'**accès synchrone à `params` est totalement supprimé** : tu dois faire `params: Promise<{ id: string }>` puis `await params`. C'était deprecated en 15, c'est obligatoire en 16.
+- L'**accès synchrone à `cookies()` et `headers()` est aussi supprimé** : `await cookies()`, `await headers()`.
+- Améliorations de **streaming SSR** et de **caching granulaire**.
+
+> Ces changements concernent toutes les pages dynamiques. Si tu migres une app Next 14, fais-le par lots : un dossier de routes à la fois.
+
+### Structure
+
+```
+app/
+├── layout.tsx              ← layout racine (head, body, providers)
+├── page.tsx                ← /
+├── about/
+│   └── page.tsx            ← /about
+├── blog/
+│   ├── layout.tsx          ← layout blog
+│   ├── page.tsx            ← /blog
+│   └── [slug]/
+│       └── page.tsx        ← /blog/:slug
+├── (marketing)/             ← grouping (n'apparaît PAS dans l'URL)
+│   ├── pricing/
+│   └── features/
+└── api/
+    └── users/
+        └── route.ts         ← API endpoint /api/users
+```
+
+### Layout racine
+
+```tsx
+// app/layout.tsx
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="fr">
+      <body>
+        <Header />
+        <main>{children}</main>
+        <Footer />
+      </body>
+    </html>
+  );
+}
+```
+
+Les layouts s'**imbriquent** — `app/blog/layout.tsx` enveloppe les pages de blog, à l'intérieur du layout racine.
+
+### Pages
+
+```tsx
+// app/products/[id]/page.tsx
+export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const product = await db.product.findUnique({ where: { id } });
+  if (!product) notFound();
+  return <h1>{product.name}</h1>;
+}
+```
+
+### Mode de rendu — par page
+
+```ts
+export const dynamic = 'force-dynamic';   // SSR
+export const dynamic = 'force-static';    // SSG
+export const revalidate = 60;              // ISR avec 60 s
+```
+
+Par défaut, Next 14+ détecte automatiquement (si tu utilises des cookies ou des params dynamiques → SSR ; sinon → SSG).
+
+### Loading et error states
+
+```tsx
+// app/products/loading.tsx — pendant le chargement de la page
+export default function Loading() {
+  return <Spinner />;
+}
+
+// app/products/error.tsx — si une erreur survient
+'use client';
+export default function Error({ error, reset }: { error: Error; reset: () => void }) {
+  return (
+    <div>
+      <p>Erreur : {error.message}</p>
+      <button onClick={reset}>Réessayer</button>
+    </div>
+  );
+}
+```
+
+### Métadonnées
+
+```tsx
+// statique
+export const metadata = {
+  title: 'Mon site',
+  description: 'Description de la page',
+  openGraph: { images: ['/og.png'] },
+};
+
+// dynamique
+export async function generateMetadata({ params }) {
+  const post = await db.post.findUnique({ where: { id: params.id } });
+  return { title: post.title };
+}
+```
+
+### API Routes (Route Handlers)
+
+```ts
+// app/api/users/route.ts
+import { NextResponse } from 'next/server';
+
+export async function GET() {
+  const users = await db.user.findMany();
+  return NextResponse.json(users);
+}
+
+export async function POST(request: Request) {
+  const data = await request.json();
+  const user = await db.user.create({ data });
+  return NextResponse.json(user, { status: 201 });
+}
+```
+
+### Middleware — exécuté avant chaque requête
+
+```ts
+// middleware.ts (à la racine)
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export function middleware(request: NextRequest) {
+  // Protéger /admin
+  if (request.nextUrl.pathname.startsWith('/admin')) {
+    const session = request.cookies.get('session');
+    if (!session) {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+  }
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ['/admin/:path*', '/api/admin/:path*'],
+};
+```
+
+## Server Actions — au-delà de l'API REST
+
+Au lieu d'écrire un endpoint POST + un client `fetch`, tu peux exposer une **fonction serveur** appelable directement depuis le client :
+
+```tsx
+// app/feedback/page.tsx
+'use server';
+
+async function sendFeedback(formData: FormData) {
+  'use server';
+  const message = formData.get('message') as string;
+  await db.feedback.create({ data: { message } });
+}
+
+export default function Page() {
+  return (
+    <form action={sendFeedback}>
+      <textarea name="message" required />
+      <button type="submit">Envoyer</button>
+    </form>
+  );
+}
+```
+
+✅ Pas d'endpoint à écrire, pas de client fetch.
+✅ Marche sans JS (le formulaire est natif).
+✅ Validation côté serveur native.
+
+**Attention sécurité** : une server action est appelable depuis n'importe où. Toujours **valider** et **autoriser** dedans (Zod + check de session).
+
+## Nuxt — l'équivalent Vue
+
+```
+nuxt-app/
+├── pages/                  ← file-based routing
+│   ├── index.vue
+│   └── products/[id].vue
+├── components/
+├── composables/            ← équivalent hooks
+├── server/
+│   └── api/
+│       └── users.ts
+└── nuxt.config.ts
+```
+
+Concepts identiques à Next.js mais en Vue. SSR, SSG, ISR via `nitro` (le moteur sous-jacent).
+
+## SvelteKit — l'équivalent Svelte
+
+```
+src/routes/
+├── +layout.svelte
+├── +page.svelte             ← /
+├── +page.server.ts          ← load() côté serveur
+└── products/[id]/
+    ├── +page.svelte
+    └── +page.server.ts
+```
+
+Convention `+page.svelte` (UI) vs `+page.server.ts` (serveur). Très propre.
+
+## Remix — focus loaders/actions
+
+Approche **anti-tendance** par rapport à RSC : pas de Server Components, mais des `loader()` et `action()` clairs côté serveur, du HTML envoyé directement, et une approche très progressive enhancement.
+
+```tsx
+// app/routes/products.$id.tsx
+export async function loader({ params }) {
+  return await db.product.findUnique({ where: { id: params.id } });
+}
+
+export default function Product() {
+  const product = useLoaderData<typeof loader>();
+  return <h1>{product.name}</h1>;
+}
+
+export async function action({ request }) {
+  const form = await request.formData();
+  // ...
+}
+```
+
+Très bien pour les apps qui doivent **marcher sans JS**. Maintenu par Shopify (ils ont absorbé Remix en 2022).
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu construis un blog de 200 articles, mis à jour 1× par semaine. Mode de rendu idéal ?"
+  options={[
+    'CSR — c\'est plus simple',
+    'SSR — pour avoir toujours la dernière version',
+    'SSG — pré-généré au build, servi par un CDN',
+    'ISR avec revalidate=300 secondes'
+  ]}
+  answerIndex={2}
+  explanation="SSG est parfait : 200 articles fixes par semaine, build une fois, CDN sert tout. Performance max, coût d'hébergement minimum. ISR serait utile si on avait beaucoup de variations par jour. SSR sur un blog statique = gaspillage."
+/>
+
+<Quiz
+  question="Différence principale entre Server Action Next.js et endpoint API REST classique ?"
+  options={[
+    'Server Action est plus rapide',
+    'Server Action est appelée comme une fonction depuis le client (pas besoin de fetch + URL), et permet la progressive enhancement (form action= marche sans JS)',
+    'Server Action est uniquement pour POST',
+    'Aucune différence'
+  ]}
+  answerIndex={1}
+  explanation="Server Action = fonction TypeScript invocable directement depuis le client (Next bundle l'appel sous le capot). Plus court à écrire, et le formulaire HTML natif l'invoque sans JS si nécessaire. Une route REST reste utile pour les APIs publiques ou inter-services."
+/>
+
+<Quiz
+  question="Tu déploies une app Next.js avec auth + dashboard sur Vercel. Tu veux 80 % SSG (marketing) et 20 % SSR (dashboard utilisateur). Comment Next.js gère ça ?"
+  options={[
+    'Tu dois créer 2 projets séparés',
+    'Next détecte automatiquement par page : si elle utilise des cookies ou params dynamiques → SSR, sinon → SSG. Tu peux forcer avec `dynamic = ...`',
+    'Tu dois activer un mode hybride dans next.config.js',
+    'Vercel ne supporte pas le mixe'
+  ]}
+  answerIndex={1}
+  explanation="Next 14+ a un mode hybride par défaut. Chaque page est analysée individuellement : si statiquement résolvable, elle est SSG ; sinon SSR. Tu peux forcer avec `export const dynamic = 'force-static'` ou `'force-dynamic'`. Vercel sert ça nativement (statiques sur CDN, dynamiques sur serverless)."
+/>
+
+## Pour aller plus loin
+
+- *Next.js Docs* — [nextjs.org/docs](https://nextjs.org/docs)
+- *Nuxt Docs* — [nuxt.com](https://nuxt.com/)
+- *SvelteKit Docs* — [kit.svelte.dev](https://kit.svelte.dev/)
+- *Remix Docs* — [remix.run/docs](https://remix.run/docs)
+- *Patterns.dev — Rendering Patterns* — vue d'ensemble exhaustive
+
+---
+
+**Suite** : [7.5 — Outils de build](/07-frameworks-frontend/05-outils-build/) — ce qui se passe quand tu fais `npm run build`.

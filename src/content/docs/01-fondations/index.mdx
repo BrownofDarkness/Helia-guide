@@ -1,0 +1,79 @@
+---
+title: Axe 1 — Fondations informatiques
+description: Comprendre la machine, le terminal, les données et l'algorithmie avant de toucher au web.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : disposer du socle minimal de culture informatique sans lequel tout le reste sera flou.
+
+## Prérequis
+
+Aucun. Cet axe est le point de départ pour un débutant complet.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Expliquer ce que fait un CPU, une RAM, un disque, et un OS",
+  "Naviguer, créer, copier, déplacer, supprimer des fichiers en ligne de commande",
+  "Écrire un script shell de base avec conditions et boucles",
+  "Convertir entre binaire, hexadécimal et décimal",
+  "Choisir une structure de données adaptée à un problème simple",
+  "Estimer la complexité (Big-O) d'un algorithme"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="1.1 — Matériel et OS"
+    href="/01-fondations/01-materiel-os/"
+    description="CPU, RAM, disque, processus, threads, async, choix de l'OS, WSL2."
+  />
+  <LinkCard
+    title="1.2 — Ligne de commande"
+    href="/01-fondations/02-ligne-de-commande/"
+    description="Navigation, inspection, pipes, permissions, scripts shell."
+  />
+  <LinkCard
+    title="1.3 — Représentation des données"
+    href="/01-fondations/03-donnees/"
+    description="Bits, octets, hex, UTF-8, JSON, YAML, XML, CSV, TOML, Base64."
+  />
+  <LinkCard
+    title="1.4 — Algorithmie & complexité"
+    href="/01-fondations/04-algorithmie/"
+    description="Structures de données, Big-O, récursion, tris classiques."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Script de tri automatique des téléchargements.**
+Un script shell qui range les fichiers d'un dossier `Downloads` dans des sous-dossiers (`Images`, `Documents`, `Vidéos`, `Code`, `Archives`, `Autres`) selon l'extension.
+
+<Aside type="tip" title="🎯 Tu peux attaquer ce projet dès la fin de 1.2">
+La **ligne de commande (1.2)** suffit pour 80 % de l'exercice. Les sous-axes 1.3 (données) et 1.4 (algorithmie) apportent du contexte utile — structures, complexité, le `case` du `categorie()` — mais ne sont **pas bloquants**.
+
+Deux trajectoires valides :
+- **Pratique à chaud** : tu fais 1.1 + 1.2, puis tu attaques le projet, puis tu reviens lire 1.3 et 1.4.
+- **Lecture complète d'abord** : tu termines tout l'axe puis tu attaques avec tout le contexte.
+</Aside>
+
+<ExerciseDownload
+  axe="01-fondations"
+  slug="01-tri-telechargements"
+  title="Tri automatique des téléchargements"
+  description="Premier script Bash. Tu apprends à manipuler des fichiers, gérer la casse, éviter les écrasements, et tester un script avec une vraie suite de tests automatisés (12 tests)."
+/>
+
+## Ressources clés
+
+- *MIT Missing Semester* — [missing.csail.mit.edu](https://missing.csail.mit.edu/)
+- *Crafting Interpreters* (chapitres 1–3 pour comprendre comment un programme s'exécute)
+- *Learn X in Y Minutes* — [learnxinyminutes.com](https://learnxinyminutes.com/)
+- *Big-O Cheat Sheet* — [bigocheatsheet.com](https://www.bigocheatsheet.com/)

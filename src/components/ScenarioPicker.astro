@@ -1,0 +1,90 @@
+---
+/**
+ * Composant ScenarioPicker — sélecteur initial des 5 parcours fil rouge.
+ *
+ * Placé une fois dans le préambule. Une grille de 5 cartes ;
+ * cliquer sur une carte mémorise le choix (localStorage) et applique
+ * la classe sur <html> pour la session courante.
+ *
+ * Usage :
+ *   <ScenarioPicker />
+ */
+import PersonaAvatar from './PersonaAvatar.astro';
+---
+
+<section class="scenario-picker" aria-labelledby="picker-title">
+  <h2 id="picker-title">Choisis ton parcours fil rouge</h2>
+  <p>
+    Ce guide propose <strong>5 parcours narratifs</strong> qui suivent un personnage
+    construisant un vrai projet. Choisis celui qui t'attire le plus —
+    tu peux changer à tout moment via les onglets en haut de chaque page.
+  </p>
+
+  <div class="picker-grid">
+    <button type="button" class="picker-card" data-parcours="A">
+      <PersonaAvatar parcours="A" initial="M" size={48} label="Avatar de Marie" />
+      <strong class="picker-name">Marie · La Boulangerie de Lina</strong>
+      <small class="picker-pitch">Marie aide sa sœur à mettre sa boulangerie artisanale en ligne. E-commerce local et chaleureux.</small>
+      <span class="picker-cover">✅ Axes 1–14 · ⚠️ 16</span>
+    </button>
+
+    <button type="button" class="picker-card" data-parcours="B">
+      <PersonaAvatar parcours="B" initial="H" size={48} label="Avatar de Hugo" />
+      <strong class="picker-name">Hugo · Studio Pulse</strong>
+      <small class="picker-pitch">Hugo digitalise le studio de yoga de sa cousine Inès — planning, abonnements, paiement.</small>
+      <span class="picker-cover">✅ Axes 1–14 · ⚠️ 16</span>
+    </button>
+
+    <button type="button" class="picker-card" data-parcours="C">
+      <PersonaAvatar parcours="C" initial="S" size={48} label="Avatar de Sami" />
+      <strong class="picker-name">Sami · GreenBox</strong>
+      <small class="picker-pitch">Sami lance sa boutique d'épicerie zéro-déchet livrée en vélo. E-commerce moderne complet.</small>
+      <span class="picker-cover">✅ Axes 1–14 · ⚠️ 16</span>
+    </button>
+
+    <button type="button" class="picker-card" data-parcours="D">
+      <PersonaAvatar parcours="D" initial="L" size={48} label="Avatar de Léa" />
+      <strong class="picker-name">Léa · CoupDeMain</strong>
+      <small class="picker-pitch">Léa crée une plateforme d'entraide entre voisins. Couvre <strong>tout</strong> jusqu'au temps réel et au mobile.</small>
+      <span class="picker-cover">✅ Axes 1–16 (le plus complet)</span>
+    </button>
+
+    <button type="button" class="picker-card" data-parcours="E">
+      <PersonaAvatar parcours="E" initial="Y" size={48} label="Avatar de Yanis" />
+      <strong class="picker-name">Yanis · Tasky</strong>
+      <small class="picker-pitch">Yanis développe un task manager pour son association sportive. Réutilise les exercices existants.</small>
+      <span class="picker-cover">✅ Axes 1–15 · ⚠️ 16</span>
+    </button>
+  </div>
+
+  <p class="picker-tip">
+    💡 Tu peux choisir maintenant ou plus tard. À défaut, c'est <strong>Marie</strong> qui sera affiché.
+    Voir <a href="/fil-rouge/">la page Fil rouge</a> pour le détail de chaque parcours.
+  </p>
+</section>
+
+<script>
+  function pick(parcours: string) {
+    localStorage.setItem('fil-rouge', parcours);
+    document.documentElement.dataset.parcours = parcours;
+    document.querySelectorAll<HTMLButtonElement>('.picker-card').forEach((c) => {
+      c.classList.toggle('chosen', c.dataset.parcours === parcours);
+      c.setAttribute('aria-pressed', String(c.dataset.parcours === parcours));
+    });
+    // Notifie le PersonaSwitcher (et autres listeners)
+    document.dispatchEvent(new CustomEvent('guide-parcours-change', { detail: { value: parcours } }));
+  }
+
+  function initPicker() {
+    document.querySelectorAll<HTMLButtonElement>('.picker-card').forEach((card) => {
+      if (card.dataset.pickerBound === '1') return;
+      card.dataset.pickerBound = '1';
+      card.addEventListener('click', () => pick(card.dataset.parcours!));
+    });
+    const stored = localStorage.getItem('fil-rouge');
+    if (stored) pick(stored);
+  }
+
+  initPicker();
+  document.addEventListener('astro:page-load', initPicker);
+</script>

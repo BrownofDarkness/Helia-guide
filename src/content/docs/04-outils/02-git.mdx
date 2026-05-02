@@ -1,0 +1,443 @@
+---
+title: 4.2 — Git en profondeur
+description: Concepts, workflow, rebase, cherry-pick, reflog — l'outil le plus important du dev.
+sidebar:
+  order: 2
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : ne plus avoir peur de Git. Comprendre ce qu'est un commit, savoir réécrire l'historique proprement, et toujours pouvoir récupérer un travail perdu.
+
+<ObjectiveList items={[
+  "Expliquer ce qu'est un commit (un snapshot, pas un diff)",
+  "Distinguer merge, rebase, cherry-pick et savoir quand utiliser chacun",
+  "Récupérer un commit perdu avec git reflog",
+  "Choisir entre GitFlow, GitHub Flow et trunk-based",
+  "Écrire des messages de commit selon Conventional Commits"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 1 lu" />
+
+
+## Le modèle mental — un graphe de snapshots
+
+**Un commit n'est pas un diff.** C'est un **snapshot complet** de tous les fichiers à un instant donné, identifié par un hash SHA-1.
+
+<Diagram
+  caption="Anatomie de Git — chaque commit pointe vers son parent"
+  code={`
+    flowchart RL
+      C4["c4: f3a2... (HEAD, main)<br/>fix bug auth"]
+      C3["c3: 9b1e...<br/>add login form"]
+      C2["c2: 2d8a...<br/>scaffold app"]
+      C1["c1: e7c4...<br/>initial commit"]
+      C4 --> C3 --> C2 --> C1
+  `}
+/>
+
+Chaque commit contient :
+- Un **hash unique** (SHA-1).
+- Un **pointeur vers son parent** (ou plusieurs en cas de merge).
+- L'**arbre des fichiers** à ce moment.
+- Métadonnées : auteur, message, date.
+
+Une **branche** est juste un pointeur mobile vers un commit. `main` pointe vers le dernier commit de main. Quand tu fais un commit, le pointeur avance.
+
+## La zone de travail — 4 états
+
+Un fichier dans Git peut être dans 4 endroits :
+
+<Diagram
+  caption="Le cycle d'un fichier dans Git"
+  code={`
+    flowchart LR
+      WD[Working Directory<br/>fichiers édités] -->|git add| Staging[Staging area<br/>index]
+      Staging -->|git commit| Local[Local repo<br/>commits]
+      Local -->|git push| Remote[Remote repo<br/>GitHub/GitLab]
+      Remote -->|git fetch| Local
+      Remote -->|git pull| WD
+  `}
+/>
+
+### Voir l'état
+
+```bash
+git status            # vue d'ensemble
+git diff              # diff working dir vs staging
+git diff --staged     # diff staging vs dernier commit
+git log --oneline -10 # 10 derniers commits
+git log --graph --oneline --all  # graphe visuel des branches
+```
+
+## Workflow quotidien — les 10 commandes essentielles
+
+```bash
+# Configurer (une fois)
+git config --global user.name "Ton Nom"
+git config --global user.email "ton@email.com"
+git config --global init.defaultBranch main
+git config --global pull.rebase false
+
+# Démarrer
+git clone <url>                      # cloner un repo
+git init                             # nouveau repo
+
+# Travailler
+git checkout -b feat/login           # créer + basculer sur une branche
+git status                           # qu'est-ce que j'ai modifié ?
+git add fichier.js                   # stage un fichier
+git add .                            # stage tout (avec précaution !)
+git commit -m "feat: add login form" # créer un commit
+git push -u origin feat/login        # pousser et tracker la branche
+
+# Mettre à jour
+git fetch                            # récupérer les changements distants (sans merger)
+git pull                             # fetch + merge
+git pull --rebase                    # fetch + rebase (historique plus propre)
+```
+
+## Branches — créer, basculer, fusionner
+
+### Créer / basculer
+
+```bash
+git branch                           # liste les branches locales
+git branch -a                        # locales + distantes
+git checkout -b feat/login           # créer + basculer (Git < 2.23)
+git switch -c feat/login             # même chose, syntaxe moderne
+git switch main                      # revenir sur main
+git switch -                         # retourner sur la précédente
+```
+
+### Fusionner — merge vs rebase
+
+Tu as travaillé sur `feat/login`, pendant que `main` a évolué. Comment intégrer ?
+
+#### Option 1 — Merge
+
+```bash
+git switch main
+git pull
+git merge feat/login
+```
+
+Crée un **commit de merge** qui a deux parents.
+
+<Diagram
+  caption="Merge — un commit supplémentaire qui réunit les deux branches"
+  code={`
+    gitGraph
+      commit id: "A"
+      commit id: "B"
+      branch feat/login
+      checkout feat/login
+      commit id: "L1"
+      commit id: "L2"
+      checkout main
+      commit id: "C"
+      merge feat/login id: "M"
+  `}
+/>
+
+✅ Préserve l'historique réel.
+❌ Historique « complexe » à long terme (beaucoup de commits de merge).
+
+#### Option 2 — Rebase
+
+```bash
+git switch feat/login
+git rebase main           # rejoue les commits de feat/login après main
+git switch main
+git merge feat/login      # fast-forward, pas de merge commit
+```
+
+<Diagram
+  caption="Rebase — réécrit l'historique pour qu'il soit linéaire"
+  code={`
+    gitGraph
+      commit id: "A"
+      commit id: "B"
+      commit id: "C"
+      commit id: "L1'"
+      commit id: "L2'"
+  `}
+/>
+
+✅ Historique linéaire, lisible.
+❌ Réécrit l'historique : **dangereux sur des branches partagées** !
+
+<Aside type="caution" title="La règle d'or du rebase">
+**Ne jamais rebaser une branche que d'autres ont déjà tirée.** Tu réécris des hashs de commits qui existent déjà ailleurs. Sur ta branche locale uniquement (avant push), c'est sûr.
+</Aside>
+
+### Squash — un seul commit pour la PR
+
+Quand ta branche a 12 commits *« wip »*, *« fix »*, *« re-fix »*, tu veux les fusionner en 1 seul commit propre avant de pousser :
+
+```bash
+git rebase -i main
+# Dans l'éditeur, garde "pick" sur le 1er, change les autres en "squash" ou "s"
+```
+
+Ou directement à la PR : la plupart des plateformes (GitHub, GitLab) ont un bouton *« Squash and merge »*.
+
+## Les outils avancés à connaître
+
+### `git stash` — mettre de côté
+
+Tu travailles sur une feature, on te demande de fixer un bug urgent ailleurs :
+
+```bash
+git stash                    # sauvegarde le working dir et le nettoie
+git switch main
+git switch -c fix/urgent
+# ... travail urgent ...
+git switch feat/login
+git stash pop                # restaure ton travail
+```
+
+### `git cherry-pick` — appliquer un commit ailleurs
+
+Tu as un fix sur `feat/login` qui doit aussi aller sur `main` immédiatement :
+
+```bash
+git switch main
+git cherry-pick <hash-du-commit>
+```
+
+### `git reflog` — la machine à remonter le temps
+
+> *« J'ai perdu mon commit ! »* Non, tu ne l'as **jamais vraiment** perdu. Git garde un historique de toutes tes manipulations pendant ~90 jours.
+
+```bash
+git reflog
+# 1a2b3c HEAD@{0}: reset: moving to HEAD~1
+# 4d5e6f HEAD@{1}: commit: feat: add awesome feature
+# ...
+
+git reset --hard 4d5e6f      # récupère le commit perdu
+```
+
+C'est ton filet de sécurité ultime. Si tu te plantes — `git reset --hard`, `git rebase` cassé, etc. — `reflog` te sauve.
+
+### `git bisect` — trouver le commit qui a introduit un bug
+
+Recherche binaire dans l'historique :
+
+```bash
+git bisect start
+git bisect bad                  # le commit actuel est cassé
+git bisect good v1.2.0          # cette version marchait
+# Git checkout un commit au milieu
+# Tu testes, puis :
+git bisect good                  # ou bad selon le résultat
+# Répète jusqu'à trouver le coupable
+git bisect reset
+```
+
+### `git worktree` — plusieurs branches en parallèle
+
+Tu veux travailler sur une feature **et** un fix simultanément, sans stash :
+
+```bash
+git worktree add ../mon-repo-fix fix/urgent
+# Tu as maintenant 2 dossiers, 2 branches actives
+```
+
+## Stratégies de branching
+
+### GitHub Flow — simple et efficace
+
+<Diagram
+  caption="GitHub Flow — main toujours déployable"
+  code={`
+    gitGraph
+      commit id: "v1.0"
+      branch feat/login
+      checkout feat/login
+      commit id: "wip"
+      commit id: "ok"
+      checkout main
+      merge feat/login id: "PR fusionnée"
+      branch fix/bug
+      checkout fix/bug
+      commit id: "fix"
+      checkout main
+      merge fix/bug
+  `}
+/>
+
+- `main` est toujours déployable.
+- Chaque feature/fix → une branche.
+- PR → review → merge sur main.
+- Déploiement après chaque merge (continuous deployment).
+
+**Pour 90 % des équipes web modernes, c'est le bon choix.**
+
+### Trunk-based development
+
+Encore plus radical : tout le monde commit directement sur `main` (avec feature flags pour cacher l'incomplet). Pour les équipes très matures avec excellente CI/CD.
+
+### GitFlow — l'historique
+
+Plus complexe : `main`, `develop`, `feature/*`, `release/*`, `hotfix/*`. **Surdimensionné pour la plupart des projets web modernes**, encore utilisé sur certains projets avec releases trimestrielles.
+
+## Conventional Commits
+
+Format normalisé pour les messages de commit :
+
+```
+<type>[scope optionnel]: description courte
+
+[corps optionnel : pourquoi]
+
+[footer optionnel : BREAKING CHANGE, Refs #123]
+```
+
+Types courants :
+
+| Type | Usage |
+|------|-------|
+| `feat` | Nouvelle fonctionnalité |
+| `fix` | Correction de bug |
+| `docs` | Documentation seulement |
+| `style` | Formatage (pas de logique) |
+| `refactor` | Réorganisation sans changement fonctionnel |
+| `perf` | Amélioration de perf |
+| `test` | Ajout/correction de tests |
+| `build` | Système de build, dépendances |
+| `ci` | Configuration CI |
+| `chore` | Maintenance |
+
+**Exemples** :
+
+```
+feat(auth): add password reset flow
+
+Lien vers issue #145.
+
+BREAKING CHANGE: l'endpoint /reset-password est devenu /auth/reset-password
+```
+
+```
+fix: prevent crash when user has no avatar
+
+Returns a default avatar URL instead of throwing.
+
+Refs #234
+```
+
+**Pourquoi c'est utile** :
+- Les changelogs se génèrent automatiquement (`standard-version`, `changesets`).
+- Le versioning sémantique se déduit (`feat` → minor, `fix` → patch, `BREAKING CHANGE` → major).
+- L'historique se survole en un coup d'œil.
+
+## Bonnes pratiques
+
+### Faire des commits petits et atomiques
+
+**Un commit = un changement logique cohérent.** Pas *« Save de fin de journée »*.
+
+**Mauvais** :
+```
+- 47 fichiers changés en 1 commit
+- "wip"
+```
+
+**Bon** :
+```
+- feat(auth): add login form
+- feat(auth): add password validation
+- test(auth): cover login error cases
+- docs(auth): document JWT expiration
+```
+
+Tu pourras **revenir en arrière** sur une partie sans perdre les autres. Les **PR sont plus reviewables**.
+
+### `.gitignore`
+
+Ce qu'il **faut** ignorer :
+
+```
+node_modules/
+.env
+.env.*.local
+dist/
+build/
+.DS_Store
+Thumbs.db
+.vscode/        # ← discutable, certains aiment versionner
+.idea/
+*.log
+coverage/
+```
+
+Ce qui **ne doit jamais** être commit :
+- Mots de passe, clés API, JWT secrets.
+- Fichiers binaires lourds (préfère Git LFS).
+- Dossiers `node_modules/` (régénérables).
+
+### Si tu as commit un secret par erreur
+
+```bash
+# C'est URGENT. Le secret est dans l'historique distant.
+# 1. Révoquer le secret immédiatement (rotate API key, etc.)
+# 2. Réécrire l'historique avec git-filter-repo ou BFG Repo-Cleaner
+# 3. Force-push (avec accord équipe — change l'historique pour tout le monde)
+```
+
+**Ne pas se contenter d'un nouveau commit qui supprime le fichier.** Le secret reste dans l'historique. Toujours révoquer d'abord.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu as fait `git reset --hard HEAD~3` mais tu réalises que tu voulais garder ces 3 commits. Que faire ?"
+  options={[
+    'C\'est perdu, recommencer le travail',
+    'git reflog puis git reset --hard <hash> sur le commit voulu',
+    'Restaurer depuis la corbeille du système',
+    'git revert HEAD'
+  ]}
+  answerIndex={1}
+  explanation="git reflog garde toutes les positions HEAD pendant ~90 jours, même après un reset hard. Tu retrouves le hash et tu y reviens. C'est le filet de sécurité ultime de Git."
+/>
+
+<Quiz
+  question="Tu travailles sur une feature branch que ton collègue a déjà tirée. Tu veux mettre à jour avec main. Que choisis-tu ?"
+  options={[
+    'git rebase main — historique linéaire',
+    'git merge main — préserve l\'historique réel et ne réécrit pas les commits déjà tirés par d\'autres',
+    'git reset --hard main',
+    'Force-push directement'
+  ]}
+  answerIndex={1}
+  explanation="Règle d'or : ne JAMAIS rebaser une branche que d'autres ont tirée. Tu réécrirais des commits qui existent ailleurs avec de nouveaux hashs, ce qui crée le chaos pour tes collègues. Le merge est sûr ici."
+/>
+
+<Quiz
+  question="Quel message de commit suit le mieux Conventional Commits ?"
+  options={[
+    '"fixed stuff"',
+    '"feat(auth): add password reset via email"',
+    '"WIP final"',
+    '"finally working"'
+  ]}
+  answerIndex={1}
+  explanation="Format type(scope): description en impératif présent, scope précis (auth), description claire. Permet la génération auto de changelog et de version sémantique."
+/>
+
+## Pour aller plus loin
+
+- *Pro Git* — Scott Chacon (gratuit, en français) : [git-scm.com/book/fr/v2](https://git-scm.com/book/fr/v2)
+- *Oh Shit, Git!?!* — [ohshitgit.com](https://ohshitgit.com/) — comment se sortir des situations classiques
+- *Learn Git Branching* — [learngitbranching.js.org](https://learngitbranching.js.org/) — visualisations interactives
+- *Conventional Commits* — [conventionalcommits.org](https://www.conventionalcommits.org/)
+
+---
+
+**Suite** : [4.3 — Gestion de paquets](/04-outils/03-paquets/) — npm, semver, lockfiles, monorepos.

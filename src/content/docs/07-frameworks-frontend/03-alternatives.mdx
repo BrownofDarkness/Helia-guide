@@ -1,0 +1,388 @@
+---
+title: 7.3 — Alternatives à React
+description: Vue, Svelte, Solid, Qwik, Astro, Angular — quand préférer chacun, avec exemples côte à côte.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="8">
+Marie hésite : sa vitrine Lina pourrait être en Astro (statique, ultra léger), avec un îlot React uniquement pour le panier. Elle explore les alternatives avant de figer son choix. Beaucoup de pages de Lina (à propos, contact, recettes) n'ont **aucun JS** — Astro s'en sortirait beaucoup mieux.
+</Scenario>
+
+<Scenario parcours="B" episode="7">
+Hugo a tout fait en React. Mais il découvre Vue 3.6 Vapor Mode et Svelte 5 — un peu jaloux des bundles plus petits. Il explore mais reste sur React (équipe d'Inès en théorie nulle, Hugo = seul dev, écosystème dispo).
+</Scenario>
+
+<Scenario parcours="C" episode="8">
+Sami compare React vs Vue 3 vs Svelte 5 sérieusement pour GreenBox. Performance, écosystème i18n, RGPD-friendly. Il fait un prototype 1 jour dans chaque, mesure les bundles, choisit React 19 pour la maturité de RSC + Next.js 16.
+</Scenario>
+
+<Scenario parcours="D" episode="8">
+Léa compare React et Svelte 5 (runes). Svelte est plus léger (compilation, pas de runtime VDOM), parfait pour mobile-first. Mais l'écosystème PWA + Yjs + Liveblocks est plus mature en React. Elle reste sur React, mais elle sait pourquoi.
+</Scenario>
+
+<Scenario parcours="E" episode="8">
+Yanis le sait : son association n'a aucune contrainte de bundle ou de perf extrême. React est le bon choix par défaut côté CV et écosystème de mainteneurs futurs (jeunes devs qu'il pourra onboarder dans l'asso).
+</Scenario>
+
+> 🎯 **Objectif** : connaître les forces des alternatives à React pour faire un choix éclairé selon le projet, l'équipe et la cible technique.
+
+<ObjectiveList items={[
+  "Connaître Vue 3, Svelte 5, Solid, Qwik, Astro, Angular",
+  "Lire un composant écrit dans chaque framework",
+  "Choisir entre eux selon le contexte (équipe, perf, écosystème, courbe d'apprentissage)",
+  "Comprendre quand React n'est PAS le bon choix"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 6 lu" />
+
+
+## Le même composant, 6 frameworks
+
+Pour rendre la comparaison concrète, voici **un compteur simple** dans chaque syntaxe.
+
+### React
+
+```jsx
+import { useState } from 'react';
+
+export function Counter() {
+  const [count, setCount] = useState(0);
+  return (
+    <button onClick={() => setCount(c => c + 1)}>
+      Compté {count} fois
+    </button>
+  );
+}
+```
+
+### Vue 3 (Composition API)
+
+```vue
+<script setup>
+import { ref } from 'vue';
+
+const count = ref(0);
+</script>
+
+<template>
+  <button @click="count++">
+    Compté {{ count }} fois
+  </button>
+</template>
+```
+
+### Svelte 5 (runes)
+
+```svelte
+<script>
+  let count = $state(0);
+</script>
+
+<button onclick={() => count++}>
+  Compté {count} fois
+</button>
+```
+
+### Solid
+
+```jsx
+import { createSignal } from 'solid-js';
+
+export function Counter() {
+  const [count, setCount] = createSignal(0);
+  return (
+    <button onClick={() => setCount(count() + 1)}>
+      Compté {count()} fois
+    </button>
+  );
+}
+```
+
+### Astro (composant statique + island)
+
+```astro
+---
+import Counter from './Counter.tsx';
+---
+<h1>Page Astro</h1>
+<Counter client:visible />   <!-- charge le JS uniquement quand visible -->
+```
+
+### Angular
+
+```ts
+import { Component, signal } from '@angular/core';
+
+@Component({
+  selector: 'app-counter',
+  template: `<button (click)="count.set(count() + 1)">Compté {{ count() }} fois</button>`,
+})
+export class CounterComponent {
+  count = signal(0);
+}
+```
+
+## Vue 3 — l'alternative la plus accessible
+
+| | |
+|---|---|
+| **Style** | Templates HTML + `<script setup>` |
+| **Réactivité** | Refs + Composition API (proxy) |
+| **Méta-framework** | **Nuxt 3** |
+| **État global** | **Pinia** (officiel) |
+| **Forces** | Documentation excellente, courbe douce, syntaxe lisible |
+| **Faiblesses** | Écosystème plus petit que React (mais solide) |
+
+### Pourquoi choisir Vue ?
+
+- Tu démarres une équipe avec des devs **non frontend** (Vue est plus intuitif côté HTML).
+- Tu veux **moins de surprises** que React (re-render moins agressif, réactivité explicite).
+- Tu préfères les **single-file components** (`.vue` qui contient template + script + style).
+
+### Exemple plus complet
+
+```vue
+<script setup>
+import { ref, computed, onMounted } from 'vue';
+
+const items = ref([]);
+const filter = ref('');
+const filtered = computed(() => items.value.filter(i => i.name.includes(filter.value)));
+
+onMounted(async () => {
+  items.value = await fetch('/api/items').then(r => r.json());
+});
+</script>
+
+<template>
+  <input v-model="filter" placeholder="Filtrer…" />
+  <ul>
+    <li v-for="item in filtered" :key="item.id">{{ item.name }}</li>
+  </ul>
+</template>
+```
+
+`v-model` fait du **two-way binding** : la variable et l'input se synchronisent automatiquement. C'est plus court qu'en React (`value + onChange`).
+
+### Vue 3.6 — Vapor Mode (expérimental, 2026)
+
+Depuis Vue 3.6, le **Vapor Mode** compile certains composants directement vers des opérations DOM sans passer par le Virtual DOM :
+
+```vue
+<script setup vapor>
+  // ce composant est compilé en code DOM direct
+  import { ref } from 'vue';
+  const count = ref(0);
+</script>
+
+<template>
+  <button @click="count++">{{ count }}</button>
+</template>
+```
+
+✅ **Bundle ~10 KB baseline** (vs ~22 KB pour Vue 3 classique).
+✅ Performances équivalentes à Svelte 5 sur les benchmarks.
+✅ **Opt-in par composant** — tu peux mixer Vapor et VDOM dans la même app.
+⚠ Encore expérimental — à valider sur ton cas d'usage avant prod.
+
+C'est la réponse de Vue à la pression perf de Svelte/Solid : rendu brutal **sans abandonner** l'écosystème Vue.
+
+## Svelte 5 — la performance sans douleur
+
+| | |
+|---|---|
+| **Style** | Compilation, pas de runtime de réactivité |
+| **Réactivité** | Runes (`$state`, `$derived`, `$effect`) |
+| **Méta-framework** | **SvelteKit** |
+| **État global** | Stores natifs (`writable`) ou runes |
+| **Forces** | Bundle minuscule (~5 Ko), syntaxe limpide |
+| **Faiblesses** | Écosystème encore plus petit que Vue, churn récent (Svelte 4 → 5 = changements significatifs) |
+
+### Pourquoi choisir Svelte ?
+
+- Tu vises une **app très performante** (mobile, marchés émergents avec connexions lentes).
+- Tu veux **moins de boilerplate** qu'en React.
+- Tu démarres un projet où tu peux te permettre de t'éloigner du standard industriel.
+
+### Exemple
+
+```svelte
+<script>
+  let { name = 'Monde' } = $props();   // props
+  let count = $state(0);
+  let doubled = $derived(count * 2);
+
+  $effect(() => {
+    console.log('count a changé :', count);
+  });
+</script>
+
+<h1>Bonjour {name}</h1>
+<button onclick={() => count++}>+</button>
+<p>Compté : {count} (×2 = {doubled})</p>
+```
+
+C'est **ultra lisible**. Pas de hooks, pas de `useEffect`, pas de re-render mental — la variable change, ce qui dépend d'elle se met à jour. Point.
+
+## Solid — les performances brutales
+
+| | |
+|---|---|
+| **Style** | JSX comme React, mais réactivité fine-grained |
+| **Réactivité** | Signaux (comme Svelte 5, qui s'en est inspiré) |
+| **Méta-framework** | **SolidStart** |
+| **Forces** | Performances meilleures que React/Vue, syntaxe React-like |
+| **Faiblesses** | Petit écosystème, peu de talents disponibles |
+
+### Quand choisir Solid ?
+
+Quand tu connais déjà React mais veux les perfs de Svelte avec une syntaxe familière. Niche en 2026 mais solide techniquement.
+
+## Qwik — résumabilité
+
+| | |
+|---|---|
+| **Style** | Composants JSX |
+| **Particularité** | **Resumability** : la page est interactive sans hydratation, le JS se charge à la demande quand on interagit |
+| **Forces** | Time-to-interactive instantané même sur grosses apps |
+| **Faiblesses** | Très récent, écosystème naissant |
+
+Intéressant pour des **applications gigantesques** où le coût de l'hydratation classique est prohibitif. Niche, à surveiller.
+
+## Astro — les sites de contenu
+
+| | |
+|---|---|
+| **Style** | Composants `.astro` (HTML + frontmatter) |
+| **Particularité** | **Islands architecture** : par défaut, **0 JS** envoyé. Seulement les composants déclarés interactifs sont hydratés |
+| **Forces** | Performance maximale pour les sites de contenu, intègre React/Vue/Svelte/Solid en îlots |
+| **Faiblesses** | Pas pour les apps très dynamiques (SaaS, dashboards) |
+
+### Quand choisir Astro ?
+
+- Sites de contenu : blogs, marketing, docs (comme **ce site** !), e-commerce léger.
+- Tu veux mixer plusieurs frameworks (un composant React ici, un Svelte là — Astro le permet).
+- Tu vises **score Lighthouse > 95** par défaut.
+
+```astro
+---
+// Frontmatter (TypeScript côté serveur, exécuté au build)
+import ReactCounter from '../components/Counter.tsx';
+import VueChart from '../components/Chart.vue';
+
+const posts = await Astro.glob('../posts/*.md');
+---
+
+<html>
+  <body>
+    <h1>Mon blog</h1>
+    <ul>
+      {posts.map(p => <li><a href={p.url}>{p.frontmatter.title}</a></li>)}
+    </ul>
+
+    <!-- React, hydraté quand visible -->
+    <ReactCounter client:visible />
+
+    <!-- Vue, hydraté seulement sur interaction -->
+    <VueChart client:idle />
+  </body>
+</html>
+```
+
+## Angular — l'enterprise mature
+
+| | |
+|---|---|
+| **Style** | Composants TypeScript-first, decorators |
+| **Réactivité** | Signaux (depuis Angular 17) ou observables RxJS |
+| **Méta-framework** | Inclus (routing, forms, DI, HttpClient — tout est officiel) |
+| **Forces** | Cohérence sur de très gros projets, opinions fortes, DI puissant |
+| **Faiblesses** | Verbeux, courbe abrupte, image plus "old school" |
+
+### Quand choisir Angular ?
+
+- **Grandes équipes** (50+ devs) où la cohérence prime.
+- Contextes **enterprise** (banque, assurances) où Angular est encore le standard.
+- Tu viens de Java/C# et tu aimes l'architecture explicite.
+
+## Tableau de décision
+
+| Si... | Choisis |
+|-------|---------|
+| Tu es sur le marché de l'emploi français | **React** (largement majoritaire) |
+| Tu démarres seul / petite équipe et veux du fun | **Svelte** |
+| Tu veux de la perf max pour un site de contenu | **Astro** |
+| Tu encadres une équipe **non frontend** | **Vue** |
+| Tu rejoins une équipe enterprise avec gros projet existant | **Angular** |
+| Tu veux la perf de Svelte avec une syntaxe React | **Solid** |
+| Tu construis une app gigantesque où le JS bundle est un problème | **Qwik** |
+
+<Aside type="note" title="Le choix le plus important n'est pas le framework">
+**80 % des projets web pourraient utiliser n'importe lequel de ces frameworks.** Ce qui détermine la qualité finale, c'est :
+- la qualité du code écrit,
+- les choix d'architecture (axe 3),
+- la rigueur sur la sécurité, la perf, l'accessibilité.
+
+Choisis celui où ton équipe sera **productive et heureuse**. Le reste suit.
+</Aside>
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu construis un site marketing + blog (40 pages, peu d'interactivité). Choix idéal ?"
+  options={[
+    'Next.js + React partout',
+    'Astro + composants React/Vue ponctuels en îlots — performance maximale, peu de JS expédié',
+    'Une SPA Angular avec routing complet',
+    'Du HTML pur, pas besoin de framework'
+  ]}
+  answerIndex={1}
+  explanation="Astro est conçu exactement pour ça. Il génère du HTML statique par défaut et n'expédie du JS QUE pour les composants déclarés interactifs (client:*). Score Lighthouse >95 sans effort. HTML pur marche aussi mais perd la composition par composants."
+/>
+
+<Quiz
+  question="Une équipe de 50+ devs sur une banque a un gros projet en TypeScript. Cohérence et discipline avant tout. Framework probable ?"
+  options={[
+    'Svelte — perf et simplicité',
+    'Astro — pour faire ce qu\'il y a de mieux',
+    'Angular — opinions fortes, DI, structure imposée, talents enterprise disponibles',
+    'Solid — pour les meilleures perfs'
+  ]}
+  answerIndex={2}
+  explanation="Angular est le standard sur ce type de contexte : équipes nombreuses, projets long-terme, cohérence stricte. Le verbosity et l'architecture imposée sont des avantages quand l'enjeu est de garder 50 devs alignés sur 5 ans. React peut aussi marcher mais demande plus de discipline d'équipe."
+/>
+
+<Quiz
+  question="Tu connais React. Tu veux essayer un framework avec moins de boilerplate et meilleures perfs. Que choisir d'abord ?"
+  options={[
+    'Angular — pour comparer',
+    'Svelte 5 — la syntaxe et le modèle mental sont une découverte agréable, courbe d\'apprentissage faible',
+    'Backbone.js — alternative classique',
+    'jQuery'
+  ]}
+  answerIndex={1}
+  explanation="Svelte 5 + SvelteKit est généralement la première alternative que les Reactistes essaient. La syntaxe est familière mais sans hooks, et le mental model 'variable change → DOM se met à jour' est libérateur. Solid est une autre bonne option si tu veux garder JSX."
+/>
+
+## Pour aller plus loin
+
+- *Vue 3 Guide* — [vuejs.org/guide](https://vuejs.org/guide/)
+- *Svelte 5 Tutorial* — [learn.svelte.dev](https://learn.svelte.dev/)
+- *Astro Docs* — [docs.astro.build](https://docs.astro.build/)
+- *Solid Docs* — [solidjs.com](https://www.solidjs.com/)
+- *Angular* — [angular.dev](https://angular.dev/)
+- *State of JS* — [stateofjs.com](https://stateofjs.com/) — sondage annuel des tendances
+
+---
+
+**Suite** : [7.4 — Méta-frameworks](/07-frameworks-frontend/04-meta-frameworks/) — Next.js, Nuxt, SvelteKit, Remix.

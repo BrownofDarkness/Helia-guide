@@ -1,0 +1,342 @@
+---
+title: 10.5 — Sécurité dans un BaaS
+description: RLS Postgres, Firestore Rules, App Check, gestion clés API — éviter les data leaks classiques.
+sidebar:
+  order: 5
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : configurer une sécurité **réelle** dans un BaaS. Le piège n°1 : se croire sécurisé parce qu'on utilise une plateforme renommée.
+
+<ObjectiveList items={[
+  "Écrire des Row-Level Security (RLS) en PostgreSQL/Supabase",
+  "Configurer des Firestore Security Rules sans data leak",
+  "Activer App Check pour bloquer les bots et abus",
+  "Distinguer clé publique (anon) et clé secrète (service role)",
+  "Auditer la sécurité de son BaaS avec une check-list 2026"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 8-9 lus" />
+
+
+## La règle absolue
+
+> **Aucun BaaS n'est sécurisé par défaut.** Tu dois explicitement configurer les règles d'accès. Sans ça, ta DB est **publique**.
+
+### L'erreur n°1 — Supabase
+
+```sql
+-- DANGER : table créée sans RLS activée
+CREATE TABLE tasks (...);
+```
+
+→ **Toute personne avec ta clé `anon` peut tout lire et tout écrire.** Et la clé anon est **dans ton frontend** (donc publique).
+
+**Fix** :
+
+```sql
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users see own tasks" ON tasks
+  FOR SELECT USING (auth.uid() = owner_id);
+```
+
+### L'erreur n°1 — Firebase
+
+```
+allow read, write: if true;
+```
+
+→ **Toutes tes données sont publiques.** Les bots scannent les projets Firebase et copient les DB exposées.
+
+**Fix** :
+
+```
+match /tasks/{taskId} {
+  allow read, write: if request.auth != null
+                     && resource.data.owner_id == request.auth.uid;
+}
+```
+
+## Row-Level Security (Supabase / PostgreSQL)
+
+C'est la sécurité **au niveau base** : Postgres lui-même refuse de retourner des lignes que l'utilisateur ne devrait pas voir.
+
+### Activer RLS
+
+```sql
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+```
+
+**Une fois activée**, sans policy : **personne ne voit rien** (sauf `service_role`). Tu dois écrire des policies pour autoriser.
+
+### Policy SELECT
+
+```sql
+CREATE POLICY "Users see own tasks" ON tasks
+  FOR SELECT
+  USING (auth.uid() = owner_id);
+```
+
+`auth.uid()` est une fonction Supabase qui retourne l'UUID du user connecté (extrait du JWT).
+
+### Policy INSERT
+
+```sql
+CREATE POLICY "Users create own tasks" ON tasks
+  FOR INSERT
+  WITH CHECK (auth.uid() = owner_id);
+```
+
+`USING` filtre **les lignes existantes** ; `WITH CHECK` valide **les nouvelles lignes** insérées.
+
+### Policy UPDATE
+
+```sql
+CREATE POLICY "Users update own tasks" ON tasks
+  FOR UPDATE
+  USING (auth.uid() = owner_id)
+  WITH CHECK (auth.uid() = owner_id);
+```
+
+Les deux : tu ne peux update que **tes** lignes (USING) ET tu ne peux pas changer le `owner_id` pour voler la ligne d'un autre (WITH CHECK).
+
+### Policy DELETE
+
+```sql
+CREATE POLICY "Users delete own tasks" ON tasks
+  FOR DELETE
+  USING (auth.uid() = owner_id);
+```
+
+### Policies plus complexes
+
+```sql
+-- Admin peut tout voir
+CREATE POLICY "Admins see all" ON tasks
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Membres d'une équipe peuvent voir les tâches partagées
+CREATE POLICY "Team members see shared tasks" ON tasks
+  FOR SELECT
+  USING (
+    team_id IN (
+      SELECT team_id FROM team_members WHERE user_id = auth.uid()
+    )
+  );
+```
+
+### Tester ses RLS
+
+**Indispensable**. Avec `pgTAP` ou un script qui crée 2 users et vérifie que A ne voit pas les données de B.
+
+```sql
+-- Bascule en tant que user A
+SET LOCAL request.jwt.claims = '{"sub":"user-a-uuid"}';
+SELECT * FROM tasks;   -- doit voir ses tâches uniquement
+```
+
+## Firestore Security Rules
+
+Le DSL propriétaire de Firebase. Plus opaque que le SQL mais expressif.
+
+### Structure
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ... règles par collection
+  }
+}
+```
+
+### Règles par collection
+
+```
+match /tasks/{taskId} {
+  allow read: if isOwner(resource);
+  allow create: if request.auth != null
+                && request.resource.data.owner_id == request.auth.uid
+                && validTaskData(request.resource.data);
+  allow update: if isOwner(resource)
+                && request.resource.data.owner_id == resource.data.owner_id;
+  allow delete: if isOwner(resource);
+}
+
+function isOwner(doc) {
+  return request.auth != null && doc.data.owner_id == request.auth.uid;
+}
+
+function validTaskData(data) {
+  return data.title is string
+         && data.title.size() > 0
+         && data.title.size() <= 200
+         && data.done is bool;
+}
+```
+
+### Variables Firestore Rules
+
+| Variable | Sens |
+|----------|------|
+| `request.auth` | `null` si non connecté, sinon `{ uid, token }` |
+| `request.resource.data` | Le document **proposé** (insert/update) |
+| `resource.data` | Le document **existant** (read/update/delete) |
+| `request.time` | Timestamp |
+| `request.method` | `get`, `list`, `create`, `update`, `delete` |
+
+### Tester avec l'emulator
+
+```bash
+firebase emulators:start --only firestore
+```
+
+Puis avec `@firebase/rules-unit-testing` :
+
+```ts
+import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
+
+const env = await initializeTestEnvironment({
+  projectId: 'test',
+  firestore: { rules: fs.readFileSync('firestore.rules', 'utf8') },
+});
+
+const alice = env.authenticatedContext('alice').firestore();
+const bob = env.authenticatedContext('bob').firestore();
+
+await assertSucceeds(alice.doc('tasks/x').set({ owner_id: 'alice', title: 'T' }));
+await assertFails(bob.doc('tasks/x').get());   // Bob ne doit pas pouvoir lire
+```
+
+## App Check — bloquer les bots
+
+[Firebase App Check](https://firebase.google.com/docs/app-check) (ou équivalent reCAPTCHA Enterprise sur Supabase) **vérifie** que la requête vient bien de **ton app** (web, iOS, Android), pas d'un script malveillant.
+
+**Sans App Check** : un bot peut faire 1 million d'appels à ton Firebase / Supabase, **drainer ton budget**, scraper ta DB.
+
+**Avec App Check** : chaque requête doit présenter un token cryptographique signé par ton app. Les bots passent leur chemin.
+
+```ts
+// Activer App Check côté client
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+
+initializeAppCheck(app, {
+  provider: new ReCaptchaV3Provider('site_key'),
+  isTokenAutoRefreshEnabled: true,
+});
+```
+
+## Gestion des clés API
+
+### Distinguer les types
+
+| Clé | Public ? | Usage |
+|-----|----------|-------|
+| `SUPABASE_ANON_KEY` | ✅ | Côté client, soumis au RLS |
+| `SUPABASE_SERVICE_ROLE_KEY` | ❌ | Côté serveur, **bypass RLS** — danger absolu si exposée |
+| `STRIPE_PUBLISHABLE_KEY` (`pk_...`) | ✅ | Affichage formulaire paiement |
+| `STRIPE_SECRET_KEY` (`sk_...`) | ❌ | Côté serveur uniquement |
+| `CLERK_PUBLISHABLE_KEY` | ✅ | Côté client |
+| `CLERK_SECRET_KEY` | ❌ | Côté serveur |
+
+### Convention Next.js
+
+```bash
+# .env
+
+# Clés publiques (préfixe NEXT_PUBLIC_ → exposées au client)
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+
+# Clés secrètes (PAS de préfixe NEXT_PUBLIC_ → côté serveur uniquement)
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+STRIPE_SECRET_KEY=sk_test_...
+RESEND_API_KEY=re_...
+```
+
+### Vérifier ce qui fuit
+
+```bash
+# Compile et vérifie ce qui apparaît dans le bundle client
+npm run build
+grep -r "STRIPE_SECRET" .next/static/   # ne doit RIEN trouver
+grep -r "service_role" .next/static/    # ne doit RIEN trouver
+```
+
+Outils : `git-secrets`, `gitleaks`, `truffleHog` en pre-commit hook.
+
+## Check-list de sécurité BaaS 2026
+
+| ✓ | Vérification |
+|---|--------------|
+| ☐ RLS activée sur **toutes** les tables sensibles |
+| ☐ Tests automatiques des RLS (un user n'accède pas aux données d'un autre) |
+| ☐ Aucune clé secrète dans le bundle client (vérification automatique en CI) |
+| ☐ App Check / reCAPTCHA activé pour les endpoints publics |
+| ☐ Rate limiting sur `/login`, `/register`, `/reset-password` |
+| ☐ Webhooks signés vérifiés cryptographiquement |
+| ☐ Secrets stockés dans le secret manager du provider, pas en config |
+| ☐ MFA / Passkeys disponibles pour les utilisateurs sensibles |
+| ☐ Audit log des actions admin (qui a fait quoi quand) |
+| ☐ Monitoring des accès anormaux (Sentry, datadog) |
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu crées une table 'orders' dans Supabase sans activer RLS. Conséquence ?"
+  options={[
+    'Aucune, c\'est sécurisé par défaut',
+    'Toute personne avec ta clé anon (= dans ton bundle client donc PUBLIQUE) peut lire et écrire dans la table. Activer ALTER TABLE orders ENABLE ROW LEVEL SECURITY est OBLIGATOIRE',
+    'Supabase bloque automatiquement les requêtes',
+    'Tu dois être connecté pour accéder'
+  ]}
+  answerIndex={1}
+  explanation="C'est l'erreur n°1 sur Supabase. Sans RLS activée, la table est entièrement accessible avec la clé anon (qui est PUBLIQUE car dans le bundle client). Il faut explicitement ENABLE ROW LEVEL SECURITY puis créer des policies. Supabase t'avertit dans le dashboard avec un badge rouge si une table publique n'a pas de RLS."
+/>
+
+<Quiz
+  question="Différence entre `USING` et `WITH CHECK` dans une policy Postgres ?"
+  options={[
+    'Aucune différence',
+    'USING filtre les lignes existantes (lectures, updates, deletes). WITH CHECK valide les nouvelles données (inserts, updates). Les deux sont nécessaires sur UPDATE pour empêcher de voler une ligne en changeant son owner',
+    'USING est pour SELECT, WITH CHECK pour tout le reste',
+    'WITH CHECK n\'existe pas'
+  ]}
+  answerIndex={1}
+  explanation="Subtile mais critique. USING vérifie 'puis-je accéder à cette ligne existante ?'. WITH CHECK vérifie 'la version proposée est-elle valide ?'. Sur UPDATE, sans WITH CHECK, tu peux faire UPDATE tasks SET owner_id = 'alice' WHERE id = ... — passer USING (tu es propriétaire) puis CHANGER le owner pour voler la ligne. Toujours USING + WITH CHECK sur UPDATE."
+/>
+
+<Quiz
+  question="Tu vois `SUPABASE_SERVICE_ROLE_KEY=eyJ...` dans le bundle JavaScript de ton site (vérifié avec `npm run build` puis grep). Action ?"
+  options={[
+    'Pas grave, c\'est encrypté',
+    'URGENT : 1) Régénérer la clé Service Role depuis Supabase. 2) Supprimer la variable d\'env du bundle (vérifier qu\'elle n\'a pas le préfixe NEXT_PUBLIC_). 3) git filter-repo si elle est dans l\'historique. La clé service role bypass RLS — exposée = data leak total',
+    'Désactiver RLS pour qu\'elle ne serve plus à rien',
+    'Aucune action nécessaire si le site n\'est pas public'
+  ]}
+  answerIndex={1}
+  explanation="La clé service role est l'équivalent du compte admin Postgres. Elle BYPASS toute la RLS — accède à tout, écrit tout, supprime tout. Exposée dans le bundle = compromission totale. Action immédiate : révoquer (Supabase dashboard > Settings > API > Reset service role key), puis nettoyer le code."
+/>
+
+## Pour aller plus loin
+
+- *Supabase Auth + RLS Tutorial* — [supabase.com/docs/guides/auth/row-level-security](https://supabase.com/docs/guides/auth/row-level-security)
+- *Firestore Security Rules* — [firebase.google.com/docs/firestore/security/get-started](https://firebase.google.com/docs/firestore/security/get-started)
+- *App Check* — [firebase.google.com/docs/app-check](https://firebase.google.com/docs/app-check)
+- *OWASP API Security Top 10* — [owasp.org/API-Security](https://owasp.org/API-Security/)
+- *gitleaks* — [github.com/gitleaks/gitleaks](https://github.com/gitleaks/gitleaks) — détecter les secrets dans le code
+
+---
+
+**Fin de l'axe 10.** Direction l'[axe 11 — Qualité & tests](/11-qualite-tests/), ou attaque le projet **SaaS minimal en un week-end**.

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Café Émeraude — Cafés artisanaux depuis 1952</title>
+  <meta name="description" content="Café Émeraude torréfie ses grains à Lyon depuis 1952. Découvrez notre offre Robusta, Espresso et Latte, et inscrivez-vous à la lettre d'information." />
+
+  <!-- OpenGraph -->
+  <meta property="og:title" content="Café Émeraude — Cafés artisanaux depuis 1952" />
+  <meta property="og:description" content="Torréfaction artisanale à Lyon depuis 70 ans." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://cafe-emeraude.example.com/" />
+
+  <link rel="canonical" href="https://cafe-emeraude.example.com/" />
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Données structurées -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "Café Émeraude",
+    "image": "https://cafe-emeraude.example.com/og.jpg",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Lyon",
+      "addressCountry": "FR"
+    },
+    "telephone": "+33-4-00-00-00-00",
+    "priceRange": "€€"
+  }
+  </script>
+</head>
+<body>
+
+  <a class="skip-link" href="#contenu">Aller au contenu</a>
+
+  <header>
+    <div class="container header-inner">
+      <a href="/" class="brand" aria-label="Café Émeraude — accueil">
+        <span class="brand-name">Café Émeraude</span>
+        <span class="brand-tagline">Le café qui tourne tout seul depuis 1952</span>
+      </a>
+
+      <nav aria-label="Principal">
+        <ul>
+          <li><a href="#nos-cafes">Nos cafés</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="contenu">
+
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="container hero-inner">
+        <h1 id="hero-title">Cafés artisanaux torréfiés à Lyon</h1>
+        <p>Trois variétés. Une passion. Sept décennies de torréfaction familiale.</p>
+        <a class="btn btn-primary" href="#nos-cafes">Découvrir nos cafés</a>
+      </div>
+    </section>
+
+    <section id="nos-cafes" aria-labelledby="offre-title" class="section">
+      <div class="container">
+        <h2 id="offre-title">Notre offre</h2>
+
+        <ul class="cards" role="list">
+          <li class="card">
+            <picture>
+              <source type="image/avif" srcset="cafe-robusta.avif" />
+              <source type="image/webp" srcset="cafe-robusta.webp" />
+              <img src="cafe-robusta.jpg" alt="" width="400" height="300" loading="lazy" />
+            </picture>
+            <h3>Café Robusta</h3>
+            <p>Le classique reconstituant. Notes corsées, finale chocolatée.</p>
+          </li>
+          <li class="card">
+            <picture>
+              <source type="image/avif" srcset="cafe-espresso.avif" />
+              <source type="image/webp" srcset="cafe-espresso.webp" />
+              <img src="cafe-espresso.jpg" alt="" width="400" height="300" loading="lazy" />
+            </picture>
+            <h3>Espresso</h3>
+            <p>Le coup de fouet matinal. Court, intense, crema épaisse.</p>
+          </li>
+          <li class="card">
+            <picture>
+              <source type="image/avif" srcset="cafe-latte.avif" />
+              <source type="image/webp" srcset="cafe-latte.webp" />
+              <img src="cafe-latte.jpg" alt="" width="400" height="300" loading="lazy" />
+            </picture>
+            <h3>Latte</h3>
+            <p>La douceur réconfortante. Lait micro-mousse, art latte par défaut.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <aside class="banner" aria-label="Information importante">
+      <p>📅 Pensez à venir nous voir avant la fermeture annuelle du 23 au 30 août.</p>
+    </aside>
+
+    <section id="contact" aria-labelledby="contact-title" class="section section-alt">
+      <div class="container">
+        <h2 id="contact-title">Inscrivez-vous à la lettre d'information</h2>
+        <p>Recevez les nouveautés, les recettes et les invitations aux dégustations.</p>
+
+        <form action="/subscribe" method="post" class="form" novalidate>
+          <div class="field">
+            <label for="name">Nom</label>
+            <input type="text" id="name" name="name" required autocomplete="name" />
+          </div>
+
+          <div class="field">
+            <label for="email">E-mail</label>
+            <input type="email" id="email" name="email" required autocomplete="email" />
+          </div>
+
+          <div class="field">
+            <label for="phone">Téléphone <span class="optional">(facultatif)</span></label>
+            <input type="tel" id="phone" name="phone" autocomplete="tel" />
+          </div>
+
+          <div class="field">
+            <label for="message">Message</label>
+            <textarea id="message" name="message" rows="4"></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-primary">S'inscrire</button>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="container footer-inner">
+      <p>&copy; 2026 Café Émeraude — Lyon, France</p>
+      <nav aria-label="Pied de page">
+        <ul>
+          <li><a href="/mentions-legales">Mentions légales</a></li>
+          <li><a href="/confidentialite">Confidentialité</a></li>
+        </ul>
+      </nav>
+    </div>
+  </footer>
+
+</body>
+</html>

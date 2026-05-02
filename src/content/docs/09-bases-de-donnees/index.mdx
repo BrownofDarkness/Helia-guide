@@ -1,0 +1,79 @@
+---
+title: Axe 9 — Bases de données
+description: SQL, NoSQL, ORM, données opérationnelles — modéliser, requêter, indexer, scaler.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : choisir et utiliser la bonne base pour chaque problème, écrire des requêtes performantes, et opérer en prod sans perdre de données.
+
+<Aside type="tip" title="Ordre de lecture suggéré">
+**9.1 (SQL fondamentaux) se lit *avant* l'axe 8 si tu débutes.**
+L'axe 8 utilise des ORM (Drizzle, SQLAlchemy, Eloquent) qui cachent du SQL. Sans le bagage de 9.1, tu manipules un ORM sans comprendre ce qu'il fait. **9.2 → 9.4** (NoSQL, ORM, opérations) en revanche bénéficient d'avoir d'abord codé un backend.
+
+Ordre conseillé : **… axe 7 → 9.1 SQL → axe 8 (backend) → 9.2-9.4 → axe 10 (BaaS) →**.
+</Aside>
+
+## Prérequis
+
+- **9.1 (SQL)** : axes 1 + 3 (modélisation) — peut se faire **avant l'axe 8**.
+- **9.2 → 9.4** (NoSQL, ORM, opérations) : axes 1, 3, **8 (au moins un parcours backend)**.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Modéliser un domaine en relationnel (3NF) et savoir dénormaliser à bon escient",
+  "Écrire des requêtes SQL avec jointures, CTE, fenêtrage",
+  "Lire un plan d'exécution (EXPLAIN ANALYZE) et indexer correctement",
+  "Choisir entre PostgreSQL, MongoDB, Redis, Neo4j, pgvector selon le cas",
+  "Utiliser un ORM (Prisma 7, Drizzle, SQLAlchemy 2, Eloquent) sans tomber dans les pièges N+1",
+  "Mettre en place migrations, sauvegardes (PITR), réplication"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="9.1 — Bases relationnelles (SQL) ⚡ avant l'axe 8"
+    href="/09-bases-de-donnees/01-sql/"
+    description="PostgreSQL 17, DDL/DML, jointures, CTE, fenêtrage, ACID, indexes, EXPLAIN ANALYZE. Le bagage à avoir AVANT de manipuler un ORM."
+  />
+  <LinkCard
+    title="9.2 — NoSQL"
+    href="/09-bases-de-donnees/02-nosql/"
+    description="Document (Mongo), key-value (Redis), graphe (Neo4j), search (Meilisearch), vector (pgvector)."
+  />
+  <LinkCard
+    title="9.3 — ORM & query builders"
+    href="/09-bases-de-donnees/03-orm/"
+    description="Prisma 7, Drizzle, SQLAlchemy 2, Eloquent — pièges N+1, transactions, raw SQL, migrations."
+  />
+  <LinkCard
+    title="9.4 — Données opérationnelles"
+    href="/09-bases-de-donnees/04-operations/"
+    description="Sauvegardes, PITR, réplication, sharding, partitionnement, hébergement managé, monitoring."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**E-commerce PostgreSQL** — schéma à 7 tables (ENUM, JSONB, contraintes), seed de **1 M orders + 6 M order_lines**, **10 queries analytiques** (CTE, window functions, full-text trigram, anti-join, JSONB), **stratégie d'indexation** B-tree composite + partiel + couvrant + GIN. Cible : 9/10 queries sous 200 ms (5/10 sous 10 ms).
+
+<ExerciseDownload
+  axe="09-bases-de-donnees"
+  slug="01-ecommerce-postgres"
+  title="E-commerce PostgreSQL — 10 queries < 200 ms sur 1 M de rows"
+  description="Pré-requis : Docker Desktop. Tu deviens à l'aise avec EXPLAIN ANALYZE, tu apprends quand un index aide vs quand il ne suffit plus (matview), et tu vois les 4 patterns SQL non-évidents (NOT EXISTS, CTE de pré-agrégation, GIN trigram, JSONB @>). Benchmark mesuré sur la correction : 9/10 verts."
+/>
+
+## Ressources clés
+
+- *PostgreSQL Documentation* — [postgresql.org/docs](https://www.postgresql.org/docs/)
+- *Use The Index, Luke!* — [use-the-index-luke.com](https://use-the-index-luke.com/)
+- *Designing Data-Intensive Applications* — Martin Kleppmann
+- *MongoDB University* — cours gratuits
+- *Redis University* — [university.redis.com](https://university.redis.com/)

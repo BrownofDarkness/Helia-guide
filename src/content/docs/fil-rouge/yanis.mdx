@@ -1,0 +1,105 @@
+---
+title: 📋 Yanis · Tasky
+description: Yanis, dev junior, développe un task manager pour son association sportive. Réutilise les exercices taskly-api du guide.
+sidebar:
+  order: 5
+  label: Yanis
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Le pitch
+
+**Yanis**, 26 ans, fraîchement embauché comme dev junior dans une scale-up parisienne. À côté, il est **bénévole dans une asso sportive locale** (basket, 4 équipes, ~ 60 licenciés). L'asso galère à coordonner :
+
+- planning des matchs et entraînements,
+- courses des bénévoles (gourdes, plots, dossards),
+- communications parents / coachs / arbitres,
+- bilans financiers à présenter en AG.
+
+Yanis propose de coder **Tasky**, un task manager collaboratif sur mesure — petit projet pour l'asso, gros pour son CV.
+
+## Le projet : « Tasky »
+
+| | |
+|---|---|
+| **Type** | Task manager multi-rôles (président, coachs, bénévoles, parents) |
+| **Cible** | Association sportive locale, ~ 60-100 utilisateurs |
+| **Volume** | ~ 200 tâches par mois, kanban + calendrier |
+| **Stack frontend** | Next.js 16 |
+| **Stack backend** | Hono (Node 24) — **réutilise le code de l'exo `taskly-api` axe 8** |
+| **Base de données** | Postgres + Drizzle |
+| **Auth** | Better Auth (email + Google OAuth) |
+| **Paiement** | Aucun (interne asso) |
+| **Hébergement** | Fly.io — **réutilise la config IaC axe 14** |
+
+## L'arc narratif (axes 5 à 8)
+
+### Axe 5 — Vitrine
+
+| Sous-axe | Épisode |
+|---|---|
+| 5.1 HTML | Yanis monte la page de connexion + le tableau des tâches du sprint. |
+| 5.2 CSS | Grid pour le board kanban, Flex pour les cards de tâche. |
+| 5.3 A11y | Le drag & drop kanban doit être accessible au clavier. Yanis ajoute les contrôles ARIA + alternatives boutons. |
+
+### Axe 6 — JS / TS
+
+| Sous-axe | Épisode |
+|---|---|
+| 6.1 JS | Création de tâche, marquer comme fait, filtrer par owner, par projet, par statut. |
+| 6.2 Async | Synchronisation entre onglets (BroadcastChannel) : si un coach ajoute une tâche, les autres la voient sans refresh. |
+| 6.3 APIs navigateur | Notifications du navigateur quand une tâche t'est assignée. Drag & drop API native. |
+| 6.4 TypeScript | Yanis type strictement : Task, User, Project, Status, Role. Pas de `any`, pas de bug de type en prod. |
+
+### Axe 7 — Frameworks
+
+| Sous-axe | Épisode |
+|---|---|
+| 7.1 Concepts communs | Multi-utilisateurs en temps quasi-réel = framework obligatoire. |
+| 7.2 React | Composants : KanbanBoard, TaskCard, TaskDrawer, ProjectSelector. |
+| 7.3 Alternatives | Yanis évalue Svelte mais reste sur React (vivier de mainteneurs futurs dans l'asso). |
+| 7.4 Next.js | App Router + Server Actions pour les mutations de tâche. |
+| 7.5 Build | Bundle initial 60 KB, perf Lighthouse 95+. |
+| 7.6 Design system | Tailwind v4 + Radix UI pour les menus contextuels et drawers. |
+
+### Axe 8 — Backend
+
+| Sous-axe | Épisode |
+|---|---|
+| 8.0 Concepts communs | **Yanis reprend exactement le code `taskly-api` de l'exercice 8.1** comme base. |
+| 8.1 Node + Hono | Endpoints CRUD tâches, projets, utilisateurs. Validation Zod. |
+| 8.2 Auth + sécu | Magic link + Google OAuth. RBAC : président (admin), coach (éditeur), bénévole (lecteur + ses tâches). |
+| 8.3 Notifications | Email Resend quand une tâche est assignée ou en retard de plus de 48 h. |
+
+## Bonus — réutilise les exercices du guide
+
+C'est le **seul parcours** qui s'enchaîne directement sur les exercices fournis :
+
+| Axe | Exercice du guide | Lien avec Yanis |
+|---|---|---|
+| 8.1 | `exercises/08-backend/01-nodejs-typescript/taskly-api/` | Backend de référence — Yanis le forke |
+| 14.1 | `exercises/14-devops/01-deploiement-complet/` | Yanis applique : CI GitHub Actions + Fly.io + Sentry + Better Stack |
+| 15.1 | `exercises/15-methodes-soft-skills/01-faux-sprint/` | Yanis simule un sprint avec 2 autres bénévoles devs |
+
+Cette réutilisation t'évite de réécrire 3 projets — tu en as **un** que tu enrichis au fil du guide.
+
+## Incidents naturels qu'on rencontre plus loin
+
+- **Axe 12 sécu** : un coach injecte du `<script>` dans le titre d'une tâche → XSS qui s'exécute chez les autres. Yanis comprend l'échappement strict.
+- **Axe 13 perf** : kanban à 300 tâches → ramme. Virtualisation + pagination par projet.
+- **Axe 13 a11y** : drag & drop accessible au clavier (Tab + flèches). Yanis utilise dnd-kit.
+- **Axe 14 DevOps** : Yanis suit l'exo 14.1 à la lettre — déploiement Fly.io, OIDC, Sentry, runbooks.
+- **Axe 15 méthodes** : faux sprint à 3 dans l'asso — review de PR, ADR (« pourquoi Drizzle plutôt que Prisma »), post-mortem sur l'incident XSS.
+- **Axe 16** : pour le **collab temps réel** sur le kanban (à la Linear), Yanis bascule sur le parcours **Léa** (Yjs).
+
+## Pourquoi Yanis te conviendrait
+
+- Tu te projettes en **dev pro junior** dans une vraie boîte.
+- Tu veux **réutiliser le code des exercices** pour avoir un projet portfolio prêt.
+- Tu veux toucher aux **enjeux d'équipe** (sprint, code review, post-mortem) très concrètement.
+- Tu cherches un **fil rouge cohérent** avec le reste du guide.
+
+<Aside type="tip">
+**Le parcours le plus utilitaire** côté CV : à la fin tu as un projet GitHub réel, déployé, avec CI, monitoring, runbooks. C'est exactement ce qu'un employeur veut voir d'un junior.
+</Aside>

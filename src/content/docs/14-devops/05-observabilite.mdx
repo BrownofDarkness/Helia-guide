@@ -1,0 +1,432 @@
+---
+title: 14.5 — Observabilité
+description: Logs, métriques, traces — OpenTelemetry, Prometheus + Grafana, Loki, Sentry, SLI/SLO/SLA, error budget, alerting raisonné, astreinte.
+sidebar:
+  order: 5
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : ne plus apprendre une panne par un client mécontent. Mettre en place les 3 piliers (logs, métriques, traces), définir des SLO réalistes, et construire des alertes qui réveillent **uniquement** quand il faut.
+
+<ObjectiveList items={[
+  "Différencier monitoring et observabilité",
+  "Implémenter les 3 piliers : logs structurés, métriques, traces distribuées",
+  "Choisir entre OSS (Prometheus/Loki/Tempo) et SaaS (Datadog, New Relic, Honeycomb)",
+  "Définir des SLI / SLO mesurables avec un error budget",
+  "Construire des alertes qui n'usent pas l'astreinte"
+]} />
+
+<Level value="confirmé" reading="11 min" prereq="axes 4 et 8 lus" />
+
+
+## Monitoring vs observabilité
+
+| Concept | Définition |
+|---------|------------|
+| **Monitoring** | Surveiller des métriques **prédéfinies** (CPU, RAM, latence, erreurs) |
+| **Observabilité** | Pouvoir poser une **question nouvelle** sur le système sans redéployer |
+
+> Monitoring répond aux questions que tu **savais** poser. Observabilité te permet de répondre à celles que tu **ne savais pas** poser.
+
+Exemple concret. À 3h du matin, p95 latence explose sur `/checkout`. Avec du monitoring : tu vois la métrique. Avec de l'observabilité : tu peux filtrer par tenant, par version, par région, voir la stack trace, et trouver que c'est seulement le tenant ACME en région eu-west-3 sur la version v1.2.3 qui souffre.
+
+---
+
+## Les 3 piliers
+
+<Diagram
+  caption="Logs, métriques, traces — chacun répond à une question différente"
+  code={`
+    flowchart LR
+      A[Une requête<br/>en prod] --> Logs[Logs<br/>Que s'est-il passé exactement ?]
+      A --> Metrics[Métriques<br/>Combien et à quel rythme ?]
+      A --> Traces[Traces<br/>Où va le temps ?]
+  `}
+/>
+
+### 1. Logs
+
+Texte (ou JSON) émis par l'app à chaque événement.
+
+**Bon log** :
+
+```json
+{
+  "ts": "2026-04-30T14:23:11.123Z",
+  "level": "error",
+  "service": "checkout-api",
+  "trace_id": "abc-123",
+  "user_id": 4567,
+  "tenant": "acme",
+  "event": "payment.failed",
+  "amount": 49.90,
+  "currency": "EUR",
+  "error": "stripe.card_declined",
+  "stripe_request_id": "req_xyz"
+}
+```
+
+**Mauvais log** :
+
+```
+Erreur paiement
+```
+
+Règles :
+
+| Règle | Pourquoi |
+|-------|----------|
+| **JSON structuré** | Greppable, agrégeable, filtre par champ |
+| **Inclure `trace_id`** | Lier au tracing distribué |
+| **Niveau** : debug / info / warn / error | Filtrer en prod |
+| **Pas de PII en clair** | RGPD — masquer email, IBAN, etc. |
+| **Pas de password** | Évident, mais arrive |
+| **Volume mesuré** | 100 logs/req × 10k req/s × 30 j = facture explosive |
+
+Stacks courantes :
+
+| Stack | Pour qui |
+|-------|----------|
+| **Loki + Grafana** | OSS, pay-per-volume modeste |
+| **OpenSearch / Elasticsearch + Kibana** | Plus puissant, plus lourd |
+| **Datadog Logs** | Cher, intégration totale |
+| **Vector** ou **Fluent Bit** | Agents qui collectent et routent |
+| **Better Stack / Logtail** | SaaS très simple, prix correct |
+
+### 2. Métriques
+
+Séries temporelles numériques agrégées : `http_requests_total{status="500"}`.
+
+```
+Time      Value
+14:00     1234
+14:01     1289
+14:02     1345
+```
+
+| Type Prometheus | Usage |
+|-----------------|-------|
+| **Counter** | Cumulatif (jamais décroît). `requests_total` |
+| **Gauge** | Valeur instantanée. `memory_used_bytes` |
+| **Histogram** | Distribution avec buckets. `request_duration_seconds` |
+| **Summary** | Quantiles côté client. Préférer Histogram en pratique |
+
+```ts
+// Exposition d'un compteur depuis Hono / Express
+import { register, Counter, Histogram } from 'prom-client';
+
+const httpRequests = new Counter({
+  name: 'http_requests_total',
+  help: 'Nombre total de requêtes HTTP',
+  labelNames: ['method', 'route', 'status'],
+});
+
+const httpDuration = new Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Durée des requêtes HTTP',
+  labelNames: ['method', 'route', 'status'],
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+});
+
+app.use('*', async (c, next) => {
+  const end = httpDuration.startTimer();
+  await next();
+  const labels = { method: c.req.method, route: c.req.routePath, status: c.res.status };
+  httpRequests.inc(labels);
+  end(labels);
+});
+
+app.get('/metrics', async (c) => {
+  c.header('Content-Type', register.contentType);
+  return c.body(await register.metrics());
+});
+```
+
+**Stack standard** :
+
+```
+App → /metrics endpoint → Prometheus scrape (15s) → Grafana dashboards
+```
+
+### 3. Traces distribuées
+
+Une **trace** suit une requête à travers plusieurs services. Chaque opération est un **span** avec parent / enfant.
+
+```
+GET /checkout                                  (842 ms) ─┐
+├─ db.query (find_user)                         (12 ms)  │
+├─ http.fetch stripe.com /charges               (210 ms) │
+├─ db.transaction                               (480 ms) │
+│   ├─ db.query (insert_order)                  (15 ms)  │
+│   └─ db.query (decrement_stock × 4)           (435 ms) │ ← 4 N+1
+└─ redis.set                                    (8 ms)   │
+                                                         ┘
+```
+
+**OpenTelemetry** est le standard 2026 — neutre, supporté partout (Datadog, Honeycomb, Grafana Tempo, Jaeger, Sentry).
+
+```ts
+// Instrumentation auto-magique avec OTel SDK Node
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+
+new NodeSDK({
+  serviceName: 'checkout-api',
+  traceExporter: new OTLPTraceExporter({ url: 'http://otel-collector:4318/v1/traces' }),
+  instrumentations: [getNodeAutoInstrumentations()],
+}).start();
+```
+
+Tu obtiens **gratuitement** : HTTP, fetch, fs, pg, mysql, redis, prisma instrumentés.
+
+---
+
+## OTel — l'instrumentation universelle
+
+```
+┌─────────┐    OTLP     ┌─────────────────┐    push     ┌────────────┐
+│  App    │ ─────────>  │ OTel Collector  │ ─────────>  │  Backend   │
+│ (SDK)   │             │  (relai)        │             │ (Tempo,    │
+└─────────┘             └─────────────────┘             │  Honeycomb)│
+                                                        └────────────┘
+```
+
+Le **Collector** est un proxy qui :
+
+- reçoit les signaux des apps (OTLP),
+- enrichit / filtre / sample,
+- exporte vers un ou plusieurs backends.
+
+Avantage : **changer de backend** sans toucher l'app. Tu pointes le Collector ailleurs.
+
+---
+
+## Sentry — l'erreur applicative
+
+Sentry n'est pas redondant avec les logs : il agrège, déduplique, lie au commit, alerte. Plug & play pour 90 % des stacks.
+
+```ts
+import * as Sentry from '@sentry/node';
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN!,
+  environment: process.env.NODE_ENV,
+  release: process.env.GIT_SHA,
+  tracesSampleRate: 0.1,
+  profilesSampleRate: 0.1,
+});
+```
+
+Bonus : **Source maps uploadés en CI** → la stack trace pointe ton TypeScript original, pas un bundle minifié.
+
+---
+
+## SLI / SLO / SLA — mesurer la fiabilité
+
+| Sigle | Définition | Exemple |
+|-------|------------|---------|
+| **SLI** (Indicator) | Une mesure technique réelle | « Latence p95 de `/api/checkout` » |
+| **SLO** (Objective) | Cible interne sur un SLI | « p95 < 300 ms sur 30 jours » |
+| **SLA** (Agreement) | Engagement contractuel client + sanctions | « Disponibilité ≥ 99,9 % ou avoir 5 % du mois » |
+
+**Toujours** : SLA > SLO > SLI réel. Sinon tu paies des pénalités.
+
+### Les SLI utiles
+
+```
+Disponibilité   = (req sans erreur 5xx) / (req totales)
+Latence p95     = 95% des req plus rapides que X
+Taux d'erreur   = (req 4xx + 5xx) / (req totales)
+Saturation      = ressource en %, > 80 % = saturé
+```
+
+### Error budget
+
+Si ton SLO est **99,9 % de dispo sur 30 jours**, ton « budget d'erreur » est :
+
+```
+30 jours × 24h × 60min × 0,1 % = 43,2 minutes/mois autorisées
+```
+
+Une fois consommé : on **gèle les déploiements** et on stabilise. Une fois préservé : on peut prendre plus de risques (déployer plus souvent, faire du chaos engineering).
+
+C'est l'idée centrale du **Site Reliability Engineering** : la fiabilité n'est pas absolue — c'est un compromis vélocité/stabilité piloté par un budget.
+
+---
+
+## Alerting raisonné
+
+### Anti-pattern : « tout doit alerter »
+
+Un humain réveillé pour une fausse alerte à 3h du matin :
+
+- Râle.
+- Met l'alerte en mute « pour cette nuit ».
+- Oublie le mute.
+- L'alerte vraiment critique passe inaperçue 6 mois plus tard.
+
+### Trois principes
+
+1. **Alerter sur des symptômes, pas des causes.** « Latence p95 > 500 ms » > « CPU > 80 % ». L'utilisateur s'en fout du CPU.
+2. **Toute alerte doit avoir un runbook** : quoi vérifier, qui appeler, comment mitiger.
+3. **Si tu ne ferais rien à 3h du matin, ce n'est pas une alerte critique.** Met-la en warning / Slack.
+
+### Niveau de gravité
+
+| Niveau | Quand | Notification |
+|--------|-------|--------------|
+| **Critique** | SLO en danger, impact client massif | Pager (PagerDuty, OnCall, Better Stack) → réveil |
+| **Haute** | Risque de devenir critique sous 1-2 h | Slack haut prio + email |
+| **Info** | Drift, anomalie sans impact | Slack low prio, ou ticket |
+
+### Multi-burn-rate alerts (Google SRE)
+
+Pour éviter de paniquer sur un blip court tout en réagissant aux dégradations soutenues :
+
+| Fenêtre | Burn rate | Action |
+|---------|-----------|--------|
+| **5 min** | 14× le rythme acceptable | Page critique |
+| **1 h** | 6× le rythme acceptable | Page critique |
+| **6 h** | 3× le rythme acceptable | Notif équipe |
+| **3 j** | 1× le rythme acceptable | Ticket dette |
+
+Si plusieurs fenêtres dépassent en même temps, on est sûr que ce n'est pas un faux positif.
+
+---
+
+## Construire un dashboard utile
+
+### Le RED method (services)
+
+| Lettre | Sens |
+|--------|------|
+| **R** Rate | Requêtes/s |
+| **E** Errors | Taux d'erreur |
+| **D** Duration | Latence (p50, p95, p99) |
+
+### Le USE method (ressources)
+
+| Lettre | Sens |
+|--------|------|
+| **U** Utilization | % d'usage |
+| **S** Saturation | File d'attente, contention |
+| **E** Errors | Erreurs hardware / driver |
+
+Un bon dashboard tient sur **un écran**, montre l'essentiel, et **ne prétend pas tout dire**.
+
+---
+
+## OSS vs SaaS — quel choix ?
+
+| Solution | Coût direct | Coût humain |
+|----------|-------------|-------------|
+| **Prometheus + Grafana + Loki + Tempo** (OSS) | Très bas | Tu maintiens, tu scales |
+| **Datadog / New Relic** | Cher (€/host ou €/log GB) | Très bas |
+| **Honeycomb** | Cher mais excellent pour traces | Bas |
+| **Better Stack** | Modéré, all-in-one | Bas |
+| **Cloud-native** (CloudWatch, GCP Ops) | Modéré | Lock-in cloud |
+| **Grafana Cloud** | Free tier généreux + payant | Bas, OSS-friendly |
+
+> La plupart des startups partent en **Grafana Cloud free tier** ou **Better Stack** : on a tout en quelques heures pour un coût modeste, on migrera vers du self-host quand le coût SaaS dépasse le coût humain.
+
+---
+
+## Astreinte — humaine, soutenable
+
+| Pratique | Pourquoi |
+|----------|----------|
+| **Rotation hebdo** entre N personnes (N ≥ 4) | Personne ne brûle |
+| **On-call comp** (prime ou jours de repos compensateurs) | Reconnaissance + légalité |
+| **Runbooks** par alerte | Le réveillé sait quoi faire sans réfléchir |
+| **Post-mortem blameless** systématique | Apprentissage > culpabilisation |
+| **Post-mortem → actions concrètes** | Sinon c'est de la littérature |
+| **Métriques** : MTTR, MTBF, fréquence d'incidents | Pour piloter l'amélioration |
+| **Escalation path** clair | À qui appeler après 30 min de blocage |
+
+> *« An on-call shift you wouldn't take yourself is one you shouldn't ask anyone else to take. »* — Honeycomb
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu mets en place une alerte qui pingue PagerDuty à chaque fois que CPU > 80 %. Au bout d'un mois, ton équipe l'a mute. Pourquoi ?"
+  options={[
+    'Le CPU est rarement le problème — c\'est une cause, pas un symptôme. Beaucoup de pics CPU sans impact utilisateur. Préférer alerter sur la latence ou le taux d\'erreur (symptômes)',
+    'La métrique CPU est inutile',
+    'Il faut alerter à 70 %',
+    'PagerDuty est mauvais'
+  ]}
+  answerIndex={0}
+  explanation="L'utilisateur ne ressent pas le CPU, il ressent la latence et les erreurs. Un pic CPU peut être un compactage Postgres, un GC sain, un batch légitime. Alerter sur des symptômes (SLO violés) garde le signal/bruit acceptable. Le CPU reste une métrique utile pour le diagnostic une fois l'alerte symptôme déclenchée."
+/>
+
+<Quiz
+  question="Ton SLO est 99,9 % de dispo. À quoi sert l'error budget ?"
+  options={[
+    'À calculer la marge dispo (43 min/mois) — quand on dépasse, on freeze les déploiements le temps de stabiliser ; quand il reste du budget, on peut déployer plus risqué',
+    'À calculer le SLA',
+    'À budgétiser les serveurs',
+    'À demander une augmentation'
+  ]}
+  answerIndex={0}
+  explanation="C'est l'idée centrale du SRE : la fiabilité est un compromis vélocité/stabilité piloté par un budget. Trop strict = pas d'innovation. Trop laxiste = clients qui partent. Le budget rend le compromis explicite et factuel."
+/>
+
+<Quiz
+  question="Tu choisis OpenTelemetry plutôt que un agent propriétaire (Datadog, New Relic). Quelle est l'avantage principal ?"
+  options={[
+    'C\'est plus performant',
+    'Standard neutre — tu peux changer de backend (Datadog → Tempo → Honeycomb) sans réinstrumenter ton code, le Collector route les signaux',
+    'C\'est obligatoire',
+    'C\'est plus simple à configurer'
+  ]}
+  answerIndex={1}
+  explanation="OTel est l'API/SDK que les éditeurs intègrent désormais comme entrée standard. Tu instrumentes une fois, tu pointes ailleurs au besoin. C'est l'antidote au lock-in observabilité, qui était fort avec les agents propriétaires."
+/>
+
+<Quiz
+  question="Sur 1 mois, tu cumules 200 alertes critiques sur PagerDuty dont 192 fausses (« flap » d'un service qui rebascule). Conséquence ?"
+  options={[
+    'Aucune, l\'astreinte est habituée',
+    'Alert fatigue : l\'équipe ignore tout, finit par rater l\'alerte vraiment critique. Il faut auditer les seuils, ajouter du multi-burn-rate, supprimer / requalifier les bruyantes',
+    'Acheter PagerDuty Premium',
+    'Recruter plus d\'astreintes'
+  ]}
+  answerIndex={1}
+  explanation="C'est un anti-pattern classique. Le ratio signal/bruit minimum exigé est ~80 % : si plus de 20 % des alertes critiques sont des faux positifs, l'humain finit par toutes les ignorer. Audit des alertes ≥ 1×/trimestre, requalification ou suppression sans état d'âme."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Site Reliability Engineering* — Google (gratuit en ligne)
+- *The SRE Workbook* — Google (suite pratique)
+- *Observability Engineering* — Charity Majors et al. (Honeycomb)
+- *OpenTelemetry docs* — [opentelemetry.io](https://opentelemetry.io/)
+- *Prometheus / Grafana / Loki / Tempo* — [grafana.com/oss](https://grafana.com/oss/)
+- *Sentry docs* — [docs.sentry.io](https://docs.sentry.io/)
+- *PagerDuty Incident Response* — guide gratuit
+
+## Observabilité LLM — un cas particulier
+
+Si ton backend appelle des LLM (Claude, OpenAI, Mistral), les métriques classiques **ne suffisent pas**. Tu dois en plus tracer :
+
+- **Tokens consommés par requête** (prompt + completion)
+- **Latence par modèle** (Claude Sonnet 4.6 vs GPT-5 vs Llama local)
+- **Coût €/requête**
+- **Qualité de réponse** (golden set evaluation)
+- **Hallucinations** (citations inventées, refus calibrés)
+
+→ Voir [16.4 — IA appliquée](/16-specialisations/04-ia/#observabilité-llm) pour les outils dédiés (Langfuse, promptfoo, OpenLLMetry) et les patterns d'instrumentation.
+
+---
+
+**Suite** : [14.6 — Fiabilité](/14-devops/06-fiabilite/) pour les sauvegardes, runbooks et plans de reprise.

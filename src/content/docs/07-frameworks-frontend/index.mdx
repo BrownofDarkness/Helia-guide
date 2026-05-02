@@ -1,0 +1,82 @@
+---
+title: Axe 7 — Frameworks frontend
+description: React, Vue, Svelte, Astro, Next.js — choisir, comprendre et utiliser un framework UI moderne.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : construire des applications web ambitieuses avec un framework moderne, en choisissant lucidement entre rendu côté client, serveur, statique et edge.
+
+## Prérequis
+
+- **Phase 1 de l'axe 6 (sous-axes 6.1 à 6.3)** indispensable : JS moderne, async/await, APIs navigateur.
+- **TypeScript (6.4) n'est pas bloquant** pour démarrer cet axe — tu peux faire React/Vue en JS pur, et revenir sur 6.4 après quelques semaines de pratique. La plupart des exemples de cet axe sont en TS, mais tu peux les lire et les comprendre avec une base JS solide.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Comprendre virtual DOM, fine-grained reactivity, et islands architecture",
+  "Maîtriser React (hooks, RSC, Suspense) ou Vue/Svelte au choix",
+  "Construire une application Next.js avec SSR, SSG, ISR et route handlers",
+  "Choisir entre TanStack Query, Zustand, Redux Toolkit pour l'état",
+  "Tester des composants avec Testing Library et des E2E avec Playwright"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="7.1 — Concepts communs"
+    href="/07-frameworks-frontend/01-concepts-communs/"
+    description="Composants, état, virtual DOM vs fine-grained, cycle de vie, routing, gestion d'état."
+  />
+  <LinkCard
+    title="7.2 — React"
+    href="/07-frameworks-frontend/02-react/"
+    description="JSX, hooks, RSC, Suspense, Server Actions, TanStack Query, RHF + Zod, Vitest + Testing Library."
+  />
+  <LinkCard
+    title="7.3 — Alternatives"
+    href="/07-frameworks-frontend/03-alternatives/"
+    description="Vue 3, Svelte 5, Solid, Qwik, Astro, Angular — comparaison côte à côte avec un même composant."
+  />
+  <LinkCard
+    title="7.4 — Méta-frameworks"
+    href="/07-frameworks-frontend/04-meta-frameworks/"
+    description="Next.js, Nuxt, SvelteKit, Remix ; CSR / SSR / SSG / ISR / Edge ; Server Actions ; middleware."
+  />
+  <LinkCard
+    title="7.5 — Outils de build"
+    href="/07-frameworks-frontend/05-outils-build/"
+    description="Vite, esbuild, SWC, Webpack, Rollup ; tree-shaking, code-splitting, bundle analyzer."
+  />
+  <LinkCard
+    title="7.6 — Design systems & UI kits"
+    href="/07-frameworks-frontend/06-design-systems/"
+    description="Tailwind, shadcn/ui, Radix UI, Headless UI, Storybook, tokens et patterns."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Dashboard Next.js 16 (App Router)** — Server Components, Server Actions avec `useActionState`, middleware d'auth, mode sombre sans FOUC, Tailwind v4, tests Vitest. C'est l'exercice qui fait la jonction entre TS strict, Server-first thinking, et patterns React 19.
+
+<ExerciseDownload
+  axe="07-frameworks-frontend"
+  slug="01-dashboard-nextjs"
+  title="Dashboard Next.js — Server Components et Server Actions"
+  description="Pré-requis : Node ≥ 20. Tu construis un mini-dashboard avec auth simulée, mode sombre sans FOUC, et 6 routes (5 statiques + 1 dynamique). Build green vérifié + 2/2 tests Vitest. Capture le piège jsdom matchMedia que tout projet React+Next croise."
+/>
+
+## Ressources clés
+
+- *react.dev* — la doc officielle (excellente)
+- *Vue.js Guide* — [vuejs.org/guide](https://vuejs.org/guide/)
+- *SvelteKit Tutorial* — [learn.svelte.dev](https://learn.svelte.dev/)
+- *Next.js Docs* — [nextjs.org/docs](https://nextjs.org/docs)
+- *Patterns.dev* — patterns de rendu et de chargement
+- *shadcn/ui* — [ui.shadcn.com](https://ui.shadcn.com/)

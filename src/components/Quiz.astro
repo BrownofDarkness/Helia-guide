@@ -1,0 +1,104 @@
+---
+/**
+ * Composant Quiz — QCM autocorrigé avec feedback animé.
+ *
+ * Utilisation :
+ *   <Quiz
+ *     question="Quel code HTTP indique une ressource introuvable ?"
+ *     options={['200', '301', '404', '500']}
+ *     answerIndex={2}
+ *     explanation="404 Not Found signifie que la ressource demandée n'existe pas."
+ *   />
+ */
+
+interface Props {
+  question: string;
+  options: string[];
+  answerIndex: number;
+  explanation?: string;
+}
+
+const { question, options, answerIndex, explanation = '' } = Astro.props;
+const id = `quiz-${Math.random().toString(36).slice(2, 9)}`;
+---
+
+<div class="quiz" data-answer={answerIndex} data-explanation={explanation}>
+  <fieldset class="quiz-options">
+    <legend>{question}</legend>
+    {options.map((option, i) => (
+      <label class="quiz-option">
+        <input type="radio" name={id} value={i} />
+        <span class="quiz-option-bullet" aria-hidden="true"></span>
+        <span class="quiz-option-text">{option}</span>
+      </label>
+    ))}
+  </fieldset>
+  <button type="button" class="quiz-submit">Valider</button>
+  <div class="quiz-result" hidden role="status" aria-live="polite"></div>
+</div>
+
+<script>
+  function initQuizzes() {
+    document.querySelectorAll<HTMLDivElement>('.quiz').forEach((quiz) => {
+      if (quiz.dataset.bound === '1') return;
+      quiz.dataset.bound = '1';
+
+      const button = quiz.querySelector<HTMLButtonElement>('.quiz-submit');
+      const result = quiz.querySelector<HTMLDivElement>('.quiz-result');
+      if (!button || !result) return;
+
+      button.addEventListener('click', () => {
+        const selected = quiz.querySelector<HTMLInputElement>('input[type="radio"]:checked');
+        if (!selected) {
+          result.className = 'quiz-result hint';
+          result.textContent = 'Sélectionne une réponse pour valider.';
+          result.hidden = false;
+          return;
+        }
+
+        const answer = Number(quiz.dataset.answer);
+        const explanation = quiz.dataset.explanation ?? '';
+        const isCorrect = Number(selected.value) === answer;
+
+        // Marque les options : bonne réponse + réponse cochée si fausse
+        const labels = quiz.querySelectorAll<HTMLLabelElement>('.quiz-option');
+        labels.forEach((label, i) => {
+          const radio = label.querySelector<HTMLInputElement>('input');
+          if (!radio) return;
+          radio.disabled = true;
+          if (i === answer) label.classList.add('is-correct');
+          else if (radio.checked) label.classList.add('is-wrong');
+        });
+
+        // Construit le résultat avec icône animée + texte
+        result.className = 'quiz-result ' + (isCorrect ? 'correct' : 'incorrect');
+        const icon = document.createElement('span');
+        icon.className = 'quiz-result-icon';
+        icon.textContent = isCorrect ? '✅' : '❌';
+        const text = document.createElement('span');
+        text.textContent = isCorrect
+          ? `Bonne réponse !${explanation ? ' ' + explanation : ''}`
+          : `Mauvaise réponse.${explanation ? ' ' + explanation : ''}`;
+        result.replaceChildren(icon, text);
+        result.hidden = false;
+
+        // Désactive le bouton avec feedback texte
+        button.disabled = true;
+        button.textContent = isCorrect ? 'Validé ✓' : 'Réponse révélée';
+
+        // Shake animation sur la wrong option
+        if (!isCorrect) {
+          const wrong = quiz.querySelector<HTMLElement>('.quiz-option.is-wrong');
+          if (wrong) {
+            wrong.classList.remove('shake');
+            void wrong.offsetWidth;
+            wrong.classList.add('shake');
+          }
+        }
+      });
+    });
+  }
+
+  initQuizzes();
+  document.addEventListener('astro:page-load', initQuizzes);
+</script>

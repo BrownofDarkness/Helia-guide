@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PokéSPA — TypeScript pur</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 1rem; }
+    nav { display: flex; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid #eee; margin-bottom: 1rem; }
+    nav a { padding: 0.5rem 1rem; border-radius: 0.25rem; text-decoration: none; color: #2563eb; }
+    nav a:hover { background: #eff6ff; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
+    .card { border: 1px solid #ddd; border-radius: 0.5rem; padding: 1rem; text-align: center; }
+    .card a { text-decoration: none; color: inherit; }
+    .card img { width: 100%; max-width: 96px; }
+    .pagination { display: flex; gap: 1rem; justify-content: center; margin: 1rem 0; }
+    button { padding: 0.5rem 1rem; cursor: pointer; }
+    button.fav { background: white; border: 1px solid #ddd; }
+    button.fav.active { background: #fef3c7; border-color: #f59e0b; }
+    .stats li { display: flex; justify-content: space-between; padding: 0.25rem 0; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #111827; color: #f3f4f6; }
+      .card, .pagination, button.fav { background: #1f2937; border-color: #374151; }
+      nav { border-color: #374151; }
+      nav a { color: #60a5fa; }
+      nav a:hover { background: #1e3a8a; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" data-link>Liste</a>
+    <a href="/favorites" data-link>Favoris</a>
+  </nav>
+  <main id="app">Chargement…</main>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

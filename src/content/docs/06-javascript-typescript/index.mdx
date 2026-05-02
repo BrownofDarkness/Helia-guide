@@ -1,0 +1,98 @@
+---
+title: Axe 6 — JavaScript & TypeScript
+description: Le langage du web et son sur-ensemble typé — pièges, idiomes et écosystème.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : écrire du JavaScript moderne idiomatique, puis le typer correctement avec TypeScript.
+
+<Aside type="caution" title="L'axe le plus dense du parcours — lis ceci avant d'attaquer">
+Cet axe contient **deux phases distinctes** qui s'enchaînent souvent mal pour un débutant :
+
+- **Phase 1 — JS essentiel (6.1 → 6.3)** : 2 à 4 semaines à temps partiel. Tu apprends à coder en JS, gérer l'async, manipuler le DOM. **C'est ce qu'il te faut pour attaquer l'axe 7 (frameworks).**
+- **Phase 2 — TypeScript (6.4)** : 1 à 2 semaines supplémentaires. Tu rajoutes le typage par-dessus.
+
+**Tu peux attaquer l'axe 7 (frameworks) dès la fin de la phase 1**, et revenir sur 6.4 en mode « approfondissement » plus tard. Beaucoup de devs apprennent React **avant** TypeScript — c'est un parcours valide.
+
+Si tu enchaînes 6.1 → 6.2 → 6.3 → 6.4 d'un trait, prévois **5 à 8 semaines** à temps partiel. Le saut HTML/CSS (axe 5) → JS+TS (axe 6) est le plus violent du parcours.
+</Aside>
+
+## Prérequis
+
+Axes 1, 2, 4 et 5.
+
+## Phase 1 — JS essentiel (à faire avant l'axe 7)
+
+> Objectif : pouvoir attaquer un framework (React, Vue, Svelte) sans être perdu.
+
+<ObjectiveList items={[
+  "Lire et écrire du JS moderne : let/const, destructuring, spread, template literals, modules ES",
+  "Comprendre fonctions, closures, scope, hoisting, this — sans avoir besoin de tout maîtriser à 100 %",
+  "Manier l'asynchronisme : Promises, async/await, AbortController",
+  "Utiliser les APIs du navigateur : DOM, fetch, Storage, Observers"
+]} />
+
+<CardGrid>
+  <LinkCard
+    title="6.1 — JavaScript essentiel"
+    href="/06-javascript-typescript/01-javascript/"
+    description="Types, scope, closures, prototypes, this, classes, tableaux, modules ES."
+  />
+  <LinkCard
+    title="6.2 — Asynchronisme"
+    href="/06-javascript-typescript/02-async/"
+    description="Event loop, microtasks, Promises, async/await, AbortController."
+  />
+  <LinkCard
+    title="6.3 — APIs du navigateur"
+    href="/06-javascript-typescript/03-apis-navigateur/"
+    description="DOM, fetch, Storage, IndexedDB, Observers, Workers, History API."
+  />
+</CardGrid>
+
+> ✅ **À la fin de 6.3, tu es prêt pour l'axe 7 (frameworks).** TypeScript n'est pas un pré-requis pour démarrer React.
+
+## Phase 2 — TypeScript (peut attendre après l'axe 7)
+
+> Objectif : ajouter le typage par-dessus ta base JS — pour attraper les bugs au compile-time et écrire du code maintenable.
+
+<ObjectiveList items={[
+  "Typer une application TypeScript en mode strict (génériques, utility types)",
+  "Distinguer interface vs type, union vs intersection, narrowing",
+  "Maîtriser les discriminated unions et les patterns avancés (Zod runtime)",
+  "Configurer tsconfig.json strict + noUncheckedIndexedAccess"
+]} />
+
+<CardGrid>
+  <LinkCard
+    title="6.4 — TypeScript"
+    href="/06-javascript-typescript/04-typescript/"
+    description="Types, génériques, utility types, narrowing, discriminated unions, Zod."
+  />
+</CardGrid>
+
+> 💡 **Quand revenir sur 6.4 ?** Soit immédiatement après 6.3 (parcours linéaire), soit après quelques semaines de React/Vue en JS pur (parcours pragmatique). Les deux ordres marchent — choisis selon ton confort.
+
+## Projet de l'axe
+
+**SPA en TypeScript pur (sans framework)** — un explorateur PokéAPI avec router maison via History API, store réactif (pattern Observable/Signal), fetch typé Zod + AbortController, TypeScript strict 0 `any`. ~300 lignes de code.
+
+<ExerciseDownload
+  axe="06-javascript-typescript"
+  slug="01-spa-typescript"
+  title="SPA TypeScript — sans framework"
+  description="Pré-requis : Node ≥ 20. Tu réimplémentes les briques que les frameworks abstraient (routing, state, fetch typé) pour comprendre ce qu'ils font. À la fin, tu sauras quand un framework vaut le coup et quand il est de l'over-engineering."
+/>
+
+## Ressources clés
+
+- *Eloquent JavaScript* — Marijn Haverbeke (gratuit en ligne)
+- *You Don't Know JS Yet* — Kyle Simpson
+- *TypeScript Handbook* — [typescriptlang.org](https://www.typescriptlang.org/docs/handbook/intro.html)
+- *Total TypeScript* — Matt Pocock
+- *MDN — Web APIs*

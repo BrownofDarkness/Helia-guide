@@ -1,0 +1,56 @@
+---
+/**
+ * Script de filtrage du glossaire — search live + pills par axe.
+ * Extrait dans un composant Astro (et non inline MDX) pour éviter
+ * le parsing JSX des `{` dans le JS.
+ */
+---
+
+<script is:inline>
+  (function () {
+    function init() {
+      const searchInput = document.getElementById('glossary-search');
+      const countEl = document.getElementById('glossary-count');
+      const emptyEl = document.getElementById('glossary-empty');
+      const entries = Array.from(document.querySelectorAll('.glossary-entry'));
+      const pills = Array.from(document.querySelectorAll('.axe-pill'));
+      if (!searchInput || !entries.length || !pills.length) return;
+
+      const totalLabel = entries.length + ' termes';
+      let activeAxe = 'all';
+      let query = '';
+
+      function apply() {
+        const q = query.trim().toLowerCase();
+        let visible = 0;
+        for (const e of entries) {
+          const axeMatch = activeAxe === 'all' || e.dataset.axe === activeAxe;
+          const queryMatch = !q || e.dataset.key.includes(q) || e.dataset.short.includes(q);
+          const show = axeMatch && queryMatch;
+          e.hidden = !show;
+          if (show) visible++;
+        }
+        countEl.textContent = visible === entries.length
+          ? totalLabel
+          : visible + ' / ' + entries.length + ' termes';
+        if (emptyEl) emptyEl.hidden = visible !== 0;
+      }
+
+      searchInput.addEventListener('input', (ev) => {
+        query = ev.target.value;
+        apply();
+      });
+
+      for (const pill of pills) {
+        pill.addEventListener('click', () => {
+          activeAxe = pill.dataset.axe;
+          for (const p of pills) p.classList.toggle('active', p === pill);
+          apply();
+        });
+      }
+    }
+
+    init();
+    document.addEventListener('astro:page-load', init);
+  })();
+</script>

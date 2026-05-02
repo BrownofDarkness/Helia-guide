@@ -1,0 +1,81 @@
+---
+title: Axe 11 — Qualité & tests
+description: Clean Code, SOLID, tests unitaires/intégration/E2E, linting, documentation.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : produire un code lisible, testé, maintenable que d'autres pourront reprendre sans douleur.
+
+<Aside type="note" title="Tests dans les axes précédents — où est la frontière">
+Tu as déjà vu des tests dans les axes 7 (Vitest+Testing Library), 8 (pytest, Pest, Vitest+supertest) et 6.1 (premiers Vitest sans framework).
+
+- **Axes 6-7-8** : tests **comme outil quotidien** — assert simple, golden path, 1-2 edge cases.
+- **Axe 11 (ici)** : tests **comme discipline** — pyramide testing, TDD, mocks/stubs/fakes, contract testing, mutation testing, golden set, coverage significatif.
+
+Si tu n'as jamais écrit un test, va d'abord faire 1.1 et 6.1 — reviens ici quand tu as 5–10 tests à ton actif.
+</Aside>
+
+## Prérequis
+
+Axes 6 et 8.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Appliquer Clean Code, SOLID, DRY/KISS/YAGNI sans dogmatisme",
+  "Écrire des tests unitaires avec Vitest/Jest et Testing Library",
+  "Mettre en place des tests d'intégration sur DB éphémère (Testcontainers)",
+  "Couvrir un parcours critique en E2E avec Playwright",
+  "Configurer ESLint v9, Prettier, TypeScript strict en équipe",
+  "Rédiger un README, CHANGELOG, ADR de qualité professionnelle"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="11.1 — Bonnes pratiques"
+    href="/11-qualite-tests/01-bonnes-pratiques/"
+    description="Clean Code, SOLID, DRY/KISS/YAGNI, naming, code smells, code review, conventional commits."
+  />
+  <LinkCard
+    title="11.2 — Tests"
+    href="/11-qualite-tests/02-tests/"
+    description="Pyramide, TDD/BDD, Vitest, Pest, Playwright, mocks, fixtures, couverture, Testcontainers."
+  />
+  <LinkCard
+    title="11.3 — Outils statiques"
+    href="/11-qualite-tests/03-outils-statiques/"
+    description="ESLint v9, Prettier, Biome, TypeScript strict, PHPStan, Ruff, mypy, pre-commit hooks."
+  />
+  <LinkCard
+    title="11.4 — Documentation"
+    href="/11-qualite-tests/04-documentation/"
+    description="README, ADR, CHANGELOG, OpenAPI auto, Storybook, Mermaid, Diátaxis."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Refactor + tests — `tasky-pricing`** — un module de calcul de prix volontairement catastrophique (80 lignes spaghetti, magic numbers, `any`, 0 test) que tu refactores en suivant la **démarche pro** : caractériser, outiller, découper en 6 modules cohérents, tester à 100 %, documenter par ADR.
+
+<ExerciseDownload
+  axe="11-qualite-tests"
+  slug="01-refactor-tests"
+  title="Refactor + tests — démarche professionnelle"
+  description="Pré-requis : Node ≥ 20. Tu apprends la discipline qui distingue un dev junior d'un senior : Characterization Tests d'abord, refactor par étapes, jamais sans filet de sécurité. La correction atteint 31/31 tests + 100 % coverage + 0 erreur lint/typecheck."
+/>
+
+## Ressources clés
+
+- *Clean Code* — Robert C. Martin
+- *A Philosophy of Software Design* — John Ousterhout
+- *Refactoring* — Martin Fowler
+- *Vitest Docs* — [vitest.dev](https://vitest.dev/)
+- *Playwright Docs* — [playwright.dev](https://playwright.dev/)
+- *Diátaxis* — [diataxis.fr](https://diataxis.fr/)

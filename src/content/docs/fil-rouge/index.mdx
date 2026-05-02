@@ -1,0 +1,78 @@
+---
+title: Le fil rouge — 5 parcours pour apprendre
+description: Suis un personnage qui construit un projet réel à travers les axes 5 à 8. Marie, Hugo, Sami, Léa ou Yanis — choisis celui qui te ressemble.
+sidebar:
+  order: 0
+  label: Fil rouge
+---
+
+import ScenarioPicker from '../../../components/ScenarioPicker.astro';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif de la page** : présenter les **5 parcours fil rouge** disponibles dans ce guide. Choisis-en un (ou change-le à tout moment via les onglets en haut de chaque page).
+
+## Pourquoi un fil rouge ?
+
+Apprendre dans le vide est dur. Apprendre **en suivant quelqu'un** qui construit un vrai produit — qui hésite, qui galère, qui rencontre des bugs concrets — est beaucoup plus immersif.
+
+Ce guide te propose donc 5 personnages, chacun avec son projet. Les axes **5 à 8** (frontend HTML/CSS, JavaScript, frameworks, backend) déroulent leur histoire en 16 épisodes. Les autres axes font des clins d'œil au parcours choisi quand c'est pertinent.
+
+<ScenarioPicker />
+
+## Tableau de couverture honnête
+
+Aucun parcours ne couvre **parfaitement** les 17 axes (l'axe 16 a 6 sous-domaines très spécialisés). Le tableau te dit où chaque parcours brille et où une bascule est conseillée.
+
+| | A · Marie | B · Hugo | C · Sami | D · Léa | E · Yanis |
+|---|---|---|---|---|---|
+| 1-4 Fondations + Web + Analyse + Outils | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 5-7 Frontend (HTML/CSS, JS, frameworks) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 8-10 Backend + DB + BaaS | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 11-14 Qualité, sécu, perf, DevOps | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 15 Méthodes & soft skills | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ |
+| 16 Spécialisations (mobile, real-time, IA…) | ⚠️ | ⚠️ | ⚠️ | ✅ | ⚠️ |
+| 17 Carrière | meta — s'applique au lecteur | | | | |
+| Réutilise les exos `taskly-api` du guide | ❌ | ❌ | ❌ | ❌ | ✅ |
+
+**Lecture** :
+- ✅ couvert naturellement par l'arc narratif du parcours.
+- ⚠️ partiellement couvert ou nécessite une **bascule** (clic sur les onglets en haut de la page) vers un autre parcours pour cet axe.
+
+## Découvre chaque parcours
+
+<CardGrid>
+  <LinkCard
+    title="🥖 Marie · La Boulangerie de Lina"
+    href="/fil-rouge/marie/"
+    description="Marie aide sa sœur à mettre sa boulangerie artisanale en ligne. Ambiance chaleureuse, e-commerce local."
+  />
+  <LinkCard
+    title="🧘 Hugo · Studio Pulse"
+    href="/fil-rouge/hugo/"
+    description="Hugo digitalise le studio de yoga de sa cousine Inès. Réservations, abonnements, paiement Stripe."
+  />
+  <LinkCard
+    title="🥬 Sami · GreenBox"
+    href="/fil-rouge/sami/"
+    description="Sami lance son épicerie zéro-déchet livrée en vélo. E-commerce moderne complet, durabilité."
+  />
+  <LinkCard
+    title="🤝 Léa · CoupDeMain"
+    href="/fil-rouge/lea/"
+    description="Léa crée la plateforme d'entraide de son quartier. Le parcours le plus complet — temps réel, mobile, IA."
+  />
+  <LinkCard
+    title="📋 Yanis · Tasky"
+    href="/fil-rouge/yanis/"
+    description="Yanis développe un task manager pour son association sportive. Réutilise les exercices existants du guide."
+  />
+</CardGrid>
+
+## Comment ça marche en pratique
+
+1. **Tu choisis** ton parcours principal sur cette page (clic sur une carte) ou plus tard via les onglets en haut de chaque page.
+2. **Sur chaque page** des axes 5 à 8, tu vois un encart « Où en est [ton personnage] » qui plante l'enjeu de la section avec son histoire.
+3. **Tu peux switcher à tout moment** via les onglets — le contenu technique est le même, seul l'épisode narratif change.
+4. **Tu peux réviser ton parcours** sur sa fiche personnelle (liens ci-dessus) — toutes ses étapes y sont listées dans l'ordre.
+
+> 💡 **Astuce** : si tu ne sais pas quoi choisir, prends **Marie** (le plus universel) ou **Léa** (le plus complet côté spécialisations).

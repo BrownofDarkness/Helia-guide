@@ -1,0 +1,19 @@
+{
+  "name": "spa-typescript",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.3.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vite": "^8.0.0"
+  }
+}

@@ -1,0 +1,83 @@
+---
+/**
+ * Tracker passif — marque une page comme "lue" après scroll > 50% OU 25s passées.
+ * Stocké dans localStorage 'guideProgress' (Set des pathnames sérialisés).
+ *
+ * À inclure une fois dans le Head pour s'activer globalement.
+ */
+---
+
+<script is:inline>
+  (function () {
+    const STORAGE_KEY = 'guideProgress';
+    const PAGE_PREFIX_REGEX = /^\/((?:\d{2}-[a-z-]+|00-preambule|fil-rouge|glossaire|pieges))(?:\/|$)/;
+
+    function loadVisited() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return new Set(raw ? JSON.parse(raw) : []);
+      } catch {
+        return new Set();
+      }
+    }
+
+    function persist(set) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(set)));
+        document.dispatchEvent(new CustomEvent('guide-progress-update'));
+      } catch {}
+    }
+
+    function pageKey() {
+      const path = window.location.pathname.replace(/\/$/, '') || '/';
+      // Ne tracke que les pages sous un axe ou pages spéciales
+      if (path === '/' || path === '') return null;
+      if (!PAGE_PREFIX_REGEX.test(path) && !path.startsWith('/00-preambule')) return null;
+      return path;
+    }
+
+    let timer = null;
+    let scrollHandler = null;
+
+    function teardown() {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (scrollHandler) {
+        window.removeEventListener('scroll', scrollHandler, { passive: true });
+        scrollHandler = null;
+      }
+    }
+
+    function markAsRead() {
+      const key = pageKey();
+      if (!key) return;
+      const visited = loadVisited();
+      if (visited.has(key)) return;
+      visited.add(key);
+      persist(visited);
+      teardown();
+    }
+
+    function init() {
+      teardown();
+      const key = pageKey();
+      if (!key) return;
+      const visited = loadVisited();
+      if (visited.has(key)) return;
+
+      // Marque comme lue après 25s
+      timer = window.setTimeout(markAsRead, 25000);
+
+      // Ou après scroll > 50% du document
+      scrollHandler = () => {
+        const scrolled = window.scrollY + window.innerHeight;
+        const total = document.documentElement.scrollHeight;
+        if (total > 0 && scrolled / total > 0.5) markAsRead();
+      };
+      window.addEventListener('scroll', scrollHandler, { passive: true });
+    }
+
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:before-preparation', teardown);
+  })();
+</script>

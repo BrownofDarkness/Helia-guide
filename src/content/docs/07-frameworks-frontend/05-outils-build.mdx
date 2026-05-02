@@ -1,0 +1,352 @@
+---
+title: 7.5 — Outils de build
+description: Vite, esbuild, SWC, Webpack, Rollup — comprendre tree-shaking, code-splitting et bundling.
+sidebar:
+  order: 5
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="10">
+Marie regarde son `npm run build` : 280 KB de JS pour un panier basique. Énorme. Elle découvre `vite-bundle-visualizer` et voit qu'elle a importé toute la lib `lodash` pour un seul `debounce`. Avec un import nommé + tree-shaking, elle passe à 80 KB.
+</Scenario>
+
+<Scenario parcours="B" episode="9">
+Hugo voit son Lighthouse perf chuter à 67 sur mobile. Cause : `react-icons` complet importé pour 3 icônes. Il switch sur des imports spécifiques + lazy load le module de paiement Stripe (qui ne sert qu'à la fin du tunnel). Score remonté à 92.
+</Scenario>
+
+<Scenario parcours="C" episode="10">
+GreenBox doit livrer un score Lighthouse > 90 sur mobile (cible commerciale). Sami vérifie son <Term>bundle</Term> à chaque PR via Lighthouse CI. Il découvre Vite 8 avec Rolldown — 5× plus rapide à builder. Il optimise avec `manualChunks` pour séparer vendor / app / i18n.
+</Scenario>
+
+<Scenario parcours="D" episode="10">
+Léa veut une PWA installable au plus léger possible (mobile bas-de-gamme cible). Bundle audit régulier, Workbox pour le service worker, code splitting par route. Elle passe Yjs en chunk dynamique chargé seulement à l'ouverture du chat.
+</Scenario>
+
+<Scenario parcours="E" episode="10">
+Yanis voit son tech lead lui dire « ton bundle est à 320 KB pour un kanban, c'est trop ». Il découvre que React + dnd-kit + Zustand + Radix UI + Tailwind = 320 KB raisonnable. Mais il peut splitter dnd-kit en chunk dédié, chargé seulement quand l'utilisateur drag.
+</Scenario>
+
+> 🎯 **Objectif** : comprendre ce qui se passe quand tu fais `npm run build`, et savoir débugger un bundle qui devient gros sans raison.
+
+<ObjectiveList items={[
+  "Comprendre le rôle d'un bundler (transformer + concaténer + optimiser)",
+  "Distinguer Vite, esbuild, SWC, Webpack, Rollup",
+  "Expliquer tree-shaking, code-splitting, dynamic imports",
+  "Inspecter un bundle et identifier les gros morceaux",
+  "Configurer un projet Vite pour un cas non standard"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 6 lu" />
+
+
+## Pourquoi un bundler ?
+
+À l'origine, le navigateur ne supportait pas `import`/`export` côté client. Aujourd'hui c'est résolu (ESM natif), mais on bundle toujours pour 4 raisons :
+
+1. **Transpilation** : TS, JSX, Sass, etc. → JS standard.
+2. **Concaténation** : moins de requêtes HTTP (vrai en HTTP/1, moins critique en HTTP/2/3).
+3. **Optimisation** : minification, tree-shaking, splitting.
+4. **Polyfills** : ajouter ce qui manque pour les anciens navigateurs.
+
+## Le paysage des outils
+
+| Outil | Année | Vitesse | Usage typique |
+|-------|-------|---------|---------------|
+| **Webpack** | 2014 | 🐢 lent | Legacy ; encore présent dans des CRA et Next ≤ 15 |
+| **Rollup** | 2015 | 🐇 rapide | Surtout pour les libs (output ESM propre) |
+| **Parcel** | 2017 | 🐇 rapide | Zero-config, niche |
+| **esbuild** | 2020 | 🚀 ultra rapide (Go) | Sous-jacent à beaucoup d'outils |
+| **SWC** | 2020 | 🚀 ultra rapide (Rust) | Remplace Babel dans Next.js |
+| **Vite** | 2020 | 🚀 (Rolldown depuis v8) | **Standard 2026+** pour la majorité des projets non-Next |
+| **Rolldown** | 2025 | 🚀 (Rust) | Bundler unifié de Vite — remplace esbuild **et** Rollup en interne |
+| **Turbopack** | 2022 | 🚀 (Rust) | **Bundler par défaut de Next.js 16** |
+| **Rspack** | 2023 | 🚀 (Rust) | Drop-in replacement Webpack — meilleurs cold starts |
+| **Bun bundler** | 2024 | 🚀 ultra rapide | Inclus dans Bun |
+
+### Comparaison conceptuelle
+
+- **esbuild** et **SWC** sont des **transformers** ultra-rapides (parsing + transpilation), souvent utilisés en interne par d'autres outils.
+- **Webpack** et **Rollup** sont des **bundlers complets** (graphe de dépendances + bundling) — fondations historiques.
+- **Rolldown** (par l'équipe Vite) est le **successeur unifié** de esbuild + Rollup, en Rust.
+- **Vite ≥ 8** utilise Rolldown en dev **et** en build — fini la dichotomie esbuild/Rollup.
+
+## Vite — l'expérience moderne par défaut
+
+```bash
+npm create vite@latest mon-app -- --template react-ts
+cd mon-app && npm install && npm run dev
+```
+
+Avec **Vite 8 (2026)**, dev et build utilisent **Rolldown** (Rust). Tu obtiens :
+
+- Cold start instantané même sur gros projets.
+- Build de prod 3 à 5× plus rapide que Vite 7.
+- HMR sub-100 ms (dans la plage de Turbopack).
+
+### Pourquoi Vite est rapide
+
+**En dev** :
+- ESM natif côté navigateur — pas de bundle global.
+- Vite compile **à la volée** chaque fichier demandé par le navigateur, avec Rolldown (Vite 8+) ou esbuild (≤ 7).
+- Hot Module Replacement (HMR) instantané.
+
+**En build** :
+- **Rolldown** (Vite 8+, Rust) produit un bundle minifié unifié.
+- Vite 7 et antérieurs utilisaient Rollup en build.
+
+### Configuration minimale
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+  },
+  build: {
+    target: 'esnext',
+    sourcemap: true,
+  },
+});
+```
+
+### Variables d'environnement
+
+```bash
+# .env
+VITE_API_URL=https://api.example.com
+SECRET_KEY=xxx           # PAS exposé (pas de prefix VITE_)
+```
+
+```ts
+console.log(import.meta.env.VITE_API_URL);   // OK
+console.log(import.meta.env.SECRET_KEY);     // undefined côté client
+```
+
+**Règle** : seules les variables avec le préfixe `VITE_` sont **exposées au bundle client**. Les autres restent côté serveur (utile pour Vite SSR ou en build time).
+
+## Tree-shaking — éliminer le code mort
+
+Le **tree-shaking** supprime les exports non utilisés du bundle final.
+
+```js
+// utils.js
+export function used() { /* ... */ }
+export function unused() { /* gros code jamais appelé */ }
+
+// main.js
+import { used } from './utils.js';
+used();
+```
+
+Avec un import nommé, le bundler **détecte** que `unused` n'est jamais utilisée → elle disparaît du bundle.
+
+### Conditions pour que ça marche
+
+1. **Modules ESM** (pas CommonJS).
+2. Imports **nommés**, pas le module entier (`import * as utils`).
+3. Pas d'effets de bord déclarés ou détectés.
+
+```js
+// ❌ Bloque le tree-shaking d'utils
+import * as utils from './utils';
+
+// ✅
+import { used } from './utils';
+```
+
+### Side effects et `package.json`
+
+```json
+{
+  "name": "ma-lib",
+  "sideEffects": false   // ← dit aux bundlers : "tu peux tree-shaker"
+}
+```
+
+Si une lib n'a pas `sideEffects: false`, le bundler est conservateur et garde des choses inutiles. C'est pourquoi certaines libs (lodash classique) n'étaient pas tree-shakable. Solutions :
+
+```js
+// ❌ tout lodash importé
+import _ from 'lodash';
+
+// ✅ uniquement debounce
+import debounce from 'lodash/debounce';
+
+// ✅ ou utilise lodash-es (ESM tree-shakable)
+import { debounce } from 'lodash-es';
+```
+
+## Code-splitting — découper le bundle
+
+Plutôt qu'un seul `bundle.js` de 2 Mo, on **découpe** en chunks chargés à la demande.
+
+### Code-splitting automatique
+
+Les méta-frameworks (Next.js, Nuxt, SvelteKit) **splittent automatiquement par route**. Chaque page a son propre chunk + un chunk commun (vendor).
+
+### Code-splitting manuel — dynamic import
+
+```ts
+// Lazy : charger uniquement quand on en a besoin
+const AdminPanel = lazy(() => import('./AdminPanel'));
+
+function App() {
+  const isAdmin = useUser().role === 'admin';
+  return (
+    <Suspense fallback={<Spinner />}>
+      {isAdmin && <AdminPanel />}
+    </Suspense>
+  );
+}
+```
+
+L'AdminPanel et toutes ses dépendances sont **dans un chunk séparé**, téléchargé uniquement par les admins.
+
+```ts
+// Vanilla
+const heavy = await import('./heavy.js');
+heavy.doStuff();
+```
+
+## Inspecter ton bundle
+
+Quand le bundle gonfle, on cherche **qui prend de la place**.
+
+### Vite — visualiseur de bundle
+
+```bash
+npm install -D rollup-plugin-visualizer
+```
+
+```ts
+// vite.config.ts
+import { visualizer } from 'rollup-plugin-visualizer';
+
+export default defineConfig({
+  plugins: [react(), visualizer({ open: true })],
+});
+```
+
+```bash
+npm run build
+# ouvre stats.html — treemap qui montre la taille de chaque module
+```
+
+### Outil universel — bundle-analyzer
+
+Pour Next.js : [@next/bundle-analyzer](https://www.npmjs.com/package/@next/bundle-analyzer).
+
+Pour Webpack : [webpack-bundle-analyzer](https://github.com/webpack-contrib/webpack-bundle-analyzer).
+
+### Coupables fréquents
+
+| Coupable | Solution |
+|----------|----------|
+| `lodash` complet | Importer par fonction : `lodash/debounce` ou `lodash-es` |
+| `moment.js` | Remplacer par `date-fns` ou `dayjs` (10× plus léger) |
+| `axios` | `fetch` natif suffit dans 95 % des cas |
+| `react-icons` complet | Importer une icône à la fois : `react-icons/fa` |
+| Images dans le bundle | Servir depuis `/public` ou un CDN |
+| Police complète Google Fonts | Self-host avec subset (woff2) |
+
+## Optimisations bonus
+
+### `target: esnext` en build
+
+Si tu cibles uniquement les navigateurs récents (last 2 versions) :
+
+```ts
+// vite.config.ts
+build: {
+  target: 'es2022',
+}
+```
+
+→ pas de polyfills inutiles, bundle plus petit.
+
+### Compression Brotli/Gzip
+
+Les CDN modernes (Vercel, Netlify, Cloudflare) servent en Brotli par défaut. En self-host avec Nginx :
+
+```nginx
+gzip on;
+gzip_types application/javascript text/css;
+brotli on;
+brotli_types application/javascript text/css;
+```
+
+### Subresource Integrity (SRI)
+
+Pour les CDN externes, ajoute un hash :
+
+```html
+<script
+  src="https://cdn.example.com/lib.js"
+  integrity="sha384-..."
+  crossorigin="anonymous">
+</script>
+```
+
+Le navigateur refuse d'exécuter si le contenu a été altéré.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu importes lodash dans ton app React et le bundle gonfle de 70 Ko. Solution ?"
+  options={[
+    'Désactiver lodash',
+    'Importer chaque fonction individuellement (`import debounce from \'lodash/debounce\'`) ou utiliser `lodash-es`',
+    'Mettre lodash dans devDependencies',
+    'Utiliser `tree-shaking: true` dans Vite'
+  ]}
+  answerIndex={1}
+  explanation="lodash classique n'est pas tree-shakable car il a des effets de bord et n'est pas pure ESM. Soit tu importes par chemin (lodash/debounce), soit lodash-es. Beaucoup de libs anciennes posent ce problème ; les libs modernes sont tree-shakable par défaut."
+/>
+
+<Quiz
+  question="En dev, Vite est instantané même sur un gros projet. Pourquoi pas Webpack ?"
+  options={[
+    'Vite est écrit en Rust',
+    'Vite utilise ESM natif côté navigateur en dev — il ne bundle pas, il compile à la volée fichier par fichier. Webpack pré-bundle tout au démarrage',
+    'Webpack est plus ancien, donc plus lent',
+    'Vite met les dépendances en cache'
+  ]}
+  answerIndex={1}
+  explanation="C'est THE killer feature de Vite. En dev, le navigateur demande chaque module via ESM, Vite le compile en quelques ms avec esbuild, le HMR est instantané. Webpack doit pré-construire tout le graphe de dépendances avant de servir, ce qui prend des secondes voire minutes sur gros projet."
+/>
+
+<Quiz
+  question="Tu veux qu'un panel admin (10 % des utilisateurs) ne soit téléchargé QUE pour les admins. Comment ?"
+  options={[
+    'Le mettre dans un fichier séparé',
+    'Utiliser un dynamic import (`import(\'./Admin\')`) — le bundler crée un chunk séparé téléchargé à la demande',
+    'Le rendre côté serveur',
+    'Aucune solution, tout est bundlé ensemble'
+  ]}
+  answerIndex={1}
+  explanation="Le dynamic import crée un chunk séparé à la compilation. Couplé à React.lazy + Suspense, le panel admin est téléchargé uniquement quand on en a besoin. C'est le pattern code-splitting le plus courant."
+/>
+
+## Pour aller plus loin
+
+- *Vite Docs* — [vitejs.dev](https://vitejs.dev/)
+- *Tobias Koppers — Webpack Inception talk* — pour comprendre l'histoire
+- *web.dev — Reduce JavaScript payloads* — [web.dev/articles/reduce-javascript-payloads-with-tree-shaking](https://web.dev/articles/reduce-javascript-payloads-with-tree-shaking)
+- *Bundle Phobia* — [bundlephobia.com](https://bundlephobia.com/) — taille d'un package npm avant de l'installer
+
+---
+
+**Suite** : [7.6 — Design systems & UI kits](/07-frameworks-frontend/06-design-systems/) — Tailwind, shadcn/ui, Radix, Storybook.

@@ -1,0 +1,86 @@
+---
+title: Axe 13 — Performance & accessibilité
+description: Core Web Vitals, optimisations frontend/backend, accessibilité avancée, i18n.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : livrer des expériences rapides, accessibles et internationalisables — au niveau exigé en 2026 (Core Web Vitals, EAA, WCAG 2.2 AA).
+
+<Aside type="note" title="Perf et a11y dans les axes précédents — où est la frontière">
+Tu as déjà vu :
+- **Axe 5.1 (HTML sémantique)** : balises `<header>` `<nav>` `<main>`, `alt`, `<label>` — **socle** a11y.
+- **Axe 5.3 (Accessibilité)** : WCAG niveau AA, contrastes, focus visible, navigation clavier — **niveau confirmé** a11y.
+- **Axe 5.2 (CSS moderne)** : `width`/`height` sur images, `prefers-reduced-motion` — **socle** perf.
+- **Axe 7 (Frameworks)** : Server Components, code splitting, lazy loading — **niveau confirmé** perf via outils.
+
+L'axe 13 (ici) ajoute la **discipline avancée** : Core Web Vitals (LCP/INP/CLS), Lighthouse CI, RUM, profilage backend, EAA 2025, i18n RTL, propriétés logiques CSS. **C'est l'axe pour passer du « ça marche » au « ça respecte les standards 2026 »**.
+</Aside>
+
+## Prérequis
+
+Axes 5, 6, 7, 8, 9.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Mesurer LCP, INP, CLS et savoir les améliorer",
+  "Optimiser images, polices, JS critique côté frontend",
+  "Profiler et accélérer un endpoint backend (DB, cache, queue)",
+  "Atteindre la conformité WCAG 2.2 AA",
+  "Internationaliser une application (next-intl, i18next, ICU, RTL)"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="13.1 — Mesurer avant d'optimiser"
+    href="/13-performance-a11y/01-mesurer/"
+    description="Core Web Vitals 2026 (LCP, INP, CLS), Lighthouse, WebPageTest, Chrome DevTools, RUM via web-vitals.js, budgets perf en CI."
+  />
+  <LinkCard
+    title="13.2 — Optimisations frontend"
+    href="/13-performance-a11y/02-frontend/"
+    description="Images modernes (AVIF, srcset, fetchpriority), polices, CSS critique, code splitting, RSC vs Astro Islands, edge & cache HTTP."
+  />
+  <LinkCard
+    title="13.3 — Optimisations backend"
+    href="/13-performance-a11y/03-backend/"
+    description="Profiling (OpenTelemetry), EXPLAIN ANALYZE, indexes, N+1, caching multi-niveaux (Redis), connection pooling, queues async (BullMQ)."
+  />
+  <LinkCard
+    title="13.4 — Accessibilité avancée"
+    href="/13-performance-a11y/04-accessibilite/"
+    description="WCAG 2.2 AA, axe-core + tests manuels (clavier, NVDA), patterns ARIA (dialog, menus, formulaires), prefers-reduced-motion, target size."
+  />
+  <LinkCard
+    title="13.5 — Internationalisation"
+    href="/13-performance-a11y/05-i18n/"
+    description="Intl natif, next-intl / i18next / FormatJS, ICU MessageFormat, pluralisation, dates / nombres / devises, RTL avec propriétés logiques."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Audit perf + a11y + i18n — landing FastBites** — page volontairement catastrophique (LCP > 5 s, 14 violations a11y, monolingue FR) à mesurer, optimiser, internationaliser (FR + EN + AR avec RTL natif), et documenter dans un rapport avant/après chiffré.
+
+<ExerciseDownload
+  axe="13-performance-a11y"
+  slug="01-audit-perf-a11y-i18n"
+  title="Audit perf + a11y + i18n — FastBites"
+  description="Pré-requis : Node ≥ 20 + Chrome. Tu vis la triple discipline web pro 2026 : Core Web Vitals (LCP/CLS/TBT), WCAG 2.2 AA (axe-core 0 violation), i18n avec Intl natif + propriétés logiques CSS pour RTL. Correction validée : 99/100 perf + 100/100 a11y, bundle 71 KB → 6 KB."
+/>
+
+## Ressources clés
+
+- *web.dev / vitals* — [web.dev/vitals](https://web.dev/vitals/)
+- *Web Accessibility Initiative (WAI)* — [w3.org/WAI](https://www.w3.org/WAI/)
+- *RGAA 4.1* — [accessibilite.numerique.gouv.fr](https://accessibilite.numerique.gouv.fr/)
+- *Smashing Magazine* — articles perf & a11y de référence
+- *Inclusive Components* — Heydon Pickering
+- *MDN Intl* — [developer.mozilla.org/.../Intl](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl)

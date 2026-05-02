@@ -1,0 +1,264 @@
+---
+/**
+ * Roadmap visuelle des 17 axes — vue d'ensemble cliquable, regroupée par phase
+ * avec barre de progression individuelle (lue depuis localStorage guideProgress).
+ */
+const AXES = [
+  { num: 1, slug: '01-fondations', icon: '💾', short: 'Fondations', total: 5, phase: 'A' },
+  { num: 2, slug: '02-web', icon: '🌐', short: 'Web', total: 5, phase: 'A' },
+  { num: 3, slug: '03-analyse-conception', icon: '📐', short: 'Analyse', total: 7, phase: 'A' },
+  { num: 4, slug: '04-outils', icon: '🛠', short: 'Outils', total: 6, phase: 'A' },
+  { num: 5, slug: '05-frontend-html-css', icon: '🎨', short: 'HTML/CSS', total: 4, phase: 'B' },
+  { num: 6, slug: '06-javascript-typescript', icon: '⚡', short: 'JS/TS', total: 5, phase: 'B' },
+  { num: 7, slug: '07-frameworks-frontend', icon: '⚛', short: 'Frameworks', total: 7, phase: 'B' },
+  { num: 8, slug: '08-backend', icon: '🚀', short: 'Backend', total: 3, phase: 'C' },
+  { num: 9, slug: '09-bases-de-donnees', icon: '🗄', short: 'BDD', total: 5, phase: 'C' },
+  { num: 10, slug: '10-baas', icon: '☁', short: 'BaaS', total: 6, phase: 'C' },
+  { num: 11, slug: '11-qualite-tests', icon: '✅', short: 'Qualité', total: 5, phase: 'D' },
+  { num: 12, slug: '12-securite', icon: '🔐', short: 'Sécurité', total: 5, phase: 'D' },
+  { num: 13, slug: '13-performance-a11y', icon: '📊', short: 'Perf/A11y', total: 6, phase: 'D' },
+  { num: 14, slug: '14-devops', icon: '🚢', short: 'DevOps', total: 7, phase: 'D' },
+  { num: 15, slug: '15-methodes-soft-skills', icon: '🤝', short: 'Méthodes', total: 5, phase: 'E' },
+  { num: 16, slug: '16-specialisations', icon: '🔬', short: 'Spé.', total: 7, phase: 'E' },
+  { num: 17, slug: '17-carriere', icon: '💼', short: 'Carrière', total: 7, phase: 'E' },
+];
+
+const PHASE_COLORS: Record<string, string> = {
+  A: '#3b82f6',
+  B: '#8b5cf6',
+  C: '#ec4899',
+  D: '#f59e0b',
+  E: '#10b981',
+};
+
+const PHASE_LABELS: Record<string, string> = {
+  A: 'Fondations',
+  B: 'Frontend',
+  C: 'Backend & données',
+  D: 'Industrialisation',
+  E: 'Méta',
+};
+
+const grouped = AXES.reduce<Record<string, typeof AXES>>((acc, axe) => {
+  (acc[axe.phase] ??= []).push(axe);
+  return acc;
+}, {});
+---
+
+<section class="axes-roadmap" aria-label="Carte des 17 axes">
+  <header class="roadmap-header">
+    <h2>📍 Carte des 17 axes</h2>
+    <p>Cliquable. Le bord coloré = la phase. La barre = ce que tu as déjà parcouru.</p>
+  </header>
+
+  {Object.entries(grouped).map(([phase, axes]) => (
+    <div class="roadmap-phase-group" style={`--axe-color: ${PHASE_COLORS[phase]}`}>
+      <div class="roadmap-phase-label">
+        <span class="roadmap-phase-id">Phase {phase}</span>
+        <span class="roadmap-phase-name">{PHASE_LABELS[phase]}</span>
+      </div>
+      <div class="roadmap-grid">
+        {axes.map((axe) => (
+          <a
+            class="roadmap-axe"
+            href={`/${axe.slug}/`}
+            data-axe={String(axe.num)}
+            data-total={String(axe.total)}
+          >
+            <div class="roadmap-axe-header">
+              <span class="roadmap-axe-icon" aria-hidden="true">{axe.icon}</span>
+              <span class="roadmap-axe-num">{axe.num}</span>
+            </div>
+            <div class="roadmap-axe-title">{axe.short}</div>
+            <div class="roadmap-axe-progress">
+              <div class="roadmap-progress-bar">
+                <span class="roadmap-progress-fill"></span>
+              </div>
+              <span class="roadmap-progress-label">0 / {axe.total}</span>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  ))}
+</section>
+
+<style>
+  .axes-roadmap {
+    margin: 2rem 0;
+  }
+  .roadmap-header h2 {
+    margin: 0 0 0.25rem;
+    font-size: 1.3rem;
+  }
+  .roadmap-header p {
+    margin: 0 0 1.25rem;
+    color: var(--sl-color-gray-2);
+    font-size: 0.9rem;
+  }
+
+  .roadmap-phase-group {
+    margin-bottom: 1rem;
+  }
+  .roadmap-phase-group:last-child { margin-bottom: 0; }
+
+  .roadmap-phase-label {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding-left: 0.1rem;
+  }
+  .roadmap-phase-id {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--axe-color);
+    font-weight: 700;
+  }
+  .roadmap-phase-name {
+    font-size: 0.85rem;
+    color: var(--sl-color-gray-2);
+  }
+
+  .roadmap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+    gap: 0.5rem;
+  }
+
+  .roadmap-axe {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-top: 3px solid var(--axe-color);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg);
+    color: inherit;
+    text-decoration: none;
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  }
+  .roadmap-axe:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--card-glow, 0 4px 12px rgba(0, 0, 0, 0.08));
+    border-color: var(--axe-color);
+  }
+
+  .roadmap-axe-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+  }
+  .roadmap-axe-icon {
+    font-size: 1.3rem;
+    line-height: 1;
+  }
+  .roadmap-axe-num {
+    font-family: var(--sl-font-mono);
+    font-size: 0.68rem;
+    color: var(--axe-color);
+    background: color-mix(in srgb, var(--axe-color) 14%, transparent);
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    font-weight: 700;
+  }
+
+  .roadmap-axe-title {
+    font-weight: 600;
+    font-size: 0.85rem;
+    line-height: 1.25;
+    flex: 1;
+  }
+
+  .roadmap-axe-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .roadmap-progress-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--sl-color-gray-6);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .roadmap-progress-fill {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--axe-color);
+    border-radius: 999px;
+    transition: width 400ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .roadmap-progress-label {
+    font-size: 0.7rem;
+    color: var(--sl-color-gray-2);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .roadmap-axe[data-complete='true'] {
+    border-color: var(--axe-color);
+  }
+  .roadmap-axe[data-complete='true']::after {
+    content: '✓';
+    position: absolute;
+    top: 0.45rem;
+    right: 0.45rem;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--axe-color);
+    color: white;
+    font-size: 0.65rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    const STORAGE_KEY = 'guideProgress';
+
+    function loadVisited() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return new Set(raw ? JSON.parse(raw) : []);
+      } catch { return new Set(); }
+    }
+
+    function update() {
+      const visited = loadVisited();
+      const visitedByAxe = {};
+      for (const path of visited) {
+        const m = path.match(/^\/(\d{2})-/);
+        if (m) {
+          const n = String(Number(m[1]));
+          visitedByAxe[n] = (visitedByAxe[n] || 0) + 1;
+        }
+      }
+
+      document.querySelectorAll('.roadmap-axe').forEach((el) => {
+        const num = el.dataset.axe;
+        const total = Number(el.dataset.total);
+        const count = Math.min(visitedByAxe[num] || 0, total);
+        const percent = total ? Math.round((count / total) * 100) : 0;
+        const fill = el.querySelector('.roadmap-progress-fill');
+        if (fill) fill.style.width = percent + '%';
+        const label = el.querySelector('.roadmap-progress-label');
+        if (label) label.textContent = count + ' / ' + total;
+        el.dataset.complete = percent >= 100 ? 'true' : 'false';
+      });
+    }
+
+    update();
+    document.addEventListener('astro:page-load', update);
+    document.addEventListener('guide-progress-update', update);
+  })();
+</script>

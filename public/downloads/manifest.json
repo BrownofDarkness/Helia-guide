@@ -1,0 +1,195 @@
+{
+  "generatedAt": "2026-05-02T07:23:41.093Z",
+  "exercises": [
+    {
+      "slug": "01-fondations-01-tri-telechargements-canevas",
+      "files": 4,
+      "sizeKB": 3.4
+    },
+    {
+      "slug": "01-fondations-01-tri-telechargements-correction",
+      "files": 2,
+      "sizeKB": 6.1
+    },
+    {
+      "slug": "02-web-01-mini-curl-canevas",
+      "files": 7,
+      "sizeKB": 5.6
+    },
+    {
+      "slug": "02-web-01-mini-curl-correction",
+      "files": 7,
+      "sizeKB": 8.9
+    },
+    {
+      "slug": "03-analyse-conception-01-bibliotheque-personnelle-canevas",
+      "files": 7,
+      "sizeKB": 5.3
+    },
+    {
+      "slug": "03-analyse-conception-01-bibliotheque-personnelle-correction",
+      "files": 7,
+      "sizeKB": 13.1
+    },
+    {
+      "slug": "04-outils-01-stack-conteneurisee-canevas",
+      "files": 17,
+      "sizeKB": 7.9
+    },
+    {
+      "slug": "04-outils-01-stack-conteneurisee-correction",
+      "files": 17,
+      "sizeKB": 11
+    },
+    {
+      "slug": "05-frontend-html-css-01-refonte-lighthouse-canevas",
+      "files": 2,
+      "sizeKB": 3.9
+    },
+    {
+      "slug": "05-frontend-html-css-01-refonte-lighthouse-correction",
+      "files": 3,
+      "sizeKB": 10.4
+    },
+    {
+      "slug": "06-javascript-typescript-01-spa-typescript-canevas",
+      "files": 13,
+      "sizeKB": 8.9
+    },
+    {
+      "slug": "06-javascript-typescript-01-spa-typescript-correction",
+      "files": 13,
+      "sizeKB": 12.7
+    },
+    {
+      "slug": "07-frameworks-frontend-01-dashboard-nextjs-canevas",
+      "files": 29,
+      "sizeKB": 12.1
+    },
+    {
+      "slug": "07-frameworks-frontend-01-dashboard-nextjs-correction",
+      "files": 30,
+      "sizeKB": 16.2
+    },
+    {
+      "slug": "08-backend-01-nodejs-typescript-taskly-api-canevas",
+      "files": 28,
+      "sizeKB": 12.7
+    },
+    {
+      "slug": "08-backend-01-nodejs-typescript-taskly-api-correction",
+      "files": 30,
+      "sizeKB": 20.6
+    },
+    {
+      "slug": "08-backend-02-python-fastapi-taskly-api-canevas",
+      "files": 15,
+      "sizeKB": 9.5
+    },
+    {
+      "slug": "08-backend-02-python-fastapi-taskly-api-correction",
+      "files": 18,
+      "sizeKB": 13.6
+    },
+    {
+      "slug": "08-backend-03-php-laravel-taskly-api-canevas",
+      "files": 1,
+      "sizeKB": 3.8
+    },
+    {
+      "slug": "08-backend-03-php-laravel-taskly-api-correction",
+      "files": 26,
+      "sizeKB": 13.9
+    },
+    {
+      "slug": "09-bases-de-donnees-01-ecommerce-postgres-canevas",
+      "files": 6,
+      "sizeKB": 5
+    },
+    {
+      "slug": "09-bases-de-donnees-01-ecommerce-postgres-correction",
+      "files": 17,
+      "sizeKB": 16.6
+    },
+    {
+      "slug": "10-baas-01-saas-minimal-canevas",
+      "files": 26,
+      "sizeKB": 14.5
+    },
+    {
+      "slug": "10-baas-01-saas-minimal-correction",
+      "files": 26,
+      "sizeKB": 16.5
+    },
+    {
+      "slug": "11-qualite-tests-01-refactor-tests-canevas",
+      "files": 5,
+      "sizeKB": 5.5
+    },
+    {
+      "slug": "11-qualite-tests-01-refactor-tests-correction",
+      "files": 26,
+      "sizeKB": 15.7
+    },
+    {
+      "slug": "12-securite-01-audit-owasp-canevas",
+      "files": 12,
+      "sizeKB": 10.8
+    },
+    {
+      "slug": "12-securite-01-audit-owasp-correction",
+      "files": 18,
+      "sizeKB": 23.4
+    },
+    {
+      "slug": "13-performance-a11y-01-audit-perf-a11y-i18n-canevas",
+      "files": 9,
+      "sizeKB": 9.7
+    },
+    {
+      "slug": "13-performance-a11y-01-audit-perf-a11y-i18n-correction",
+      "files": 15,
+      "sizeKB": 97.5
+    },
+    {
+      "slug": "14-devops-01-deploiement-complet-canevas",
+      "files": 9,
+      "sizeKB": 7.6
+    },
+    {
+      "slug": "14-devops-01-deploiement-complet-correction",
+      "files": 17,
+      "sizeKB": 17
+    },
+    {
+      "slug": "15-methodes-soft-skills-01-faux-sprint-canevas",
+      "files": 12,
+      "sizeKB": 10.3
+    },
+    {
+      "slug": "15-methodes-soft-skills-01-faux-sprint-correction",
+      "files": 10,
+      "sizeKB": 16.7
+    },
+    {
+      "slug": "16-specialisations-01-assistant-rag-canevas",
+      "files": 10,
+      "sizeKB": 7.8
+    },
+    {
+      "slug": "16-specialisations-01-assistant-rag-correction",
+      "files": 19,
+      "sizeKB": 16.3
+    },
+    {
+      "slug": "17-carriere-01-portfolio-audit-canevas",
+      "files": 7,
+      "sizeKB": 11.9
+    },
+    {
+      "slug": "17-carriere-01-portfolio-audit-correction",
+      "files": 7,
+      "sizeKB": 17.9
+    }
+  ]
+}

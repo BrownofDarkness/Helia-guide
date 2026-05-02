@@ -1,0 +1,438 @@
+---
+title: 16.3 — 3D, jeu, créatif
+description: Canvas 2D, WebGL, Three.js, React Three Fiber, WebGPU — choisir la stack adaptée à un configurateur produit, une visualisation data, un mini-jeu, un effet portfolio.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : pouvoir intégrer un canvas, une scène 3D ou un effet shader sur le web sans être un développeur jeu — comprendre les briques et savoir où s'arrêter.
+
+<ObjectiveList items={[
+  "Choisir entre Canvas 2D, SVG, WebGL, Three.js et WebGPU selon le besoin",
+  "Construire une scène 3D minimale en Three.js et React Three Fiber",
+  "Optimiser les perfs (draw calls, géométrie, GPU instancing)",
+  "Rendre la 3D accessible (contrôles clavier, fallback statique)",
+  "Comprendre où WebGPU change la donne en 2026"
+]} />
+
+<Level value="avancé" reading="11 min" prereq="axes 1-14 maîtrisés" />
+
+
+## Le paysage des APIs graphiques web
+
+| API | Quand l'utiliser |
+|-----|------------------|
+| **CSS / SVG** | Animations UI, infographies vectorielles, < 500 éléments |
+| **Canvas 2D** | Charts custom, mini-jeux 2D, drawing tools, > 500 sprites |
+| **WebGL / Three.js** | 3D, effets shader, visualisations complexes, configurateurs produit |
+| **React Three Fiber (R3F)** | 3D dans une app React |
+| **WebGPU** | Compute, particules massives, rendering moderne — futur défaut |
+
+> **Règle** : commence par CSS/SVG. Passe au Canvas 2D quand le DOM rame. Passe à WebGL quand tu as besoin de 3D ou de shaders. WebGPU pour les cas avancés et le compute.
+
+---
+
+## Canvas 2D — souvent suffisant
+
+### En 5 lignes
+
+- Un élément `<canvas>` + une `CanvasRenderingContext2D`.
+- Tu dessines via `ctx.fillRect`, `ctx.beginPath`, `ctx.drawImage`, etc.
+- Pas de DOM par sprite → tu peux dessiner **10 000 objets** à 60 FPS.
+- Tu redessines à chaque frame (`requestAnimationFrame`).
+- **Pas accessible** par défaut — il faut un fallback.
+
+### Boucle de rendu type
+
+```ts
+const canvas = document.querySelector('canvas')!;
+const ctx = canvas.getContext('2d')!;
+
+let particles = Array.from({ length: 1000 }, () => ({
+  x: Math.random() * canvas.width,
+  y: Math.random() * canvas.height,
+  vx: (Math.random() - 0.5) * 2,
+  vy: (Math.random() - 0.5) * 2,
+}));
+
+function frame() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const p of particles) {
+    p.x = (p.x + p.vx + canvas.width) % canvas.width;
+    p.y = (p.y + p.vy + canvas.height) % canvas.height;
+    ctx.fillRect(p.x, p.y, 2, 2);
+  }
+  requestAnimationFrame(frame);
+}
+frame();
+```
+
+### Cas d'usage parfaits Canvas 2D
+
+- **Charts** custom (dépasser les capacités d'ECharts / Chart.js).
+- **Mini-jeux** 2D simples (puzzle, plateformer léger).
+- **Drawing tools** (Excalidraw, tldraw).
+- **Visualisations data** dynamiques (network graph très dense).
+
+### Libs utiles
+
+| Lib | Pour quoi |
+|-----|-----------|
+| **Konva** | Scène 2D avec hit detection (drag, click) |
+| **PixiJS** | 2D + WebGL accelerated, jeux 2D modernes |
+| **D3** | Data viz (souvent SVG, mais compatible Canvas) |
+| **Excalidraw / tldraw** | Outils dessin clé en main |
+
+---
+
+## WebGL & Three.js
+
+### WebGL pur — bas niveau
+
+WebGL est l'API GPU navigateur. Tu écris des **shaders GLSL** (vertex + fragment) et tu uploads des **buffers** de données. Très puissant, **très verbeux**.
+
+```glsl
+// Fragment shader — couleur uniforme
+precision mediump float;
+uniform vec3 uColor;
+void main() {
+  gl_FragColor = vec4(uColor, 1.0);
+}
+```
+
+Pour une scène 3D simple, tu écris ~200 lignes. Pas raisonnable pour 95 % des cas.
+
+### Three.js — la bibliothèque qui simplifie tout
+
+Three.js est **la** lib 3D web. Elle abstrait WebGL, gère caméras, lumières, géométries, animations.
+
+```ts
+import * as THREE from 'three';
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
+camera.position.z = 5;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const cube = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 1),
+  new THREE.MeshStandardMaterial({ color: 0x44aa88 })
+);
+scene.add(cube);
+
+scene.add(new THREE.DirectionalLight(0xffffff, 1));
+scene.add(new THREE.AmbientLight(0x404040));
+
+function animate() {
+  cube.rotation.x += 0.01;
+  cube.rotation.y += 0.01;
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+animate();
+```
+
+### Concepts essentiels Three.js
+
+| Concept | Rôle |
+|---------|------|
+| **Scene** | Conteneur de tous les objets |
+| **Camera** | Perspective ou Orthographic |
+| **Renderer** | WebGL / WebGPU — produit l'image |
+| **Mesh** | Géométrie + matériau |
+| **Geometry** | Position des vertices (Box, Sphere, GLTF…) |
+| **Material** | Propriétés de surface (couleur, métal, rugosité) |
+| **Light** | Directional, Point, Ambient, Spot |
+| **OrbitControls** | Caméra interactive (clic-tirer pour tourner) |
+
+---
+
+## React Three Fiber — Three.js déclaratif
+
+[React Three Fiber](https://r3f.docs.pmnd.rs/) (R3F) wrap Three.js en composants React. **L'option recommandée 2026 dans une app React**.
+
+```tsx
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
+
+export default function Scene() {
+  return (
+    <Canvas camera={{ position: [3, 3, 3] }}>
+      <ambientLight intensity={0.4} />
+      <directionalLight position={[5, 5, 5]} />
+      <mesh rotation={[0.4, 0.4, 0]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color="hotpink" />
+      </mesh>
+      <OrbitControls />
+    </Canvas>
+  );
+}
+```
+
+### Écosystème R3F
+
+| Package | Quoi |
+|---------|------|
+| **`@react-three/drei`** | Helpers : OrbitControls, environnements, GLTF loader, text |
+| **`@react-three/postprocessing`** | Bloom, DoF, glitch — effets post-process |
+| **`@react-three/rapier`** | Physique 3D (rigid bodies, joints) |
+| **`@react-three/cannon`** | Physique alternative (un peu vieillissante) |
+| **`leva`** | UI debug pour ajuster les paramètres en live |
+
+### Charger un modèle 3D
+
+```tsx
+import { useGLTF } from '@react-three/drei';
+
+function Model() {
+  const { scene } = useGLTF('/duck.glb');
+  return <primitive object={scene} />;
+}
+```
+
+Format **glTF / GLB** : standard 2026. Compresser via **Draco** ou **Meshopt** pour des fichiers 5-20× plus légers.
+
+---
+
+## Performance 3D — l'essentiel
+
+### Le coût d'une frame
+
+```
+Frame budget @ 60 FPS = 16,6 ms
+                @ 120 FPS = 8,3 ms
+```
+
+Si tu dépasses, le navigateur skip une frame → ressenti saccadé.
+
+### Les 3 axes d'optimisation
+
+| Axe | Levier |
+|-----|--------|
+| **Draw calls** | Moins d'appels GPU = mieux. Merger les meshes statiques (`BufferGeometryUtils.mergeGeometries`) |
+| **Géométrie** | Compresser, simplifier (Draco, decimate Blender) |
+| **Material** | Texture atlases, mipmaps, partager les materials |
+| **GPU instancing** | 1000 cubes identiques en 1 draw call (`InstancedMesh`) |
+| **Frustum culling** | Ne pas rendre ce qui est hors caméra (Three.js le fait par défaut) |
+| **LOD** (Level of Detail) | Modèles plus simples quand loin |
+| **Shadows** | Coûteuses — désactiver ou limiter à un seul light |
+
+### Profiler
+
+- Chrome DevTools → Performance → enregistre une session.
+- **`stats.js`** — overlay FPS / ms / mem.
+- **`r3f-perf`** — overlay R3F dédié.
+- **Spector.js** — extension Chrome pour debug WebGL frame par frame.
+
+### Cas d'école — un configurateur produit
+
+```
+Page produit → 1 modèle GLB principal (~500 KB compressé Draco)
+            → 5 textures PBR (basecolor, normal, roughness, metallic, AO)
+            → 1 environnement HDR pour reflets
+            → 8000 vertices total
+            → 60 FPS sur Mac M3 → ✅
+            → 30-45 FPS sur Android milieu de gamme → 🔵 acceptable
+```
+
+---
+
+## WebGPU — la prochaine génération
+
+[WebGPU](https://gpuweb.github.io/gpuweb/) est l'API graphique nouvelle génération. Universellement supportée en **2026** (Chrome, Edge, Firefox, Safari).
+
+### Pourquoi mieux que WebGL
+
+| Aspect | WebGL | WebGPU |
+|--------|-------|--------|
+| Modèle | Stateful (OpenGL ES) | Stateless (Vulkan-like) |
+| Performances | OK | 2-5× sur la plupart des cas |
+| Multi-threading | Non | Oui (workers) |
+| Compute shaders | Non (hack via fragment) | Oui natif |
+| Shading language | GLSL | WGSL |
+| Bindings clairs | Lourds | Élégants |
+
+### Quand passer à WebGPU
+
+- **Compute** (simulations, ML inference, rendu non-graphique).
+- **Particules massives** (>1M).
+- **Volumetric rendering** (smoke, fluids).
+- **GPU-accelerated data viz** très lourde.
+
+### Three.js et WebGPU
+
+Three.js a un `WebGPURenderer` officiellement stable depuis 2024. Tu peux switch :
+
+```ts
+import WebGPURenderer from 'three/addons/renderers/webgpu/WebGPURenderer.js';
+
+const renderer = new WebGPURenderer({ antialias: true });
+await renderer.init();
+```
+
+> En 2026, **WebGPU est l'option par défaut** sur projets neufs. WebGL reste pertinent en **fallback** sur appareils anciens.
+
+---
+
+## Accessibilité de la 3D
+
+Une scène 3D pure est **inaccessible** par défaut :
+
+- Pas de focus clavier.
+- Pas lue par lecteur d'écran.
+- Souris/tactile uniquement.
+
+### Patterns d'accessibilité
+
+```html
+<canvas role="img" aria-label="Configurateur 3D du sac à dos modèle Adventure"></canvas>
+
+<!-- Description longue + alternatives -->
+<div class="sr-only">
+  <h2>Détail du modèle</h2>
+  <ul>
+    <li>Couleur : <select id="color">...</select></li>
+    <li>Taille : <select id="size">...</select></li>
+    <li>Matériau : <select id="material">...</select></li>
+  </ul>
+</div>
+
+<!-- Capture statique en fallback -->
+<noscript><img src="product-hero.jpg" alt="Sac à dos Adventure rouge"></noscript>
+```
+
+### Bonnes pratiques
+
+| Règle | Pourquoi |
+|-------|----------|
+| `aria-label` sur le `<canvas>` | Lecteur d'écran l'identifie |
+| **Contrôles UI** doublés (boutons / selects) | L'utilisateur clavier peut tout faire |
+| **Snapshot statique** SEO + a11y | Si JS off, toujours quelque chose à voir |
+| Animations désactivables (`prefers-reduced-motion`) | Vestibulaire |
+| **Texte lisible** dans la scène (pas seulement les labels 3D) | Les labels 3D ne sont pas indexés |
+| Contrastes suffisants entre éléments | Daltoniens, faible vision |
+
+---
+
+## Quand sortir de la 3D pure ?
+
+Beaucoup de projets « 3D » seraient mieux servis par autre chose :
+
+| Besoin | Solution moins lourde |
+|--------|----------------------|
+| « Un truc qui bouge » | Animation CSS / Lottie |
+| Carte interactive | Mapbox, MapLibre, Leaflet |
+| Schéma 3D simple | Sketchfab embed, modèle GLB statique |
+| Visualisation data | Plotly 3D, deck.gl |
+| Mini-jeu 2D | PixiJS / Phaser |
+| AR mobile | WebXR / model-viewer |
+| Effets « hero » landing | Spline (no-code), Rive |
+
+---
+
+## Spline & no-code 3D
+
+[Spline](https://spline.design/) permet de **créer des scènes 3D dans le navigateur** et d'exporter en composant React.
+
+```tsx
+import Spline from '@splinetool/react-spline';
+
+export default function Hero() {
+  return <Spline scene="https://prod.spline.design/xxxxxx/scene.splinecode" />;
+}
+```
+
+**Idéal pour** : sections hero marketing, demos produit. **Pas pour** : configurateurs avec logique métier complexe.
+
+---
+
+## Anti-patterns 3D web
+
+| Symptôme | Solution |
+|----------|----------|
+| Modèle 50 MB en GLB sans compression | Draco / Meshopt → 1-3 MB typiquement |
+| 200 draw calls par frame | Merge meshes statiques, GPU instancing |
+| Shadows partout | 1 directionnal light shadow max, désactiver pour mobile |
+| Pas de fallback statique | Render-blocking pour Lighthouse, mauvais SEO |
+| Animation infinie sur la home | Désactiver après quelques secondes ou sur scroll |
+| Pas de Suspense / loading state | Ecran blanc 3 sec, UX cassée |
+| Caméra qui bouge **toute seule** + parallax | Vestibulaire — donner un toggle |
+| Chargement synchrone du modèle au mount | Lazy-load + skeleton |
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu construis un dashboard avec ~30 graphiques classiques (line, bar, pie). Quelle techno ?"
+  options={[
+    'Three.js — c\'est moderne',
+    'CSS / SVG ou une lib type Recharts / ECharts / Chart.js — léger, accessible, animable, indexable. Pas besoin de Canvas/3D',
+    'WebGPU pour la perf',
+    'Canvas 2D maison'
+  ]}
+  answerIndex={1}
+  explanation="Pour des charts classiques, SVG (Recharts, D3, ECharts) est idéal : accessible, animable en CSS, sélectionnable, indexable SEO. Three.js ou WebGPU seraient overkill et perdent l'accessibilité gratuite. Canvas 2D maison ajoute du travail sans bénéfice ici."
+/>
+
+<Quiz
+  question="Sur une app React, tu veux ajouter un configurateur 3D produit. Quelle stack en 2026 ?"
+  options={[
+    'WebGL pur',
+    'Three.js + React Three Fiber + drei pour les helpers — déclaratif, intégré React, écosystème mûr (postprocessing, physics, controls)',
+    'Three.js sans wrapper',
+    'WebGPU directement'
+  ]}
+  answerIndex={1}
+  explanation="R3F est devenu la norme dans une app React : composants déclaratifs, hooks (useFrame, useLoader), drei fournit OrbitControls, environnements HDR, GLTF loader, etc. Three.js direct fonctionne mais c'est plus de code impératif. WebGPU est utile pour les besoins avancés ; pour un configurateur classique, WebGL via Three.js suffit. R3F supporte d'ailleurs WebGPU si besoin."
+/>
+
+<Quiz
+  question="Tu charges un modèle GLB de 18 MB. Lighthouse t'engueule, mobile rame. Levier prioritaire ?"
+  options={[
+    'Acheter un meilleur serveur',
+    'Compresser le modèle avec Draco ou Meshopt (souvent 5-15× plus petit), texture atlas pour réduire les draw calls, lazy-load + Suspense React',
+    'Migrer en WebGPU',
+    'Réduire les FPS cibles à 30'
+  ]}
+  answerIndex={1}
+  explanation="18 MB est énorme. La compression Draco / Meshopt est le levier #1 (rapide à mettre en place via gltf-pipeline ou export Blender). Texture atlases réduisent les draw calls. Lazy-load empêche de bloquer le LCP. WebGPU n'aide pas sur la taille du modèle. Réduire les FPS ne change rien au temps de download initial."
+/>
+
+<Quiz
+  question="Tu mets une scène 3D Three.js sur la home publique. Lighthouse a11y score chute à 78. Pourquoi ?"
+  options={[
+    'Three.js est buggé',
+    'Le canvas n\'a aucune sémantique : pas d\'aria-label, contenu inaccessible aux lecteurs d\'écran, pas de fallback texte / image, contrôles souris exclusivement',
+    'Le score est arbitraire',
+    'Les animations sont trop rapides'
+  ]}
+  answerIndex={1}
+  explanation="Un canvas sans aria-label = élément graphique sans description pour les non-voyants. Sans contrôles UI alternatifs, les utilisateurs clavier sont bloqués. Sans fallback statique, JS-off ou crawler voit du vide. Solution : aria-label descriptif, contrôles UI doublés (boutons, selects), snapshot statique en fallback noscript, respect prefers-reduced-motion."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Three.js docs* — [threejs.org/docs](https://threejs.org/docs/)
+- *Three.js Journey* — Bruno Simon (cours payant excellent)
+- *React Three Fiber* — [r3f.docs.pmnd.rs](https://r3f.docs.pmnd.rs/)
+- *drei* — [github.com/pmndrs/drei](https://github.com/pmndrs/drei)
+- *WebGPU samples* — [webgpu.github.io/webgpu-samples](https://webgpu.github.io/webgpu-samples/)
+- *gltf-pipeline* — [github.com/CesiumGS/gltf-pipeline](https://github.com/CesiumGS/gltf-pipeline)
+- *Spline* — [spline.design](https://spline.design/)
+- *PixiJS* — [pixijs.com](https://pixijs.com/) (pour 2D accélérée)
+
+---
+
+**Suite** : [16.4 — IA appliquée au web](/16-specialisations/04-ia/) — LLM, RAG, embeddings, agents.

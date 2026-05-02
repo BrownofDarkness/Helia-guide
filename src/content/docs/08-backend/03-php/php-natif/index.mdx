@@ -1,0 +1,397 @@
+---
+title: PHP natif (8.4)
+description: Le langage avant le framework — comprendre ce que Laravel et Symfony cachent.
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../../../components/ObjectiveList.astro';
+import Quiz from '../../../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif** : maîtriser PHP 8.4 sans framework. Tu comprendras alors **ce que Laravel/Symfony font à ta place** — et tu sauras assembler un microservice quand un framework complet serait sur-dimensionné.
+
+<ObjectiveList items={[
+  "Écrire du PHP 8.4 idiomatique avec types stricts",
+  "Manier classes, traits, interfaces, enums, attributs",
+  "Accéder à une base avec PDO en évitant les injections",
+  "Configurer Composer + autoload PSR-4",
+  "Écrire un mini-routeur HTTP qui ressemble à Express/Hono"
+]} />
+
+## Setup minimal d'un projet
+
+```bash
+mkdir taskly-php && cd taskly-php
+composer init --name="me/taskly-php" --type=project --require="php:^8.3" -n
+```
+
+`composer.json` :
+
+```json
+{
+  "name": "me/taskly-php",
+  "type": "project",
+  "require": {
+    "php": "^8.3"
+  },
+  "autoload": {
+    "psr-4": { "App\\": "src/" }
+  }
+}
+```
+
+```bash
+composer dump-autoload
+```
+
+Tu peux maintenant créer `src/Anything.php` namespace `App\Anything`, et `require __DIR__ . '/vendor/autoload.php'` te donne accès à toutes les classes automatiquement.
+
+## Types stricts — toujours
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace App\Domain;
+
+function add(int $a, int $b): int
+{
+    return $a + $b;
+}
+
+add(1, 2);     // 3
+add('1', 2);   // ❌ TypeError
+```
+
+`declare(strict_types=1)` doit être en **première ligne** de chaque fichier. Sans ça, PHP fait du type juggling laxiste (`'1'` est converti en `1`). Avec, tu obtiens un comportement Java-like.
+
+## Le système de types PHP 8.4
+
+```php
+function process(
+    int $count,
+    string $name,
+    bool $active = true,
+    ?Task $task = null,                 // nullable
+    array $items = [],
+    int|string $id,                      // union type
+    Foo&Bar $combined,                   // intersection
+    string|null $maybeStr,                // équivalent ?string
+): void {
+    // ...
+}
+```
+
+### Property hooks (PHP 8.4)
+
+```php
+class Person
+{
+    public string $fullName {
+        get => trim("{$this->firstName} {$this->lastName}");
+    }
+
+    public function __construct(
+        public string $firstName,
+        public string $lastName,
+    ) {}
+}
+```
+
+Ressemble aux **getters TypeScript**. Plus besoin de méthodes `getFullName()`.
+
+## Classes et objets
+
+```php
+final class Task
+{
+    public function __construct(
+        public readonly int $id,
+        public string $title,
+        public bool $done = false,
+    ) {}
+
+    public function complete(): self
+    {
+        return new self($this->id, $this->title, true);
+    }
+}
+
+$t = new Task(1, 'Apprendre PHP');
+$t = $t->complete();
+echo $t->done ? '✓' : '✗';   // ✓
+```
+
+- **`readonly`** : la propriété ne peut être assignée qu'une fois (dans le constructeur).
+- **Constructor property promotion** : `public int $id` directement dans la signature crée la propriété.
+- **`final`** : empêche l'héritage.
+
+## Enums (PHP 8.1+)
+
+```php
+enum Priority: string
+{
+    case Low = 'low';
+    case Medium = 'medium';
+    case High = 'high';
+
+    public function label(): string
+    {
+        return match($this) {
+            Priority::Low    => 'Faible',
+            Priority::Medium => 'Moyenne',
+            Priority::High   => 'Élevée',
+        };
+    }
+}
+
+$p = Priority::High;
+echo $p->value;     // 'high'
+echo $p->label();   // 'Élevée'
+```
+
+Idem TypeScript ou Rust. Termine les `const STATUS_PENDING = 'pending'` à la pelle.
+
+## Match — l'expression
+
+```php
+$grade = match(true) {
+    $score >= 90 => 'A',
+    $score >= 80 => 'B',
+    $score >= 70 => 'C',
+    default       => 'F',
+};
+```
+
+Plus sûr que `switch` (comparaison stricte `===`, pas de fall-through implicite).
+
+## Attributs (PHP 8.0+)
+
+Équivalents des **decorators** TypeScript ou des annotations Java/Python.
+
+```php
+#[Attribute]
+class Route
+{
+    public function __construct(public string $path, public string $method = 'GET') {}
+}
+
+class TaskController
+{
+    #[Route('/tasks', 'GET')]
+    public function list(): array { /* ... */ }
+
+    #[Route('/tasks/{id}', 'GET')]
+    public function show(int $id): Task { /* ... */ }
+}
+```
+
+Symfony et Laravel les utilisent massivement (validation, routing, sécurité…).
+
+## PDO — la DB sans ORM
+
+PDO (PHP Data Objects) est l'API standard pour parler à n'importe quelle base.
+
+```php
+$dsn = 'sqlite:./data.db';
+$pdo = new PDO($dsn);
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+$pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+// Création
+$pdo->exec("CREATE TABLE IF NOT EXISTS tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  done INTEGER NOT NULL DEFAULT 0
+)");
+
+// SELECT avec paramètres (sécurisé contre SQL injection)
+$stmt = $pdo->prepare('SELECT * FROM tasks WHERE id = :id');
+$stmt->execute(['id' => 42]);
+$task = $stmt->fetch();
+
+// INSERT
+$stmt = $pdo->prepare('INSERT INTO tasks (title) VALUES (:title)');
+$stmt->execute(['title' => 'Apprendre PHP']);
+$id = (int) $pdo->lastInsertId();
+```
+
+<Aside type="caution" title="JAMAIS de concaténation SQL avec input utilisateur">
+```php
+// ❌ INJECTION SQL — ne JAMAIS faire ça
+$pdo->query("SELECT * FROM users WHERE email = '$userEmail'");
+
+// ✅ Paramétré
+$stmt = $pdo->prepare('SELECT * FROM users WHERE email = :email');
+$stmt->execute(['email' => $userEmail]);
+```
+
+**Toujours `prepare` + `execute`** avec des paramètres nommés.
+</Aside>
+
+## Mini-routeur fait main
+
+Pour comprendre ce qu'un framework apporte, voici un routeur HTTP minimal en ~50 lignes :
+
+```php
+<?php
+// public/index.php
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+class Router
+{
+    /** @var array<int, array{method: string, pattern: string, handler: callable, params: string[]}> */
+    private array $routes = [];
+
+    public function add(string $method, string $path, callable $handler): void
+    {
+        $params = [];
+        $regex = preg_replace_callback(
+            '/\{([^}]+)\}/',
+            function (array $m) use (&$params): string {
+                $params[] = $m[1];
+                return '([^/]+)';
+            },
+            $path,
+        );
+        $this->routes[] = [
+            'method'  => $method,
+            'pattern' => '#^' . $regex . '$#',
+            'handler' => $handler,
+            'params'  => $params,
+        ];
+    }
+
+    public function dispatch(string $method, string $uri): void
+    {
+        $path = parse_url($uri, PHP_URL_PATH);
+        foreach ($this->routes as $route) {
+            if ($route['method'] !== $method) continue;
+            if (preg_match($route['pattern'], $path, $matches)) {
+                array_shift($matches);
+                $params = array_combine($route['params'], $matches);
+                $result = ($route['handler'])(...$params);
+                header('Content-Type: application/json');
+                echo json_encode($result);
+                return;
+            }
+        }
+        http_response_code(404);
+        echo json_encode(['error' => 'Not Found']);
+    }
+}
+
+$router = new Router();
+
+$router->add('GET', '/health', fn() => ['status' => 'ok']);
+$router->add('GET', '/tasks/{id}', fn(string $id) => ['id' => (int)$id, 'title' => 'Demo']);
+
+$router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
+```
+
+```bash
+php -S localhost:3000 -t public
+# curl http://localhost:3000/health
+# curl http://localhost:3000/tasks/42
+```
+
+Tu obtiens **un mini-Hono PHP en 50 lignes**. Quand tu vois Laravel ou Symfony, tu sauras que c'est ce genre de logique étendue à 1000× plus de fonctionnalités (middlewares, DI, validation, etc.).
+
+## Tests avec PHPUnit
+
+```bash
+composer require --dev phpunit/phpunit
+vendor/bin/phpunit --init
+```
+
+```php
+// tests/TaskTest.php
+use PHPUnit\Framework\TestCase;
+use App\Domain\Task;
+
+class TaskTest extends TestCase
+{
+    public function test_complete_marks_task_done(): void
+    {
+        $task = new Task(1, 'Test', false);
+        $completed = $task->complete();
+        $this->assertTrue($completed->done);
+        $this->assertFalse($task->done);   // immutable
+    }
+}
+```
+
+```bash
+vendor/bin/phpunit
+```
+
+## Static analysis avec PHPStan
+
+```bash
+composer require --dev phpstan/phpstan
+vendor/bin/phpstan analyse src --level=8
+```
+
+PHPStan scanne ton code statiquement et détecte des bugs : types incohérents, propriétés manquantes, méthodes inexistantes. Niveau 1 (laxiste) à 9 (strict).
+
+```ini
+# phpstan.neon
+parameters:
+    level: 8
+    paths:
+        - src
+```
+
+C'est l'équivalent du `tsc --noEmit` côté TypeScript. **Indispensable** sur les vrais projets.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu écris `function add($a, $b) { return $a + $b; }` sans types ni declare(strict_types=1). On t'appelle add('5', 10). Que se passe-t-il ?"
+  options={[
+    'TypeError immédiate',
+    'Retourne 15 (PHP convertit \"5\" en 5 silencieusement) — c\'est pour ça qu\'on met TOUJOURS declare(strict_types=1) en haut des fichiers',
+    'Retourne \"510\" (concaténation)',
+    'Erreur fatale'
+  ]}
+  answerIndex={1}
+  explanation="Sans types stricts, PHP fait du type juggling : '5' devient 5, l'addition donne 15. Comportement bug-prone : on accepte des entrées mal typées sans s'en rendre compte. declare(strict_types=1) en haut de chaque fichier rend les types signés réellement signés."
+/>
+
+<Quiz
+  question="Tu construis une requête `SELECT * FROM users WHERE email = '$email'` avec $email venant d'un formulaire. Risque ?"
+  options={[
+    'Aucun, PHP échappe automatiquement',
+    'INJECTION SQL — l&apos;attaquant peut envoyer un email malicieux du genre " OR 1=1 -- pour tout récupérer. Toujours utiliser PDO prepare + execute avec paramètres nommés',
+    'Cela dépend de la base',
+    'Risque uniquement si la DB est MySQL'
+  ]}
+  answerIndex={1}
+  explanation="C'est LA vulnérabilité backend la plus classique. La SEULE solution sûre est le paramétrage : $stmt = $pdo->prepare('... WHERE email = :email'); $stmt->execute(['email' => $email]). Le moteur DB sait que :email est une valeur, pas du SQL exécutable. Les ORMs (Eloquent, Doctrine) le font automatiquement."
+/>
+
+<Quiz
+  question="Pourquoi écrire un router PHP from scratch n'est PAS un bon choix pour la prod ?"
+  options={[
+    'C\'est forcément buggué',
+    'Les frameworks (Laravel, Symfony) ajoutent middlewares, DI, validation, sécurité, gestion d\'erreur, qui demanderaient des semaines à coder soi-même proprement — PHP natif est utile pour COMPRENDRE, pas pour livrer',
+    'PHP natif est trop lent',
+    'Composer ne marche pas avec'
+  ]}
+  answerIndex={1}
+  explanation="L'exercice du mini-routeur a une valeur PÉDAGOGIQUE : tu vois ce qu'un framework fait. Mais en prod, tu vas vouloir : middlewares (auth, CORS, rate-limit), DI container, validation, gestion d'erreur centralisée, ORM, queues, jobs, mail, broadcasting… Toutes choses que Laravel/Symfony fournissent prêtes à l'emploi."
+/>
+
+## Pour aller plus loin
+
+- *PHP: The Right Way* — [phptherightway.com](https://phptherightway.com/)
+- *PHP Documentation* — [php.net/docs.php](https://www.php.net/docs.php)
+- *PHPStan* — [phpstan.org](https://phpstan.org/)
+- *Composer Docs* — [getcomposer.org/doc](https://getcomposer.org/doc/)
+
+---
+
+Suite : [Laravel 12](/08-backend/03-php/laravel/) ou [Symfony 7.4 LTS](/08-backend/03-php/symfony/).

@@ -1,0 +1,421 @@
+---
+title: 12.3 — Sécurité backend
+description: Injections, IDOR, SSRF, hash argon2id, secrets, rate-limit, brute-force.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : protéger ton backend contre les attaques qui n'ont rien à voir avec le navigateur — injections, manipulation d'IDs, fuite de secrets, brute-force.
+
+<ObjectiveList items={[
+  "Prévenir SQL/NoSQL/Command injection",
+  "Implémenter une vérification d'autorisation contre IDOR",
+  "Hasher un mot de passe avec argon2id",
+  "Stocker des secrets dans un secret manager",
+  "Rate-limiter les endpoints sensibles",
+  "Bloquer les SSRF en filtrant les URLs"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 8 et 11 lus" />
+
+
+## Injections — la triple menace
+
+### SQL Injection (déjà vu axe 12.1)
+
+```ts
+// ❌
+db.query(`SELECT * FROM users WHERE email = '${email}'`);
+
+// ✅
+db.query('SELECT * FROM users WHERE email = $1', [email]);
+```
+
+**ORMs** (Prisma, Drizzle, SQLAlchemy, Eloquent, Doctrine) paramétrisent **automatiquement** — c'est une raison majeure de les utiliser.
+
+### NoSQL Injection (MongoDB, Firestore)
+
+```ts
+// ❌
+db.users.find({ email: req.body.email, password: req.body.password });
+// Si body.password = { $ne: null } → MongoDB matche tout password différent de null
+```
+
+```ts
+// ✅
+db.users.find({ email: String(req.body.email), password: String(req.body.password) });
+// Plus mieux : valider avec Zod
+const { email, password } = LoginSchema.parse(req.body);
+```
+
+### Command Injection
+
+```ts
+// ❌
+import { exec } from 'node:child_process';
+exec(`convert ${userFilename} output.png`);
+// Si filename = "input.jpg; rm -rf /"
+```
+
+```ts
+// ✅ execFile + arguments séparés (jamais concaténés en string)
+import { execFile } from 'node:child_process';
+execFile('convert', [userFilename, 'output.png']);
+```
+
+**Règle absolue** : **NEVER** construire un shell command avec interpolation de string. Toujours `execFile` / `spawn` avec **array d'arguments**.
+
+## IDOR — Insecure Direct Object Reference
+
+L'attaque la plus simple à tester : changer un ID dans l'URL et voir si on accède aux données d'un autre.
+
+```ts
+// ❌
+app.get('/orders/:id', async (req, res) => {
+  const order = await db.order.findById(req.params.id);
+  res.json(order);
+});
+```
+
+Tu peux tester `GET /orders/1`, `/orders/2`, `/orders/3` et tout récupérer.
+
+### Prévention
+
+#### Niveau 1 — Vérif applicative
+
+```ts
+// ✅
+app.get('/orders/:id', requireAuth, async (req, res) => {
+  const order = await db.order.findOne({
+    where: { id: req.params.id, userId: req.user.id },
+  });
+  if (!order) return res.status(404).json({ error: 'Not found' });
+  res.json(order);
+});
+```
+
+**Pourquoi 404 et pas 403** : 403 confirme que la ressource existe → l'attaquant peut énumérer.
+
+#### Niveau 2 — Defense in depth avec RLS
+
+Même si tu oublies le check applicatif, **PostgreSQL RLS** empêche l'accès :
+
+```sql
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+CREATE POLICY user_sees_own_orders ON orders
+  FOR SELECT USING (user_id = auth.uid());
+```
+
+#### Niveau 3 — IDs non séquentiels
+
+Utiliser des **UUIDs v4** ou **slugs random** plutôt que des entiers séquentiels rend l'énumération beaucoup plus dure :
+
+```
+/orders/8f3a9c2e-4b1d-...   au lieu de   /orders/42
+```
+
+Pas une protection (juste de l'obscurité), mais **défense en profondeur**.
+
+## Hash de mots de passe — argon2id
+
+> Un hash de mot de passe doit être **lent** et **adapté aux GPU**.
+
+### Les bons algos en 2026
+
+| Algo | Avis |
+|------|------|
+| **argon2id** | ✅ **Recommandation OWASP 2026** |
+| **bcrypt** | ✅ Toujours acceptable (legacy mais éprouvé) |
+| **scrypt** | ✅ Alternative valide |
+| **PBKDF2** | 🟡 Acceptable mais moins moderne |
+
+### Les mauvais (à ne JAMAIS utiliser)
+
+| Algo | Pourquoi |
+|------|----------|
+| MD5 | Cassé depuis 2005, hashable à 100 GH/s sur GPU |
+| SHA-1 | Cassé en 2017 |
+| SHA-256 / SHA-512 | Trop rapide → brute-force massif |
+| Plain text | (sans commentaire) |
+
+### Implémentation
+
+#### Node.js
+
+```ts
+import { hash, verify } from '@node-rs/argon2';
+
+const hashed = await hash('myPassword');
+const valid = await verify(hashed, 'myPassword');
+```
+
+#### Python
+
+```python
+from passlib.context import CryptContext
+
+pwd = CryptContext(schemes=['argon2'], deprecated='auto')
+hashed = pwd.hash('myPassword')
+valid = pwd.verify('myPassword', hashed)
+```
+
+#### PHP
+
+```php
+$hashed = password_hash('myPassword', PASSWORD_ARGON2ID);
+$valid = password_verify('myPassword', $hashed);
+```
+
+#### Laravel / Symfony
+
+Configuration du hasher dans `config/hashing.php` (Laravel) ou `security.yaml` (Symfony) → automatique partout.
+
+## Secrets — gestion sérieuse
+
+### Hiérarchie de gravité
+
+| Secret | Si fuit |
+|--------|---------|
+| **Service role DB / SUPABASE_SERVICE_ROLE_KEY** | Compromission totale de la DB |
+| **STRIPE_SECRET_KEY** | Charges frauduleuses |
+| **JWT_SECRET** | Tous les tokens forgés par l'attaquant |
+| **Tokens API tiers** (OpenAI, Resend, …) | Vol de quota / spam |
+| **Cookies session** | Impersonation utilisateur |
+
+### Storage en prod
+
+| Plateforme | Outil |
+|-----------|-------|
+| **Vercel / Netlify** | Variables d'env du dashboard |
+| **AWS** | Secrets Manager (rotation automatique possible) |
+| **GCP** | Secret Manager |
+| **Kubernetes** | Sealed Secrets, External Secrets Operator |
+| **Hashicorp Vault** | Self-host enterprise |
+| **Doppler** | SaaS, sync vers tous les envs |
+
+### En dev local
+
+```
+.env (PAS dans Git)
+.env.example (DANS Git, sans les vraies valeurs)
+.gitignore : .env, .env.*.local
+```
+
+### Si tu commit un secret par erreur
+
+1. **RÉVOQUER** la clé chez le provider (Stripe, AWS, etc.) — pas négociable.
+2. **Rotation** : générer une nouvelle clé.
+3. **Nettoyer** l'historique avec `git filter-repo`.
+4. **Force-push** (avec accord équipe).
+
+Outils pour détecter avant : `gitleaks`, `trufflehog`, GitHub Secret Scanning (auto sur les repos publics).
+
+## Rate limiting — bloquer le brute-force
+
+Sans rate-limit, un attaquant peut tester **1 million de mots de passe** en quelques minutes.
+
+### Endpoints à protéger
+
+- `/login`, `/register`, `/reset-password` — par IP
+- API publique — par token
+- Endpoints coûteux (recherche, IA) — par user
+
+### Implémentation Node/Hono
+
+```ts
+import { rateLimiter } from 'hono-rate-limiter';
+
+app.use('/auth/login', rateLimiter({
+  windowMs: 15 * 60 * 1000,   // 15 min
+  limit: 5,                     // 5 tentatives par IP
+  message: 'Too many attempts, try again later',
+}));
+```
+
+### Implémentation Python/FastAPI
+
+```bash
+uv add slowapi
+```
+
+```python
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+
+@app.post('/login')
+@limiter.limit('5/15minutes')
+async def login(...): ...
+```
+
+### Implémentation Laravel
+
+```php
+// routes/api.php
+Route::post('/login', LoginController::class)->middleware('throttle:5,1');
+// 5 tentatives par minute
+```
+
+### Avec Redis pour distributed rate-limit
+
+Pour une app multi-instances, le compteur doit être **partagé** :
+
+```ts
+import { Redis } from 'ioredis';
+const redis = new Redis();
+
+async function checkRateLimit(ip: string): Promise<boolean> {
+  const count = await redis.incr(`rate:login:${ip}`);
+  if (count === 1) await redis.expire(`rate:login:${ip}`, 900);
+  return count <= 5;
+}
+```
+
+### Captcha en cas d'abus
+
+Quand un IP dépasse N tentatives, exige un **CAPTCHA** (hCaptcha, Cloudflare Turnstile) avant la prochaine.
+
+## SSRF — Server-Side Request Forgery
+
+Cas typique : ton serveur fetch une URL fournie par l'utilisateur (génération PDF, preview de lien…).
+
+### L'attaque
+
+```ts
+// ❌
+const html = await fetch(req.body.url).then(r => r.text());
+```
+
+L'attaquant envoie :
+- `http://169.254.169.254/latest/meta-data` → credentials AWS instance.
+- `http://localhost:5432` → exfiltration DB locale.
+- `http://internal-api/admin` → accès services internes.
+
+### Prévention
+
+```ts
+import dns from 'node:dns/promises';
+import net from 'node:net';
+
+async function fetchSafe(url: string) {
+  const parsed = new URL(url);
+
+  // 1. Whitelist de protocoles
+  if (!['https:', 'http:'].includes(parsed.protocol)) {
+    throw new Error('Unsupported protocol');
+  }
+
+  // 2. Résoudre le hostname → IP
+  const { address } = await dns.lookup(parsed.hostname);
+
+  // 3. Bloquer les IPs privées et localhost
+  if (isPrivateIp(address)) {
+    throw new Error('Internal IPs not allowed');
+  }
+
+  // 4. Fetch avec timeout
+  return fetch(url, { signal: AbortSignal.timeout(5000) });
+}
+
+function isPrivateIp(ip: string): boolean {
+  if (ip.startsWith('127.') || ip.startsWith('10.') || ip.startsWith('192.168.')) return true;
+  if (ip === '::1' || ip.startsWith('fe80:')) return true;
+  // 172.16.0.0/12
+  const parts = ip.split('.').map(Number);
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  return false;
+}
+```
+
+Bibliothèques : [`ssrf-req-filter`](https://www.npmjs.com/package/ssrf-req-filter) (Node), équivalents par langage.
+
+## Désérialisation non sûre
+
+Particulièrement risqué en **PHP** (`unserialize`), **Java** (`ObjectInputStream`), **Python** (`pickle`).
+
+```php
+// ❌
+$data = unserialize($_POST['data']);
+// L'attaquant peut envoyer un objet malicieux qui exécute du code à la désérialisation
+```
+
+```python
+# ❌ pickle est dangereux avec des inputs externes
+import pickle
+data = pickle.loads(request.data)
+```
+
+**Règle** : pour échanger des données, utilise **JSON** uniquement avec validation de schéma.
+
+## Audit log — savoir qui a fait quoi
+
+```ts
+// Logger les actions sensibles
+logger.info({
+  event: 'user_role_change',
+  actor: req.user.id,
+  target: targetUserId,
+  oldRole,
+  newRole,
+  ip: req.ip,
+  timestamp: new Date(),
+});
+```
+
+Stocker dans une table `audit_log` ou un système dédié (Datadog, Loki). Ne **jamais** y mettre password ou token.
+
+## Auto-évaluation
+
+<Quiz
+  question='Tu vois `db.query("SELECT * FROM users WHERE id = " + req.params.id)`. Risque immédiat ?'
+  options={[
+    "Performance dégradée",
+    'SQL Injection critique. Fix : `db.query("... WHERE id = $1", [req.params.id])` ou utiliser un ORM (Prisma, Drizzle, Eloquent)',
+    "Aucun, c'est juste du SQL",
+    "Cela dépend de la base"
+  ]}
+  answerIndex={1}
+  explanation="C'est THE bug critique. Avec id = '1 OR 1=1', tu retournes tous les users. Avec id = '1; DROP TABLE users;--' tu détruis la table. Le paramétrage est OBLIGATOIRE — il sépare le code SQL des données. Les ORMs le font automatiquement."
+/>
+
+<Quiz
+  question="Tu hashes les mots de passe avec SHA-256 + sel. Avis 2026 ?"
+  options={[
+    "OK, c'est cryptographiquement sûr",
+    "Insuffisant : SHA-256 est conçu pour être RAPIDE (gigahashs/sec sur GPU). Brute-force trivial. Utilise argon2id (OWASP 2026) ou bcrypt — tous deux conçus DÉLIBÉRÉMENT lents",
+    "Il faudrait utiliser MD5",
+    "SHA-1 serait mieux"
+  ]}
+  answerIndex={1}
+  explanation="Confusion fréquente : 'cryptographiquement sûr' (anti-collision) ≠ 'adapté au hashing de password'. SHA-256 est trop rapide → un GPU teste 1 milliard de hashs/sec. argon2id est conçu pour prendre ~100ms par hash, configurable, résistant aux GPU et ASIC. C'est le standard OWASP en 2026."
+/>
+
+<Quiz
+  question="Tu fais `fetch(req.body.url)` côté serveur pour générer une preview. Risque ?"
+  options={[
+    "Aucun, fetch est sûr",
+    'SSRF — l\'attaquant peut atteindre des IPs internes (169.254.169.254 sur AWS = credentials), localhost, services internes. Solution : whitelist domaines + bloquer IPs privées + timeout strict',
+    "Trop lent",
+    "Cela ne marche que pour HTTPS"
+  ]}
+  answerIndex={1}
+  explanation="SSRF est l'A10 d'OWASP. Sur AWS, 169.254.169.254 est l'instance metadata service — un fetch te donne les credentials IAM de l'instance. localhost:5432 = ta DB. Toujours valider l'URL : protocole, hostname résolu vers IP publique uniquement, timeout court."
+/>
+
+## Pour aller plus loin
+
+- *OWASP Cheat Sheet — Authentication* — [cheatsheetseries.owasp.org](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
+- *OWASP Password Storage* — [cheatsheetseries.owasp.org](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
+- *PortSwigger Web Security Academy* — labs gratuits
+- *HackTricks* — wiki offensif
+- *gitleaks* — [github.com/gitleaks/gitleaks](https://github.com/gitleaks/gitleaks)
+
+---
+
+**Suite** : [12.4 — Pratiques continues](/12-securite/04-pratiques-continues/) — Dependabot, SAST/DAST, RGPD.

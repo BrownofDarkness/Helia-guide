@@ -1,0 +1,639 @@
+---
+title: 4.4 — Conteneurisation (Docker)
+description: Images, conteneurs, volumes, réseaux, multi-stage builds, Docker Compose.
+sidebar:
+  order: 4
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Pitfall from '../../../components/Pitfall.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="0b">
+Marie a besoin de Postgres en local pour développer le backend de Lina. Pas envie d'installer un serveur de DB complet sur son Mac. Docker lui permet de lancer Postgres en 1 commande, isolé, et de tout supprimer à la fin sans pollution.
+</Scenario>
+
+<Scenario parcours="B" episode="0b">
+Hugo veut développer Studio Pulse en partageant son setup avec un copain dev. Plutôt que « installe Postgres + Redis + Node version X », il pose un `docker-compose.yml` : son ami clone, fait `docker compose up`, l'app tourne en 30 secondes.
+</Scenario>
+
+<Scenario parcours="C" episode="0b">
+Sami sait qu'il déploiera GreenBox sur Cloudflare Workers. Mais en local, Postgres + Redis + le worker = orchestration. Docker Compose résout ça. Au build de prod, il containerisera son app pour la pipeline CI.
+</Scenario>
+
+<Scenario parcours="D" episode="0b">
+Léa développe sur un MacBook, ses voisins testeurs sur Windows et Linux. Sans Docker, chacun a une version de Node différente — bugs subtils. Avec Docker Compose : même environnement partout, même Postgres, même Redis pour Yjs.
+</Scenario>
+
+<Scenario parcours="E" episode="0b">
+Yanis veut une stack reproductible pour Tasky. Le futur dev qui le rejoindra dans l'asso doit pouvoir cloner et lancer en 5 minutes. `docker-compose up` : Postgres + Redis + Hono + Next. Aucune installation locale.
+</Scenario>
+
+> 🎯 **Objectif** : pouvoir conteneuriser n'importe quelle stack web et lancer un environnement complet (front + back + DB + cache) avec une seule commande.
+
+<ObjectiveList items={[
+  "Distinguer image, conteneur, volume, réseau",
+  "Écrire un Dockerfile multi-stage propre",
+  "Composer une stack avec Docker Compose",
+  "Optimiser la taille d'une image (de 1 Go à 200 Mo)",
+  "Comprendre le rôle de Kubernetes (sans encore l'utiliser)"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 1 lu" />
+
+
+## Pourquoi Docker ?
+
+Avant Docker, tu disais : *« ça marche sur ma machine »*. Le serveur de prod te répondait : *« mais pas sur la mienne »*. Mille différences subtiles : version de Node, libssl, locale, packages OS, variables d'env.
+
+Docker te donne un **environnement reproductible** : tu décris dans un fichier (`Dockerfile`) tout ce dont ton app a besoin pour tourner, et **n'importe quelle machine** avec Docker peut l'exécuter à l'identique.
+
+## Installer Docker
+
+Avant d'aller plus loin, il faut Docker sur ta machine. Choisis ta plateforme :
+
+### Windows
+
+**Recommandé : Docker Desktop avec WSL2** (déjà installé si tu as suivi [1.1](/01-fondations/01-materiel-os/)).
+
+1. Télécharge **Docker Desktop for Windows** : [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/)
+2. Lance l'installeur, **coche « Use WSL 2 instead of Hyper-V »** quand on te le demande.
+3. Redémarre.
+4. Au premier lancement, Docker Desktop te demandera d'activer l'intégration WSL — accepte.
+
+**Pré-requis** : la **virtualisation** doit être activée dans le BIOS (presque toujours le cas sur les machines récentes). Si Docker refuse de démarrer avec un message *« Virtualization disabled »*, redémarre dans le BIOS et active *Intel VT-x* / *AMD-V*.
+
+### macOS
+
+**Recommandé : Docker Desktop**.
+
+```bash
+brew install --cask docker
+# ou téléchargement direct sur docker.com
+```
+
+Lance Docker Desktop depuis Applications. Le 1er démarrage prend ~30 secondes.
+
+**Alternative plus légère : [OrbStack](https://orbstack.dev/)** (commercial, mais ~10× plus léger en RAM que Docker Desktop, démarre en 2 secondes).
+
+### Linux (Ubuntu / Debian)
+
+Docker Engine + Compose plugin **sans Docker Desktop** (plus léger en CLI pure) :
+
+```bash
+# Suivre la doc officielle :
+# https://docs.docker.com/engine/install/ubuntu/
+
+# En résumé :
+sudo apt-get update
+sudo apt-get install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Pour utiliser docker sans sudo :
+sudo usermod -aG docker $USER
+# Déconnecte/reconnecte ta session
+```
+
+### Vérification
+
+Quelle que soit la plateforme, **vérifie que tout marche** :
+
+```bash
+docker --version
+# Docker version 27.x.x
+
+docker compose version
+# Docker Compose version v2.x.x
+
+docker run hello-world
+# Hello from Docker!
+# (si tu vois ce message, c'est gagné)
+```
+
+<Aside type="caution" title="Docker Desktop n'est plus 100 % gratuit en entreprise">
+Depuis 2021, Docker Desktop est **gratuit pour usage personnel et petites entreprises** (< 250 employés ET < 10 M$ de CA). Au-dessus, **licence payante** (~5–24 $/seat/mois).
+
+### Alternatives 100 % gratuites
+
+| Outil | Plateformes | Quand l'utiliser |
+|-------|-------------|------------------|
+| **Docker Engine + CLI** | Linux | Le défaut sur serveur ou WSL2 — pas de GUI, juste la CLI |
+| **[Podman Desktop](https://podman-desktop.io/)** | Win / Mac / Linux | Drop-in compatible Docker (`alias docker=podman`), rootless par défaut, OSS |
+| **[Rancher Desktop](https://rancherdesktop.io/)** | Win / Mac / Linux | Inclut K8s local, GUI familière |
+| **[OrbStack](https://orbstack.dev/)** | Mac uniquement | Commercial mais ~10× plus léger en RAM. Gratuit usage perso. |
+| **[colima](https://github.com/abiosoft/colima)** | Mac | CLI minimaliste (lightweight VM Lima) |
+
+**Recommandation 2026** : si tu es en entreprise avec policy stricte, **Podman Desktop** est le drop-in le plus mature. La plupart des `docker compose ...` marchent en remplaçant `docker` par `podman` (avec `podman-compose` ou `podman compose`).
+</Aside>
+
+## Les concepts en 3 minutes
+
+<Diagram
+  caption="Les 4 concepts de base"
+  code={`
+    flowchart LR
+      Dockerfile[Dockerfile<br/>recette] -->|docker build| Image
+      Image -->|docker run| Container1[Conteneur 1]
+      Image -->|docker run| Container2[Conteneur 2]
+      Container1 -->|écrit dans| Volume[Volume<br/>persistant]
+      Container1 <-->|réseau| Container2
+  `}
+/>
+
+### Image
+
+Un **modèle figé**, en lecture seule. Contient OS minimal, ton code, ses dépendances.
+
+```bash
+docker pull node:22-alpine     # télécharger une image officielle
+docker images                  # lister les images locales
+```
+
+### Conteneur
+
+Une **instance** d'une image, en cours d'exécution (ou arrêtée).
+
+```bash
+docker run hello-world
+docker ps                      # conteneurs en cours
+docker ps -a                   # tous, y compris arrêtés
+docker stop <id>
+docker rm <id>
+```
+
+### Volume
+
+Espace de stockage **persistant** (les conteneurs sont éphémères, les volumes survivent).
+
+```bash
+docker volume create mes-données
+docker run -v mes-données:/app/data ...
+```
+
+### Réseau
+
+Les conteneurs d'un même réseau peuvent se parler par nom.
+
+```bash
+docker network create mon-réseau
+docker run --network=mon-réseau --name=db postgres
+docker run --network=mon-réseau --name=api node:22-alpine
+# api peut joindre db via le hostname "db"
+```
+
+## Un Dockerfile minimal
+
+```dockerfile
+# Image de base
+FROM node:22-alpine
+
+# Dossier de travail
+WORKDIR /app
+
+# Copier les fichiers de dépendances en premier (bénéficie du cache)
+COPY package.json package-lock.json ./
+
+# Installer
+RUN npm ci
+
+# Copier le reste du code
+COPY . .
+
+# Build
+RUN npm run build
+
+# Exposer le port (documentation, pas effectif)
+EXPOSE 3000
+
+# Commande de démarrage
+CMD ["node", "dist/server.js"]
+```
+
+```bash
+# Construire
+docker build -t mon-app:1.0 .
+
+# Lancer
+docker run -p 3000:3000 mon-app:1.0
+```
+
+### L'importance de l'ordre des couches
+
+Chaque instruction du Dockerfile crée une **couche**. Docker met en cache chaque couche. Si une couche change, **toutes celles d'après** sont reconstruites.
+
+**Mauvais ordre** :
+
+```dockerfile
+COPY . .                # ← change tout le temps
+RUN npm ci              # ← invalidé à chaque commit !
+```
+
+**Bon ordre** :
+
+```dockerfile
+COPY package*.json ./   # ← rarement change
+RUN npm ci              # ← cache si package.json identique
+COPY . .                # ← copie le code après
+RUN npm run build
+```
+
+Résultat : ton build passe de **2 minutes à 5 secondes** quand tu modifies juste un fichier source.
+
+## Multi-stage builds — images minces
+
+Le Dockerfile naïf produit une image énorme : Node, sources, devDependencies, fichiers temporaires.
+
+**Solution** : multi-stage. Tu construis dans une image lourde, tu copies l'essentiel dans une image finale légère.
+
+```dockerfile
+# Stage 1 — Build
+FROM node:22-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Stage 2 — Production
+FROM node:22-alpine AS runtime
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY --from=builder /app/dist ./dist
+EXPOSE 3000
+CMD ["node", "dist/server.js"]
+```
+
+**Bénéfice** : la prod n'a ni TypeScript, ni Vite, ni `node_modules` de dev. Image passée de 1.2 Go à ~200 Mo.
+
+### `.dockerignore`
+
+Pareil que `.gitignore`, mais pour Docker — évite de copier dans l'image ce qui ne sert pas (et accélère le build) :
+
+```
+node_modules
+dist
+.git
+.env
+.env.*
+*.log
+coverage
+.DS_Store
+README.md
+.vscode
+```
+
+## Docker Compose — orchestrer plusieurs services
+
+Pour une stack complète (front + back + DB), tu ne veux pas lancer 4 commandes `docker run`. **Docker Compose** orchestre tout en un fichier YAML.
+
+```yaml
+# compose.yml (anciennement docker-compose.yml)
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: app_dev
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ./api
+      target: builder        # multi-stage : on s'arrête au stage builder pour le dev
+    environment:
+      DATABASE_URL: postgres://app:secret@db:5432/app_dev
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./api:/app           # bind mount pour hot-reload
+      - /app/node_modules    # ⚠ ne pas écraser node_modules du conteneur
+    depends_on:
+      db:
+        condition: service_healthy
+    command: npm run dev
+
+  web:
+    build: ./web
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    environment:
+      VITE_API_URL: http://localhost:3000
+    command: npm run dev
+
+volumes:
+  db-data:
+```
+
+```bash
+docker compose up                # tout démarre
+docker compose up -d             # en arrière-plan
+docker compose logs -f api       # suivre les logs d'un service
+docker compose down              # tout arrêter
+docker compose down -v           # arrêter + supprimer les volumes (reset DB)
+```
+
+<Aside type="tip" title="Le piège du bind mount node_modules">
+Quand tu fais `volumes: ['./api:/app']`, tu écrases **aussi** le `node_modules` que le conteneur a installé. Solution : ajouter une ligne `'/app/node_modules'` (volume anonyme) qui « masque » ton mount sur ce dossier précis.
+</Aside>
+
+## Hot-reload en dev
+
+Pour Node.js (Express, Fastify…), utilise un wrapper qui surveille les fichiers :
+
+```dockerfile
+# dans le Dockerfile dev
+CMD ["npx", "tsx", "watch", "src/index.ts"]
+```
+
+Ou avec nodemon, ts-node-dev, etc. Couplé au bind mount, tu modifies un fichier sur ta machine → le conteneur recharge automatiquement.
+
+Pour Vite (front), pas besoin de plus — le HMR (Hot Module Replacement) marche tant que le port est exposé et que le bind mount est en place.
+
+## Dev Containers — coder dans un container, pas sur ton OS
+
+Et si tu n'avais **rien** à installer sur ta machine — ni Node, ni Python, ni Postgres ? Tu ouvres VS Code, il détecte un fichier `.devcontainer/devcontainer.json`, build un conteneur, **ouvre ton éditeur dedans**. Toutes les extensions, tous les outils CLI vivent dans le conteneur.
+
+C'est ce qu'on appelle **Dev Containers** — la spec officielle d'onboarding moderne, supportée par VS Code, **Cursor**, JetBrains, et **GitHub Codespaces** (qui te donne le conteneur dans le cloud).
+
+### Exemple minimal
+
+```json
+// .devcontainer/devcontainer.json
+{
+  "name": "Taskly Dev",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:24",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/postgres:1": {}
+  },
+  "forwardPorts": [3000, 5173, 5432],
+  "postCreateCommand": "npm install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  }
+}
+```
+
+VS Code (ou Cursor) détecte ce fichier, te propose **« Reopen in Container »**, build, et tu es dans un environnement **identique pour toute l'équipe** — peu importe que tu sois sur Windows, macOS Intel, Mac M3 ou Linux.
+
+### Pourquoi c'est utile
+
+| Sans Dev Containers | Avec Dev Containers |
+|---------------------|---------------------|
+| « Mon Node est en 18, le tien en 24 » | Tout le monde a le même Node (celui défini dans l'image) |
+| Onboarding nouveau dev = 2-3 h d'install | Onboarding = clone + Reopen in Container = 5 min |
+| « Ça marche chez moi » | L'env est versionné dans le repo |
+| Mac M3 incompatible avec un binaire natif | Le conteneur Linux résout |
+
+### Compose dev-container
+
+Pour les stacks complexes (api + web + db), tu peux utiliser `docker-compose.yml` directement :
+
+```json
+// .devcontainer/devcontainer.json
+{
+  "name": "Taskly Full Stack",
+  "dockerComposeFile": "../compose.yml",
+  "service": "api",
+  "workspaceFolder": "/app",
+  "shutdownAction": "stopCompose"
+}
+```
+
+→ Tu réutilises **le même** `compose.yml` qu'en dev local. Pas de duplication.
+
+### GitHub Codespaces — le dev container dans le cloud
+
+Avec un `devcontainer.json` dans le repo, tu peux ouvrir GitHub Codespaces (gratuit 60 h/mois) **depuis n'importe quel navigateur** — y compris un Chromebook ou un iPad. C'est le futur de l'onboarding pour les contributions open-source.
+
+<Aside type="tip" title="Quand utiliser Dev Containers ?">
+- ✅ **Équipe ≥ 2 devs** sur des OS différents
+- ✅ **Onboarding fréquent** (open-source, stages, missions courtes)
+- ✅ **Stack avec dépendances natives** (Postgres avec pgvector, Python avec libs C, Ruby avec gems natives)
+- ❌ **Solo dev sur 1 machine** — overkill, Compose dev seul suffit
+- ❌ **App ultra-simple** (page HTML statique) — install Node local plus rapide
+</Aside>
+
+## Compose profiles — un seul `compose.yml` pour dev et prod
+
+Pour éviter d'avoir `compose.dev.yml` et `compose.prod.yml` séparés, utilise les **profiles** :
+
+```yaml
+services:
+  db:
+    image: postgres:16-alpine
+    # actif tout le temps (pas de profile)
+
+  pgadmin:
+    image: dpage/pgadmin4
+    profiles: [dev]                  # actif seulement en dev
+    ports: ["5050:80"]
+
+  api:
+    build:
+      target: ${BUILD_TARGET:-dev}   # variable selon profile
+    profiles: [dev, prod]            # actif partout
+
+  monitoring:
+    image: grafana/grafana
+    profiles: [prod]                 # actif seulement en prod
+```
+
+```bash
+docker compose --profile dev up         # api + db + pgadmin
+docker compose --profile prod up        # api + db + monitoring
+docker compose up                        # SEULS les services sans profile (= db)
+```
+
+Plus de duplication. Tu choisis ton « mode » au lancement.
+
+## Variables d'environnement
+
+3 façons de les passer :
+
+```bash
+# 1. CLI direct
+docker run -e DATABASE_URL=postgres://... mon-app
+
+# 2. Fichier .env
+docker run --env-file .env mon-app
+
+# 3. Compose
+services:
+  api:
+    env_file: .env
+    environment:
+      NODE_ENV: development
+```
+
+**Règle** : ne jamais coder en dur des secrets dans le Dockerfile — ils sont visibles dans les couches de l'image.
+
+## Optimisations courantes
+
+### 1. Choisir la bonne image de base
+
+| Image | Taille typique | Usage |
+|-------|---------------|-------|
+| `node:22` (Debian) | ~1 Go | Beaucoup d'outils dispo, lourd |
+| `node:22-slim` | ~250 Mo | Bon compromis |
+| `node:22-alpine` | ~150 Mo | Ultra léger, mais musl libc parfois problématique |
+| `gcr.io/distroless/nodejs22-debian12` | ~200 Mo | Pas de shell, pas de package manager — sécurité maximale |
+
+### 2. Lancer en utilisateur non-root
+
+```dockerfile
+# Ne JAMAIS tourner en root en prod
+FROM node:22-alpine AS runtime
+RUN addgroup -g 1001 -S app && adduser -u 1001 -S app -G app
+USER app
+WORKDIR /app
+# ...
+```
+
+### 3. Activer le BuildKit
+
+```bash
+export DOCKER_BUILDKIT=1
+docker build .
+# ou plus simplement :
+docker buildx build .
+```
+
+BuildKit parallélise les stages indépendants et cache plus efficacement.
+
+## Et Kubernetes ?
+
+**Kubernetes** orchestre **des centaines de conteneurs** sur un cluster de machines. Concepts à connaître de loin :
+
+| Objet K8s | Rôle |
+|-----------|------|
+| **Pod** | 1+ conteneurs colocalisés |
+| **Deployment** | Définit un ensemble de pods avec scaling et rolling updates |
+| **Service** | Adresse réseau stable pour atteindre des pods |
+| **Ingress** | Routage HTTP externe (équivalent reverse proxy) |
+| **ConfigMap / Secret** | Configuration et secrets |
+
+**Honnêtement** : 95 % des projets web n'en ont pas besoin. PaaS comme Vercel, Render, Fly.io abstraient tout cela. Apprends K8s **quand** ton équipe en a besoin, pas avant.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu modifies un fichier source. Le `docker build` reconstruit toutes les couches après ton COPY . . , y compris npm install. Pourquoi ?"
+  options={[
+    'Docker ne sait pas mettre en cache',
+    'Tu as fait COPY . . avant RUN npm install — le COPY change la couche en amont, ce qui invalide tout après',
+    'Le BuildKit n\'est pas activé',
+    'Il faut redémarrer Docker'
+  ]}
+  answerIndex={1}
+  explanation="Ordre crucial : COPY package*.json ./ + RUN npm install AVANT COPY . .. Sinon chaque modif de code invalide le cache du npm install. C'est l'optimisation Docker la plus importante."
+/>
+
+<Quiz
+  question="Pourquoi un Dockerfile multi-stage ?"
+  options={[
+    'Pour la sécurité, c\'est requis par OWASP',
+    'Pour produire une image finale qui ne contient pas les outils de build (TypeScript, devDependencies) — beaucoup plus légère',
+    'Parce que Docker Compose l\'exige',
+    'C\'est juste cosmétique'
+  ]}
+  answerIndex={1}
+  explanation="Le stage 'builder' compile (TS, Vite, etc.). Le stage 'runtime' part d'une base fraîche et copie SEULEMENT le résultat du build. L'image finale est 5-10× plus petite et n'a pas d'outils superflus exposés."
+/>
+
+<Quiz
+  question="Tu as un compose.yml avec api + db. L'API démarre avant que Postgres soit prêt et plante. Solution ?"
+  options={[
+    'Lancer docker compose 2 fois',
+    'Mettre depends_on: { db: { condition: service_healthy } } et un healthcheck sur db',
+    'Mettre un sleep 30 dans la commande de l\'API',
+    'Démarrer l\'API à la main après'
+  ]}
+  answerIndex={1}
+  explanation="depends_on avec condition service_healthy attend que Postgres réponde à pg_isready. Pas de sleep arbitraire. Docker Compose attend vraiment, et ton API démarre quand la DB est prête."
+/>
+
+## Pour aller plus loin
+
+- *Docker — Get Started* — [docs.docker.com/get-started](https://docs.docker.com/get-started/)
+- *Best practices for writing Dockerfiles* — [docs.docker.com/build/building/best-practices](https://docs.docker.com/build/building/best-practices/)
+- *Awesome Compose* — [github.com/docker/awesome-compose](https://github.com/docker/awesome-compose) — exemples de stacks
+- *Snyk — 10 best practices* — [snyk.io/blog/10-docker-image-security-best-practices](https://snyk.io/blog/10-docker-image-security-best-practices/)
+
+## 🪤 Pièges réels rencontrés
+
+<Pitfall title="better-sqlite3 ne compile pas sur Windows + Node 24" category="build" axe="4.4">
+
+**🩹 Symptôme**
+
+```
+npm error gyp ERR! stack ... node-gyp rebuild
+better-sqlite3 ... not ok
+node -v v24.14.1
+```
+
+**🔍 Cause**
+
+`better-sqlite3` est un module **natif C++** : il doit être compilé via `node-gyp`. Sous Windows, ça exige les Visual C++ Build Tools (~ 5 GB). Sous Node 24 (très récent), les binaires prébuilds ne sont pas toujours encore publiés au moment de la sortie de Node, ce qui force la compilation locale — laquelle échoue si l'environnement de build n'est pas configuré.
+
+**🩺 Fix**
+
+Trois options par ordre de préférence :
+
+1. **Migrer vers `@libsql/client`** — fork Turso de SQLite, **binaires prébuilds** pour toutes plateformes, pas de compilation. Drizzle a un driver `drizzle-orm/libsql` quasi drop-in. C'est ce que ce guide utilise dans l'exercice `taskly-api`.
+2. Installer les Build Tools Windows : `npm install --global windows-build-tools` ou via Visual Studio Installer → « C++ Build Tools ».
+3. Downgrader Node à 22 LTS où les prébuilds existent.
+
+**🧠 Leçon**
+
+Pour un projet pédagogique ou multi-plateforme, **éviter les modules natifs** quand un équivalent pure-JS / WASM existe. La friction d'installation tue les contributions. `@libsql/client`, `@noble/hashes`, `@node-rs/argon2` (lui-même prébuild) sont des bons défauts 2026.
+
+</Pitfall>
+
+> 🔍 Tous les pièges du guide sont sur la page **[/pieges/](/pieges/)** — searchable par symptôme.
+
+---
+
+**Suite** : [4.5 — Productivité](/04-outils/05-productivite/) — dotfiles, terminal moderne, ripgrep, fzf, tmux.

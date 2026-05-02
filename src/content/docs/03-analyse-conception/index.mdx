@@ -1,0 +1,81 @@
+---
+title: Axe 3 — Analyse & conception
+description: Transformer un besoin flou en système exécutable — la partie souvent négligée par les débutants.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : être capable, face à un brief client, de produire user stories, modèle de données, architecture cible et maquette avant d'écrire la moindre ligne de code.
+
+## Prérequis
+
+Axes 1 et 2.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Mener un entretien utilisateur et rédiger des user stories avec critères d'acceptation",
+  "Modéliser un domaine en UML (cas d'usage, classes, séquence) ou en C4",
+  "Concevoir un MCD/MLD/MPD pour une base relationnelle",
+  "Choisir entre monolithe, microservices et serverless en fonction du contexte",
+  "Produire une maquette Figma d'une interface simple",
+  "Écrire un ADR (Architecture Decision Record)"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="3.1 — Recueil du besoin"
+    href="/03-analyse-conception/01-recueil-besoin/"
+    description="Interviews, personas, parcours utilisateur, user stories INVEST."
+  />
+  <LinkCard
+    title="3.2 — Formalisation"
+    href="/03-analyse-conception/02-formalisation/"
+    description="Cahier des charges, exigences fonctionnelles vs non fonctionnelles, MoSCoW / RICE / Kano."
+  />
+  <LinkCard
+    title="3.3 — Modélisation"
+    href="/03-analyse-conception/03-modelisation/"
+    description="UML (cas d'usage, séquence, classes, activité), C4 Model, BPMN, Event Storming."
+  />
+  <LinkCard
+    title="3.4 — Architecture"
+    href="/03-analyse-conception/04-architecture/"
+    description="Monolithe, microservices, serverless, JAMstack, couches, ADR."
+  />
+  <LinkCard
+    title="3.5 — Modélisation de données"
+    href="/03-analyse-conception/05-donnees/"
+    description="MCD/MLD/MPD, normalisation 1NF/2NF/3NF, dénormalisation, NoSQL aggregate-driven."
+  />
+  <LinkCard
+    title="3.6 — UX/UI & maquettage"
+    href="/03-analyse-conception/06-ux-ui/"
+    description="Lois UX, wireframes, Figma, design tokens, tests utilisateurs guérilla."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Bibliothèque personnelle** — à partir d'un brief client en une page (« j'ai des centaines de livres et je perds le fil »), produire un dossier d'analyse complet : personas, user stories priorisées, MCD + SQL, archi C4, ADR de stack et wireframe.
+
+<ExerciseDownload
+  axe="03-analyse-conception"
+  slug="01-bibliotheque-personnelle"
+  title="Bibliothèque personnelle — analyse complète"
+  description="Pas de code. Tu transformes un brief flou en dossier d'analyse exécutable : 6 livrables (personas, stories Gherkin, MCD/MLD/MPD, C4, ADR, wireframe). C'est l'exercice le plus utile pour comprendre que 80 % de la valeur d'un projet se joue avant la première ligne de code."
+/>
+
+## Ressources clés
+
+- *Domain-Driven Design Distilled* — Vaughn Vernon
+- *The Mom Test* — Rob Fitzpatrick
+- *Refactoring UI* — Adam Wathan & Steve Schoger
+- *The C4 model for software architecture* — [c4model.com](https://c4model.com/)
+- *Documenting Architecture Decisions* — Michael Nygard

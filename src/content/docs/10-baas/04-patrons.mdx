@@ -1,0 +1,302 @@
+---
+title: 10.4 — Patrons d'intégration
+description: JAMstack, BFF, edge functions, migration BaaS → custom — composer une architecture moderne.
+sidebar:
+  order: 4
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : assembler les briques d'une architecture composable cohérente, et savoir migrer quand le BaaS ne suffit plus.
+
+<ObjectiveList items={[
+  "Décrire le pattern JAMstack et ses limites",
+  "Construire un Backend-for-Frontend (BFF)",
+  "Utiliser les edge functions pour auth et personnalisation",
+  "Planifier une migration BaaS → backend custom sans downtime",
+  "Choisir entre tout-BaaS et stack composable"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 8-9 lus" />
+
+
+## JAMstack — le pattern qui a tout changé
+
+JAMstack = **J**avaScript + **A**PIs + **M**arkup. Au lieu d'un serveur Rails/Django qui rend chaque page, tu :
+
+1. Pré-génères le HTML statique (au build).
+2. Sers depuis un CDN.
+3. Appelles des APIs (les tiennes ou des BaaS) côté client pour les parties dynamiques.
+
+<Diagram
+  caption="Architecture JAMstack typique"
+  code={`
+    flowchart LR
+      User((User)) --> CDN[CDN<br/>HTML statique]
+      User -->|fetch| Stripe[Stripe API]
+      User -->|fetch| Sup[Supabase API]
+      User -->|fetch| Sanity[Sanity CMS]
+      Build[Build étape] --> CDN
+      CMS[Sanity / Contentful] -->|webhook| Build
+  `}
+/>
+
+### Avantages
+
+- **Performance brutale** : CDN sert en ~10 ms partout.
+- **Sécurité** : pas de serveur applicatif côté toi (moins de surface d'attaque).
+- **Coût quasi nul** : un CDN coûte des centimes/mois.
+- **Scalabilité infinie** : tu peux servir des millions de pages sans serveur.
+
+### Limites
+
+- **Logique métier complexe** ne va pas dans le client.
+- **Données fraîches** demandent des fetch dynamiques (pas vraiment "static" alors).
+- **Multi-tenant / personnalisation** difficile à pré-générer.
+
+### Quand préférer JAMstack
+
+| Type de site | JAMstack ? |
+|--------------|-----------|
+| Blog, marketing, docs | ✅✅✅ |
+| E-commerce léger (< 1000 produits) | ✅✅ |
+| SaaS dashboard | 🟡 (mieux avec SSR via Next.js + Vercel) |
+| App temps réel (chat) | ❌ |
+| Outils internes massifs | ❌ |
+
+## Le compromis moderne : SSR/ISR au lieu de JAMstack pur
+
+Avec **Next.js + Vercel**, tu peux mixer :
+
+```tsx
+// Page complètement statique (SSG)
+export default function HomePage() { ... }
+
+// Page régénérée toutes les 60 s (ISR)
+export const revalidate = 60;
+export default async function ProductsPage() {
+  const products = await fetch('/api/products', { next: { revalidate: 60 } });
+  return ...;
+}
+
+// Page dynamique au runtime (SSR)
+export const dynamic = 'force-dynamic';
+export default async function DashboardPage() {
+  const user = await getCurrentUser();
+  return ...;
+}
+```
+
+→ tu choisis **par page** entre statique, ISR, SSR, edge. C'est ce que fait Next.js 16 par défaut.
+
+## Backend-for-Frontend (BFF)
+
+Quand tu **assembles plusieurs services** (Stripe, Sanity, Algolia, Supabase…), faire les appels **directement depuis le client** pose problèmes :
+
+- **Clés API** exposées (sauf si publishable).
+- **Logique métier** dispersée côté client.
+- **Latence** cumulée (4 round-trips au lieu de 1).
+
+Solution : un **BFF** = une fine couche serveur **dédiée à ton frontend** qui orchestre les services tiers.
+
+<Diagram
+  caption="BFF — orchestre les services tiers"
+  code={`
+    flowchart LR
+      Client[Client browser] -->|1 appel| BFF[BFF<br/>Next.js Route Handler<br/>ou Hono / Fastify]
+      BFF --> Stripe
+      BFF --> Sup[Supabase]
+      BFF --> Algolia
+      BFF --> AI[OpenAI/Anthropic]
+      BFF --> Resend
+  `}
+/>
+
+### Exemple — checkout BFF
+
+```ts
+// app/api/checkout/route.ts (Next.js)
+import Stripe from 'stripe';
+import { auth } from '@clerk/nextjs/server';
+import { supabase } from '@/lib/supabase';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+export async function POST(req: Request) {
+  // 1. Auth
+  const { userId } = await auth();
+  if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // 2. Récupérer infos user depuis Supabase
+  const { data: user } = await supabase
+    .from('users')
+    .select('email, name, stripe_customer_id')
+    .eq('id', userId)
+    .single();
+
+  // 3. Créer la session Stripe
+  const session = await stripe.checkout.sessions.create({
+    customer: user.stripe_customer_id,
+    line_items: [{ price: 'price_xxx', quantity: 1 }],
+    mode: 'subscription',
+    success_url: `${origin}/success`,
+    cancel_url: `${origin}/cancel`,
+  });
+
+  // 4. Logger l'event dans Supabase
+  await supabase.from('checkout_events').insert({
+    user_id: userId,
+    session_id: session.id,
+  });
+
+  return Response.json({ url: session.url });
+}
+```
+
+Le client appelle juste `POST /api/checkout` — propre, sécurisé, atomique.
+
+## Edge functions — pour la personnalisation et l'auth
+
+L'**edge** est idéal pour 4 cas :
+
+### 1. Auth middleware
+
+```ts
+// middleware.ts (Next.js)
+import { NextResponse } from 'next/server';
+
+export function middleware(request) {
+  const session = request.cookies.get('session');
+  if (!session && request.nextUrl.pathname.startsWith('/dashboard')) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+  return NextResponse.next();
+}
+```
+
+Exécuté **avant** la requête arrive au serveur applicatif. Latence ~10 ms.
+
+### 2. A/B testing / personnalisation
+
+```ts
+export function middleware(request) {
+  const cookie = request.cookies.get('ab-test');
+  const variant = cookie?.value ?? (Math.random() > 0.5 ? 'A' : 'B');
+
+  const response = NextResponse.next();
+  response.cookies.set('ab-test', variant);
+  response.headers.set('x-variant', variant);
+  return response;
+}
+```
+
+### 3. Geo-routing
+
+```ts
+export function middleware(request) {
+  const country = request.geo?.country ?? 'US';
+  if (country === 'FR') {
+    return NextResponse.rewrite(new URL('/fr', request.url));
+  }
+  return NextResponse.next();
+}
+```
+
+### 4. Rate limiting
+
+Avec Cloudflare KV ou Upstash Redis :
+
+```ts
+const ip = request.headers.get('x-forwarded-for')!;
+const count = await redis.incr(`rate:${ip}`);
+if (count === 1) await redis.expire(`rate:${ip}`, 60);
+if (count > 100) return new Response('Rate limited', { status: 429 });
+```
+
+## Migrer BaaS → backend custom
+
+Inévitable un jour si ton produit grandit. **Anticipe la migration dès le départ** :
+
+### Stratégies
+
+#### 1. Un module à la fois
+
+Tu commences avec Supabase complet. Plus tard, tu déplaces juste **l'auth** dans un service dédié, puis **la DB** vers un Postgres self-hosted, etc.
+
+#### 2. Strangler Fig
+
+Tu mets un **proxy / BFF** entre client et backend. Le proxy route au BaaS pour les anciennes features, à ton nouveau backend pour les nouvelles. Migration progressive, sans downtime.
+
+#### 3. Dual-write
+
+Pendant la transition, tu écris **dans les deux** systèmes (ancien BaaS + nouveau backend). Tu lis depuis le nouveau, valides, puis arrêtes l'écriture dans l'ancien.
+
+### Choisir un BaaS migrable
+
+C'est la raison pour laquelle on **préfère Supabase à Firebase** : Supabase = PostgreSQL standard. Ton schéma + tes données + tes RLS migrent **directement** vers un Postgres self-hosted (Neon, AWS RDS, ton VPS).
+
+Firebase = Firestore propriétaire. Migration = réécrire tout le modèle de données.
+
+## Tableau de décision — ton archi 2026
+
+| Scénario | Architecture suggérée |
+|---------|------------------------|
+| **MVP solo, 1 mois pour livrer** | Next.js + Supabase + Clerk + Stripe + Vercel — tout BaaS |
+| **SaaS PME, équipe 5 devs** | Next.js + Supabase + Clerk + Stripe + Sentry + PostHog — composable |
+| **App mobile + web** | Firebase (cohérence native) + frontend custom |
+| **Site marketing / blog** | Astro + CMS headless (Sanity) + Vercel — pure JAMstack |
+| **App temps réel (chat, collab)** | Cloudflare Workers + Durable Objects + Supabase |
+| **Outil interne entreprise** | Backend custom (Django/Symfony) + DB on-prem |
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu intègres Stripe, Supabase, Resend, OpenAI dans une SPA. Tu fais les appels directement depuis le client. Problème ?"
+  options={[
+    'Aucun si tu utilises les clés publiques',
+    'Risque sécu (clés secrètes potentiellement exposées) + logique métier dispersée + latence cumulée. Solution : un BFF (route handler Next.js, Hono…) qui orchestre',
+    'Trop lent en réseau',
+    'Cela fonctionne mieux ainsi'
+  ]}
+  answerIndex={1}
+  explanation="L'antipattern indie. Stripe SECRET key ne peut PAS être côté client. La logique 'créer customer Stripe + insérer en DB + envoyer email + webhook' est complexe et ne peut pas vivre dans 4 endroits. Le BFF centralise : 1 appel client → orchestration serveur. Sécurité + clarté + perf."
+/>
+
+<Quiz
+  question="Tu as choisi Firebase pour ton MVP. 2 ans plus tard, tu veux migrer vers Postgres self-hosted. Difficulté ?"
+  options={[
+    'Trivial — 1 semaine',
+    'Significative — Firestore est un modèle document propriétaire. Migration = réécriture du modèle de données + dual-write pendant des mois. C\'est pour ça qu\'on recommande Supabase qui est déjà du Postgres standard',
+    'Impossible',
+    'Firebase fournit un script de migration auto'
+  ]}
+  answerIndex={1}
+  explanation="C'est l'argument le plus fort en faveur de Supabase. Avec Firestore, tu as un modèle document, des Security Rules dans un DSL propriétaire, et des conventions Firebase spécifiques. Migrer vers Postgres = repenser tout. Avec Supabase, tu as déjà du Postgres ; tu pourras littéralement pg_dump et migrer ailleurs en quelques heures."
+/>
+
+<Quiz
+  question="Tu as un site marketing + blog (40 pages). Approche idéale en 2026 ?"
+  options={[
+    'Next.js complet en SSR',
+    'Astro + Sanity (CMS) → JAMstack pur, build statique, CDN, score Lighthouse 100',
+    'WordPress',
+    'PHP natif'
+  ]}
+  answerIndex={1}
+  explanation="C'est le sweet spot JAMstack 2026. Astro pré-génère 40 pages au build, déployées en CDN. Sanity (ou autre CMS) gère le contenu, déclenche un rebuild via webhook quand un article change. Score Lighthouse > 95 par défaut, coût d'hébergement quasi nul, sécurité maximale."
+/>
+
+## Pour aller plus loin
+
+- *JAMstack.org* — [jamstack.org](https://jamstack.org/)
+- *Sam Newman — Pattern: Backend for Frontend* — articles de référence
+- *Strangler Fig pattern* — Martin Fowler
+- *Patterns.dev — Rendering Patterns* — [patterns.dev](https://www.patterns.dev/)
+
+---
+
+**Suite** : [10.5 — Sécurité dans un BaaS](/10-baas/05-securite/) — RLS, Security Rules, App Check.

@@ -1,0 +1,357 @@
+---
+title: 12.2 — Sécurité frontend
+description: XSS, CSRF, CSP, clickjacking, SRI — protéger l'utilisateur dans le navigateur.
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="18">
+Marie laisse un client poster un avis. Premier test : un copain malicieux poste `<script>alert('hack')</script>`. Tous les visiteurs suivants voient l'alerte. <Term>XSS</Term> stocké. Marie échappe l'output et pose une <Term>CSP</Term> stricte.
+</Scenario>
+
+<Scenario parcours="B" episode="17">
+Le formulaire d'inscription de Studio Pulse renvoie l'email saisi en cas d'erreur. Hugo teste : `?email=<img src=x onerror=alert(1)>` — alerte exécutée. <Term>XSS</Term> réfléchi. Il valide en sortie + active CSP.
+</Scenario>
+
+<Scenario parcours="C" episode="18">
+Sami pose dès le début une CSP stricte avec nonce, HSTS, X-Frame-Options DENY, Referrer-Policy. Il teste avec securityheaders.com — note A. Pas une option en B2C aujourd'hui.
+</Scenario>
+
+<Scenario parcours="D" episode="18">
+Un voisin malveillant tente d'injecter du HTML dans une demande. CoupDeMain l'échappe correctement à l'affichage (React le fait par défaut), mais Léa pousse plus loin : <Term>CSP</Term> stricte + Subresource Integrity sur les CDN.
+</Scenario>
+
+<Scenario parcours="E" episode="18">
+Un coach injecte `<script>` dans le titre d'une tâche pour piéger le président. Yanis échappe l'output, configure CSP, et apprend qu'**aucun input n'est de confiance**, même venant des collègues bénévoles.
+</Scenario>
+
+> 🎯 **Objectif** : protéger les utilisateurs contre les attaques **côté navigateur** : XSS qui vole les sessions, CSRF qui exécute des actions à leur insu, clickjacking qui les manipule.
+
+<ObjectiveList items={[
+  "Distinguer XSS stocké, réfléchi, DOM",
+  "Configurer une Content Security Policy (CSP) stricte",
+  "Comprendre CSRF et savoir s'en protéger (SameSite + tokens)",
+  "Activer HSTS, X-Frame-Options, et autres en-têtes de sécu",
+  "Valider et échapper les inputs dans toutes les contextes (HTML, attributs, JS, URLs)"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 8 et 11 lus" />
+
+
+## XSS — Cross-Site Scripting
+
+L'attaque **n°1** côté frontend. Un attaquant injecte du JS qui s'exécute dans le navigateur d'autres utilisateurs.
+
+### 3 types de XSS
+
+#### 1. XSS stocké (le plus dangereux)
+
+Un commentaire utilisateur `<script>steal(document.cookie)</script>` est sauvegardé en DB et **affiché** à tous les visiteurs sans échappement.
+
+```ts
+// ❌
+const html = `<div>${userComment}</div>`;
+res.send(html);
+```
+
+#### 2. XSS réfléchi
+
+L'input arrive **dans l'URL** et est renvoyé tel quel.
+
+```
+https://example.com/search?q=<script>steal()</script>
+```
+
+```ts
+// ❌
+res.send(`<h1>Résultats pour ${req.query.q}</h1>`);
+```
+
+#### 3. XSS DOM-based
+
+Côté client, du JS prend une valeur de l'URL et l'injecte dans le DOM **sans échapper**.
+
+```ts
+// ❌
+document.getElementById('greeting').innerHTML = location.hash.slice(1);
+// URL : example.com/#<img src=x onerror=alert(1)>
+```
+
+### Impact
+
+- Vol de cookies / tokens (si pas HttpOnly).
+- Actions au nom de la victime (changer son mot de passe).
+- Phishing dans la page.
+- Crypto-mining dans le navigateur.
+
+### Prévention
+
+#### A. Échapper systématiquement
+
+**Les frameworks modernes (React, Vue, Svelte) échappent par défaut** :
+
+```jsx
+// ✅ React — échappe automatiquement
+<div>{userComment}</div>
+```
+
+Le danger : `dangerouslySetInnerHTML` (React), `v-html` (Vue), `innerHTML` (vanilla). Si tu DOIS afficher du HTML utilisateur, **assainis avec DOMPurify** :
+
+```ts
+import DOMPurify from 'isomorphic-dompurify';
+
+const clean = DOMPurify.sanitize(userHtml);
+return <div dangerouslySetInnerHTML={{ __html: clean }} />;
+```
+
+#### B. Échapper selon le contexte
+
+Le même input s'échappe **différemment** selon où il finit :
+
+| Contexte | Échappement |
+|----------|-------------|
+| Texte HTML | `< → &lt;`, `> → &gt;`, etc. |
+| Attribut HTML | échapper guillemets aussi |
+| URL | `encodeURIComponent` |
+| JavaScript | `JSON.stringify` |
+| CSS | éviter, c'est complexe |
+
+Les frameworks gèrent ça correctement par défaut.
+
+#### C. Content Security Policy (CSP)
+
+**Défense en profondeur** : même si une XSS passe, la CSP **bloque** l'exécution du JS injecté.
+
+```http
+Content-Security-Policy:
+  default-src 'self';
+  script-src 'self' https://www.googletagmanager.com;
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: https:;
+  connect-src 'self' https://api.stripe.com;
+  frame-ancestors 'none';
+  base-uri 'self';
+```
+
+Le navigateur **refuse d'exécuter** tout script qui n'est pas du domaine autorisé.
+
+### CSP avec nonce (Next.js, Astro)
+
+```ts
+// middleware.ts
+import { NextResponse } from 'next/server';
+
+export function middleware(request) {
+  const nonce = crypto.randomUUID();
+  const csp = `script-src 'self' 'nonce-${nonce}'; ...`;
+  const response = NextResponse.next();
+  response.headers.set('Content-Security-Policy', csp);
+  response.headers.set('x-nonce', nonce);
+  return response;
+}
+```
+
+```tsx
+// Layout
+const nonce = (await headers()).get('x-nonce');
+<script nonce={nonce}>console.log('OK')</script>
+```
+
+Le nonce change à chaque requête → le JS injecté ne peut pas le deviner.
+
+<Aside type="caution" title="`'unsafe-inline'` et `'unsafe-eval'`">
+Évite-les. Ils désactivent la protection CSP. Si une lib en a besoin (gtag, Google Tag Manager…), utilise plutôt un **nonce** ou un **hash**.
+</Aside>
+
+## CSRF — Cross-Site Request Forgery
+
+Un site malveillant fait faire une requête à **ton site** au nom de la victime connectée.
+
+### Exemple
+
+L'utilisateur est connecté à banque.com. Il visite mauvais-site.com qui contient :
+
+```html
+<form action="https://banque.com/transfer" method="POST">
+  <input type="hidden" name="to" value="hacker" />
+  <input type="hidden" name="amount" value="1000" />
+</form>
+<script>document.forms[0].submit();</script>
+```
+
+Le navigateur **envoie automatiquement le cookie** de banque.com → la banque exécute le transfert.
+
+### Protections (3 couches)
+
+#### 1. Cookies `SameSite=Lax` ou `Strict`
+
+```http
+Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Lax
+```
+
+`SameSite=Lax` = le cookie n'est PAS envoyé sur des POST cross-site. **Protection automatique** dans tous les navigateurs récents.
+
+#### 2. Token CSRF
+
+Le serveur génère un token unique par session, embedded dans les formulaires. Le serveur le vérifie sur chaque POST.
+
+Avec **Next.js** (Server Actions) : protection CSRF native via le mécanisme de signature.
+
+Avec **Express / Hono** : libs comme `csurf`, ou utiliser le pattern **Double-Submit Cookie**.
+
+#### 3. Header personnalisé
+
+Pour les API : ajouter un header `X-Requested-With: XMLHttpRequest`. Les requêtes cross-origin **ne peuvent pas** ajouter de headers custom (sauf preflight CORS).
+
+### Verdict 2026
+
+Si tu utilises :
+- **Cookies HttpOnly Secure SameSite=Lax** + frameworks modernes (Next.js, Laravel, Symfony) → CSRF géré.
+- **JWT en Authorization Bearer** (jamais cookie) → pas de CSRF (pas envoyé auto par le navigateur).
+
+## Clickjacking
+
+L'attaquant met **ton site dans une iframe** invisible et fait cliquer la victime à des endroits piégés.
+
+### Protection
+
+```http
+X-Frame-Options: DENY
+```
+
+Ou (plus moderne, plus précis) :
+
+```http
+Content-Security-Policy: frame-ancestors 'none';
+```
+
+Le navigateur **refuse** de charger ton site dans une iframe.
+
+## En-têtes de sécurité — la liste complète
+
+```http
+# Forcer HTTPS pour 1 an, incluant sous-domaines, soumis pour preload
+Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+# Empêche l'iframe (clickjacking)
+X-Frame-Options: DENY
+
+# Désactive le sniffing de type MIME
+X-Content-Type-Options: nosniff
+
+# CSP — voir plus haut
+Content-Security-Policy: ...
+
+# Référer leak control
+Referrer-Policy: strict-origin-when-cross-origin
+
+# Permissions modernes (caméra, micro, géoloc…)
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# CORS (côté API)
+Access-Control-Allow-Origin: https://app.example.com
+Access-Control-Allow-Credentials: true
+```
+
+### Checker
+
+[securityheaders.com](https://securityheaders.com/) → tape ton URL, obtiens un score A+ à F. Cible **A** minimum en prod.
+
+## Subresource Integrity (SRI)
+
+Si tu charges un script depuis un CDN tiers, **vérifie le hash** :
+
+```html
+<script
+  src="https://cdn.example.com/lib.js"
+  integrity="sha384-Xxx..."
+  crossorigin="anonymous">
+</script>
+```
+
+Si le CDN est compromis et le fichier modifié, le navigateur **refuse** de l'exécuter.
+
+`integrity` est calculé via `openssl dgst -sha384 -binary lib.js | openssl base64 -A`.
+
+## Mixed content
+
+Une page HTTPS qui charge des ressources HTTP est **bloquée par défaut** depuis 2020+ pour les scripts/iframes (active mixed content).
+
+Détection : DevTools console → message en rouge.
+
+Migration en bloc :
+
+```http
+Content-Security-Policy: upgrade-insecure-requests
+```
+
+## Storage côté client — récap sécu
+
+| Storage | Accessible JS ? | Envoyé serveur ? | Conseil |
+|---------|------------------|-------------------|---------|
+| **Cookie HttpOnly Secure SameSite=Lax** | ❌ | ✅ | **Standard pour sessions/JWT** |
+| **localStorage** | ✅ | ❌ | OK pour préférences UI, **PAS pour tokens** |
+| **sessionStorage** | ✅ | ❌ | Même règle que localStorage |
+| **IndexedDB** | ✅ | ❌ | Pour gros volumes data offline |
+
+**Règle absolue** : un token de session/auth dans localStorage → vol par XSS = accès complet au compte.
+
+## Auto-évaluation
+
+<Quiz
+  question='Tu affiches `<div>{userBio}</div>` dans React. userBio vient de la DB. Risque XSS ?'
+  options={[
+    "Oui, l'utilisateur peut injecter du HTML",
+    "Non — React ÉCHAPPE automatiquement les valeurs avec {}. Le HTML inséré est rendu en texte. Le risque arrive avec dangerouslySetInnerHTML, v-html, innerHTML",
+    "Cela dépend du navigateur",
+    'Il faut DOMPurify de toute façon'
+  ]}
+  answerIndex={1}
+  explanation="React (Vue, Svelte, Angular) échappent par défaut TOUTE valeur insérée via {} ou {{}}. < devient &lt;. Le XSS arrive uniquement avec les APIs explicites comme dangerouslySetInnerHTML / v-html / innerHTML — qui sont dangereuses précisément parce qu'elles disent : 'fais-moi confiance, c'est du HTML'. Pour ces cas, DOMPurify."
+/>
+
+<Quiz
+  question="Tu stockes un JWT dans localStorage côté client. Risque ?"
+  options={[
+    "Aucun, c'est sécurisé",
+    'Une faille XSS donne accès à localStorage → vol du JWT → impersonation du user. Solution : cookie HttpOnly Secure SameSite=Lax (inaccessible au JS)',
+    'localStorage est crypté',
+    "Cela dépend du navigateur"
+  ]}
+  answerIndex={1}
+  explanation="C'est la règle d'or de l'auth web. localStorage est accessible à tout JS qui s'exécute dans la page (y compris une lib npm compromise, une XSS ratée ailleurs). Cookie HttpOnly = INVISIBLE au JS, envoyé automatiquement à chaque requête, protégé contre XSS. SameSite=Lax bloque CSRF de base."
+/>
+
+<Quiz
+  question="Tu mets `Content-Security-Policy: default-src 'self' 'unsafe-inline' 'unsafe-eval'`. Avis ?"
+  options={[
+    "Bonne CSP, défense en profondeur activée",
+    "CSP désactivée pour le JS — 'unsafe-inline' et 'unsafe-eval' permettent justement les attaques XSS qu'on veut bloquer. Préfère un nonce ou hash, sinon CSP n'a aucun effet de protection",
+    "Trop strict",
+    "CSP n'est plus utilisée en 2026"
+  ]}
+  answerIndex={1}
+  explanation="C'est l'erreur classique. Activer CSP avec 'unsafe-inline' = le navigateur autorise l'exécution de tout script inline injecté → bypass complet. La bonne approche : nonce par requête (Next.js middleware le supporte), ou hash des scripts inline statiques. Si une lib externe a besoin d'eval, choisis-en une autre."
+/>
+
+## Pour aller plus loin
+
+- *OWASP XSS Cheat Sheet* — [cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)
+- *Content Security Policy Reference* — [content-security-policy.com](https://content-security-policy.com/)
+- *Security Headers* — [securityheaders.com](https://securityheaders.com/)
+- *SameSite Cookies Explained* — [web.dev/articles/samesite-cookies-explained](https://web.dev/articles/samesite-cookies-explained)
+- *DOMPurify* — [github.com/cure53/DOMPurify](https://github.com/cure53/DOMPurify)
+
+---
+
+**Suite** : [12.3 — Sécurité backend](/12-securite/03-backend/) — injections, IDOR, secrets, rate-limit.

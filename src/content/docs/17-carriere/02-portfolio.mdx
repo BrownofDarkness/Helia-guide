@@ -1,0 +1,498 @@
+---
+title: 17.2 — Portfolio
+description: 3-5 projets soignés > 20 bâclés. README impeccable, démo en ligne, captures, code propre, présence pro (LinkedIn, GitHub, site personnel).
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : transformer 3-5 projets en preuve de ton niveau. Un recruteur passe **3 minutes** sur ton portfolio. Tu dois lui faire dire « celui-ci, je veux le rencontrer » dès cette fenêtre.
+
+<ObjectiveList items={[
+  "Choisir 3-5 projets vitrine et les soigner ; archiver le reste",
+  "Écrire un README qui répond à 'pourquoi, quoi, comment, quels résultats'",
+  "Mettre une démo en ligne par projet et un GIF / capture dans le README",
+  "Construire un site personnel concis qui pointe vers ces projets",
+  "Tenir une présence pro minimale (LinkedIn, GitHub bien tenu)"
+]} />
+
+<Level value="confirmé" reading="14 min" prereq="aucun (parallélisable dès l'axe 4)" />
+
+
+## La règle des 3 minutes
+
+Un recruteur tech passe :
+
+- **30 secondes** sur ton CV.
+- **30 secondes** sur ton LinkedIn.
+- **2 minutes** sur ton GitHub / site personnel.
+
+Sur ces 3 minutes, tu dois pouvoir convaincre. Donc :
+
+| Élément | Doit faire |
+|---------|------------|
+| **Page d'accueil GitHub** | Pinned repos visibles + bio claire |
+| **Top 3 README** | Lisibles en 60 secondes, captures visuelles |
+| **1 démo en ligne** cliquable | Pour voir, pas pour cloner-builder |
+| **CV** | Stack, projets pinned, contact |
+
+Si ton recruteur doit `git clone` pour comprendre ce que tu fais, tu as perdu.
+
+---
+
+## 3-5 projets, pas 20
+
+> **Profondeur > largeur.**
+
+Sélectionne **3 à 5 projets vitrine**. Archive ou rends privés les autres (`Settings → Archive` ou `→ Private`). Garder 50 repos publics avec README à 5 lignes brouille ton image.
+
+Critères pour les 3-5 vitrines :
+
+- [ ] **Déployés en ligne**, accessibles via URL.
+- [ ] **README détaillé** (cf section suivante).
+- [ ] **Code propre** : pas de console.log oubliés, pas de TODO, pas de fichiers en désordre.
+- [ ] **Tests** : au moins 30 % de couverture sur la logique métier.
+- [ ] **CI** verte.
+- [ ] **Au moins 1 capture / GIF** dans le README.
+
+### Quels projets choisir ?
+
+Privilégie :
+
+| Type | Pourquoi |
+|------|----------|
+| **Projet full-stack** (CRUD + auth) | Montre le pipeline complet |
+| **Projet de spé** (IA, real-time, mobile) | Montre que tu peux aller en profondeur |
+| **Contribution OSS** | Différenciation forte |
+| **Outil que TU utilises** | Tu peux en parler avec passion |
+
+Évite :
+
+- 5 TODO list.
+- 5 clones de Twitter.
+- Tutos refaits sans modification.
+- Projets « showcase » sans utilité réelle (juste des animations).
+
+---
+
+## Anatomie d'un README qui convertit
+
+### Structure recommandée
+
+```markdown
+# Nom du projet
+
+> Tagline en 1 ligne — qu'est-ce que ça fait, pour qui
+
+[![Demo](https://img.shields.io/badge/demo-online-success)](https://demo.url)
+[![CI](badges...)]()
+
+![Capture / GIF](./assets/cover.png)
+
+## Pourquoi
+2-3 lignes : quel problème ça résout.
+
+## Démo
+- 🌐 https://demo.example
+- 📺 [Loom 90 secondes](https://loom.com/...)
+
+## Stack technique
+- Frontend : Next.js 16 + Tailwind v4
+- Backend : Hono + Drizzle + Postgres 17
+- Auth : Better Auth
+- Déployé sur Fly.io
+- Tests : Vitest + Playwright
+
+## Fonctionnalités principales
+- ✅ Inscription email + OAuth GitHub
+- ✅ CRUD notes avec tags
+- ✅ Partage via lien
+- ✅ Multi-tenant (workspaces)
+- ✅ Export Markdown
+
+## Décisions techniques notables
+- **Better Auth plutôt que Clerk** : open source, contrôle total des cookies — voir ADR-001
+- **Drizzle plutôt que Prisma** : runtime edge-compatible, moins d'overhead — voir ADR-002
+
+## Démarrer en local
+```bash
+git clone ...
+cp .env.example .env
+docker compose up -d
+npm install
+npm run db:migrate
+npm run dev
+```
+
+## Tests
+- `npm test` : 78 % couverture, 142 tests
+- E2E avec Playwright : flow complet auth + CRUD
+
+## Métriques
+- Lighthouse mobile : 96 / 100 / 100 / 100
+- Cold start : 180 ms
+- Latence API p95 : 120 ms
+
+## Architecture
+[diagramme.svg]
+
+## Roadmap
+- [ ] Recherche full-text Postgres
+- [ ] Mode hors ligne (PWA)
+- [ ] Notifications push
+
+## Licence
+MIT
+```
+
+### Ce qui fait la différence
+
+| Élément | Effet |
+|---------|-------|
+| **Capture / GIF** dès le top | « Je vois ce que ça fait » en 5 sec |
+| **Démo en ligne** | « Je peux tester » sans setup |
+| **Stack listée** | Filtre instantané pour le recruteur |
+| **Décisions techniques** | « Cette personne réfléchit » |
+| **Métriques** chiffrées | Crédibilité |
+| **Diagramme** d'architecture | Maturité système-design |
+
+### Anti-patterns README
+
+| Erreur | Effet |
+|--------|-------|
+| « Hello world » + screenshot | Pas crédible |
+| Pas de démo en ligne | Tu obliges à cloner |
+| `npm install && npm start` sans plus | Ça ne marchera pas la 1ère fois |
+| Liste de fonctionnalités floues | Aucune information |
+| Pas de capture / GIF | Effort minimum gaspillé |
+| « En cours de développement » | Mort à l'arrivée |
+
+---
+
+## Les captures et démos
+
+### Capture statique
+
+Tu prends un screenshot soigné de l'écran principal :
+
+- Résolution **1920×1080** ou **1440×900** typique.
+- Compresser en **WebP** ou **AVIF** (~100-300 KB).
+- Place-le tout en haut du README.
+- Considère un **light + dark** mode si pertinent.
+
+### GIF / vidéo courte
+
+Un **GIF 5-15 sec** ou un **Loom 60-90 sec** vaut 100 lignes de README.
+
+Outils 2026 :
+
+- **CleanShot X** (Mac payant) — capture vidéo + edit.
+- **ScreenStudio** (Mac) — zoom dynamique, fond, polish.
+- **OBS Studio** (gratuit, multi-plateforme).
+- **Loom** (gratuit jusqu'à 5 min) — partage cloud.
+- **kap** — OSS Mac.
+
+> Un GIF de 5 secondes au-dessus du fold du README **multiplie** par 3 le temps que les visiteurs passent.
+
+---
+
+## Le site personnel
+
+### Faut-il un site perso ?
+
+**Oui** si :
+
+- Tu cherches du freelance ou de l'indie hacker.
+- Tu veux écrire un blog.
+- Tu vises des postes seniors / lead.
+
+**Non si** :
+
+- Tu débutes et n'as pas encore 3 projets fierté.
+- Tu n'as pas de temps à y passer (un GitHub bien tenu suffit).
+
+### Stack 2026 recommandée
+
+| Stack | Quand |
+|-------|-------|
+| **Astro + Starlight** | Si blog technique + doc |
+| **Astro + thème** | Vitrine + blog |
+| **Next.js 16** | Si tu veux montrer Next |
+| **Hugo / Jekyll / Eleventy** | Très simple, statique |
+
+### Sections d'un site perso minimal
+
+1. **Hero** : Qui tu es, ce que tu fais, comment te contacter (email + GitHub + LinkedIn).
+2. **Projets** : 3-5 cards avec capture + lien.
+3. **Articles** : 3-10 articles techniques (optionnel).
+4. **À propos** : 1-2 paragraphes, pas une bio Wikipedia.
+5. **CV téléchargeable** : PDF.
+
+### Ce qui ne sert à rien
+
+- Animation 3D au scroll qui rame.
+- Page « services » à la freelance générique.
+- Tonne de témoignages flous.
+- Page Hire me avec form 12 champs.
+
+---
+
+## GitHub bien tenu
+
+### Le profil
+
+```
+┌─────────────────────────────────────────┐
+│ Photo de profil propre                  │
+│ Nom complet + tagline                   │
+│ Bio 1 ligne (Senior frontend, etc.)     │
+│ Localisation, lien site, email pro      │
+│                                         │
+│ Pinned repos × 6 (ton choix)            │
+│ Activité récente                        │
+└─────────────────────────────────────────┘
+```
+
+### README de profil
+
+GitHub te laisse créer un README de profil (`username/username`) qui s'affiche en haut. Bonne place pour :
+
+- Bio courte + tagline.
+- Stack technique.
+- 3-4 projets phares (avec captures).
+- Contact.
+
+> **Évite** les compteurs animés, les graphiques de stats, les badges flashy en excès. Sobre = professionnel.
+
+### Pinned repos
+
+GitHub te permet **6 pins** sur ton profil. Choisis-les **dans l'ordre suivant** :
+
+1. Projet vitrine 1 (le plus impressionnant).
+2. Projet vitrine 2.
+3. Projet vitrine 3.
+4. Contribution OSS notable.
+5. Projet de spé.
+6. (optionnel) repo de dotfiles, blog, ou similar.
+
+### Commits réguliers
+
+Pas besoin du green graph plein chaque jour. Mais :
+
+- **Quelques commits par semaine** sur les périodes actives.
+- **Messages de commit propres** (Conventional Commits idéalement).
+- **PRs avec descriptions soignées** (cf [15.3 Communication](/15-methodes-soft-skills/03-communication/)).
+
+---
+
+## LinkedIn — le minimum syndical
+
+LinkedIn n'est pas un terrain de jeu, c'est un **filtre RH**. Sois professionnel :
+
+| Élément | À faire |
+|---------|---------|
+| **Photo** | Pro, fond uni, expression neutre / sourire léger |
+| **Titre** | « Frontend Engineer @ Entreprise » ou « Looking for X » |
+| **About** | 3-5 lignes, ce que tu fais + ce que tu cherches |
+| **Expérience** | Postes avec **réalisations chiffrées** (pas listes de tâches) |
+| **Stack** | Skills 5-10 max, pas 30 |
+| **Activité** | 1 post / mois si tu veux. Pas de spam |
+
+Anti-patterns LinkedIn :
+
+- « Open to work » avec halo si tu n'es pas activement en recherche.
+- Citations motivationnelles génériques.
+- 50 skills validés mais aucun travail à montrer.
+- Photos de soirée d'entreprise.
+
+---
+
+## CV — quelques règles 2026
+
+### 1 page max — sauf 8+ années d'expérience
+
+Tu n'as pas le temps. Eux non plus.
+
+### Structure
+
+```
+┌─────────────────────────────────────────┐
+│ Nom                                     │
+│ Titre — Email — Téléphone — LinkedIn    │
+│ Site perso — GitHub                     │
+│                                         │
+│ EXPÉRIENCE                              │
+│  Entreprise · Rôle · Dates              │
+│   - Réalisation chiffrée 1              │
+│   - Réalisation chiffrée 2              │
+│   - Réalisation chiffrée 3              │
+│                                         │
+│ PROJETS PERSO                           │
+│   - Projet 1 (lien) — pitch + résultat  │
+│   - Projet 2 (lien) — pitch + résultat  │
+│                                         │
+│ COMPÉTENCES                             │
+│  Frontend, Backend, DevOps              │
+│                                         │
+│ FORMATION                               │
+│  Diplôme · École · Année                │
+└─────────────────────────────────────────┘
+```
+
+### Réalisations chiffrées — pas tâches
+
+| ❌ Tâche | ✅ Réalisation chiffrée |
+|---------|--------------------------|
+| « Développé l'app Next.js » | « Refonte Next.js → -40 % LCP, +15 % conv mobile » |
+| « Mis en place la CI » | « CI GitHub Actions : 14 min → 4 min, 0 régression depuis » |
+| « Géré l'équipe » | « Lead 4 devs, 12 PRs/sem, 0 incident SEV1 sur 6 mois » |
+
+### Garde de la place pour ce que tu valorises
+
+Si tu veux faire de l'**IA**, mets une expérience IA en haut. Si tu cherches du **freelance**, mets tes clients en haut.
+
+### Adapter par poste
+
+Tu n'as pas besoin de réécrire 100 % du CV. Mais **2-3 lignes** par poste cible :
+
+- Réordonner les compétences mises en avant.
+- Mettre en haut le projet pertinent.
+- Ajuster la tagline.
+
+---
+
+## Présence sur les réseaux dev
+
+### Twitter / X / Bluesky / Mastodon
+
+**Optionnel**. Si tu veux y être :
+
+- **Suis** des devs reconnus dans ton domaine.
+- **Partage** ce que tu apprends, sans inflation.
+- **Pas de drama** ni de débats stériles.
+- **Une plateforme suffit**, pas les 4.
+
+### Conférences / meetups
+
+| Activité | Effet |
+|----------|-------|
+| **Aller** à un meetup | Networking light |
+| **Donner** un talk | Boost CV très important |
+| **Lightning talk** | Excellente première marche (5-10 min) |
+| **Co-organiser** un meetup | Reconnaissance forte locale |
+| **Speaker** en confs reconnues (JSConf, dotJS) | Profil senior |
+
+---
+
+## Faut-il un blog ?
+
+### Pour qui
+
+- Si tu **aimes écrire**.
+- Si tu vises des postes **seniors / lead / freelance**.
+- Si tu te spécialises (a11y, IA, perf — la spé attire les recruteurs ciblés).
+
+### Pas pour
+
+- Forcer toi-même à écrire si tu n'aimes pas.
+- Faire 2 articles puis abandonner — pire que rien.
+
+### Format minimal
+
+- 1 article par mois.
+- 800-2000 mots.
+- Sujet **technique précis** (pas généraliste).
+- **Captures** + extraits de code.
+- **Lien** depuis ton profil.
+
+> Les blogs personnels les plus lus en 2026 : **Julia Evans** (zines), **Charity Majors** (observability), **Dan Abramov** (React internals), **Andy Jiang**, **Lee Robinson**, **Theo Browne**. Pas pour t'imiter — pour te donner des standards.
+
+---
+
+## Audit ton portfolio en 10 minutes
+
+Checklist à passer **maintenant** sur ton GitHub / site / LinkedIn :
+
+- [ ] Mon profil GitHub a une photo, une bio, un email, un site.
+- [ ] Mes 3-5 pinned repos sont **réellement** mes meilleurs.
+- [ ] Chaque pinned repo a un README avec capture + démo en ligne.
+- [ ] Mes autres repos publics (mauvais code, abandonnés) sont archivés.
+- [ ] Mon LinkedIn a une photo pro et 3-5 expériences chiffrées.
+- [ ] Mon CV tient sur 1 page (≤ 5 ans d'XP).
+- [ ] Mon CV a des **réalisations chiffrées**, pas des tâches.
+- [ ] Si j'ai un site perso : il pointe vers les pinned repos.
+- [ ] J'ai un email pro non-fantaisiste (`prenom.nom@`).
+- [ ] Je peux pitcher mon top projet en 60 secondes.
+
+Compte le nombre de coches. **< 7 → priorité absolue avant de postuler**.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu as 18 repos publics. 3 sont vraiment soignés, 5 sont des tutos copiés, 10 sont abandonnés. Que ferais-tu ?"
+  options={[
+    'Tout garder, ça montre ton activité',
+    'Pin les 3 soignés, archive les 10 abandonnés, soit retravaille soit privatise les 5 tutos. Profondeur > largeur',
+    'Tout supprimer pour repartir à zéro',
+    'Renommer les 10 abandonnés'
+  ]}
+  answerIndex={1}
+  explanation="Un recruteur regarde tes pinned + ton activité récente. 18 repos avec 80 % de mauvais code envoie le mauvais signal. 3 projets nickel + 5 contributions = profil sérieux. Archiver ne supprime rien (le code reste consultable), juste sort du flux par défaut."
+/>
+
+<Quiz
+  question="Ton CV mentionne « Développé un dashboard avec React et Tailwind ». Comment l'améliorer ?"
+  options={[
+    'Ajouter plus de techs : « React, Tailwind, Tanstack Query, Zustand, Vite... »',
+    'Le transformer en réalisation chiffrée : « Refonte dashboard : -3.2s LCP → -1.4s, +18% engagement, livré en 6 sem avec couverture tests 75% »',
+    'Le supprimer',
+    'Mettre en gras'
+  ]}
+  answerIndex={1}
+  explanation="Lister des techs n'apporte rien — n'importe qui peut écrire React. Ce qui distingue : ce que tu as **livré** et **mesuré**. Une réalisation chiffrée transforme un CV générique en preuve d'impact. Recruteurs et CTOs lisent les chiffres en premier."
+/>
+
+<Quiz
+  question="Tu publies un projet sans démo en ligne, juste un README et des captures statiques. Quel risque ?"
+  options={[
+    'Aucun, le README suffit',
+    'Le recruteur ne va PAS cloner ton projet pour le tester. Sans démo cliquable, tu réduis drastiquement les chances que ton projet soit « vu en action ». Une démo Vercel/Netlify gratuite résout le problème en 10 minutes',
+    'Les captures suffisent',
+    'Risque RGPD'
+  ]}
+  answerIndex={1}
+  explanation="Un dev ne va pas `git clone && npm install` ton projet. Une démo en ligne (gratuite chez Vercel, Netlify, Cloudflare Pages, Render free tier) augmente massivement la probabilité que ton projet soit testé. Pour un projet full-stack avec DB, un déploiement Render avec free tier suffit — accepte les cold starts si gratuit."
+/>
+
+<Quiz
+  question="Pour un poste senior IA / RAG, tu as un blog avec 1 article publié il y a 2 ans. Que faire ?"
+  options={[
+    'Le garder tel quel',
+    'Soit publier 2-3 articles techniques fraîches sur le RAG / LLM, soit RETIRER le lien blog du CV/portfolio. Un blog mort fait plus de mal que pas de blog du tout',
+    'Mettre l\'article en privé',
+    'Changer de domaine'
+  ]}
+  answerIndex={1}
+  explanation="Un blog avec 1 article il y a 2 ans signale « j'ai abandonné ». Soit tu réinvestis (3 articles en 2-3 mois sur ta spé), soit tu retires le lien — un GitHub propre + portfolio sans blog est mieux. Un blog mort est un anti-signal. Pas de honte à choisir l'option 2."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *The Tech Resume Inside Out* — Gergely Orosz (référence absolue côté CV)
+- *resume.dev* / *standardresume.co* — templates
+- *Carrd / Astro Portfolio* — site perso vite fait bien fait
+- *GitHub profile README templates* — [github.com/abhisheknaiidu/awesome-github-profile-readme](https://github.com/abhisheknaiidu/awesome-github-profile-readme)
+- *Lee Robinson / Josh Comeau / Dan Abramov sites* — sources d'inspiration
+- *Julia Evans zines* — exemple de différenciation par le contenu
+
+---
+
+**Suite** : [17.3 — Recherche d'emploi](/17-carriere/03-recherche-emploi/) — process, entretiens, négociation.

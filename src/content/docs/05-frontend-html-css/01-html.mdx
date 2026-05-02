@@ -1,0 +1,488 @@
+---
+title: 5.1 — HTML sémantique
+description: Structurer une page avec les bonnes balises — accessibilité, SEO et maintenabilité gratuites.
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Level from '../../../components/Level.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+<Level value="débutant" reading="30 min" prereq="axe 2 (web) lu" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="1">
+**Marie** ouvre son éditeur pour la première fois. Lina lui a donné un mot : « il me faut une page d'accueil avec mon adresse, mes horaires, et la liste des pains du jour ». Marie sait qu'elle peut tout coller dans des `<div>`. Mais elle a entendu dire que c'est *« mal »*. Pourquoi ? Et si elle utilisait les bonnes balises HTML5, qu'est-ce qu'elle gagnerait, **gratuitement** ?
+</Scenario>
+
+<Scenario parcours="B" episode="1">
+**Hugo** doit livrer la vitrine de Studio Pulse à Inès cette semaine. Sa cousine veut une page qui présente le studio, les profs, les types de cours. Hugo connaît `<div>` et `<span>`. Il aimerait aller plus vite que ça — et surtout, il sait qu'Inès tient à ce que les personnes malvoyantes puissent lire la page. Il découvre HTML sémantique.
+</Scenario>
+
+<Scenario parcours="C" episode="1">
+**Sami** lance GreenBox dans 3 mois. Pour le SEO, il sait qu'il faut que Google comprenne **vraiment** sa page produit (titre, prix, disponibilité, image). HTML sémantique + données structurées schema.org sont son point d'entrée — sans ça, ses 200 produits resteront invisibles dans la recherche.
+</Scenario>
+
+<Scenario parcours="D" episode="1">
+**Léa** maquette CoupDeMain. Elle sait que beaucoup de ses futurs voisins utilisent un lecteur d'écran ou n'ont qu'un mobile bas-de-gamme. Elle veut que la **structure** de la page soit limpide pour le navigateur, le SEO **et** les technologies d'assistance. C'est là où HTML sémantique change tout.
+</Scenario>
+
+<Scenario parcours="E" episode="1">
+**Yanis** code la page de connexion + le tableau du board kanban en HTML pur avant de passer à React. Il sait que côté pro, un dev qui pose un `<button>` à la place d'un `<div onclick>` n'aura pas à corriger 30 bugs d'accessibilité plus tard. Il commence proprement dès le premier commit.
+</Scenario>
+
+> 🎯 **Objectif** : ne plus écrire `<div>` partout. Utiliser les balises HTML5 qui décrivent la **structure** d'une page — tu obtiens accessibilité et SEO **gratuitement**, et le code reste lisible 2 ans plus tard.
+
+<ObjectiveList items={[
+  "Structurer une page avec header/nav/main/section/article/aside/footer",
+  "Construire un formulaire avec validation native et labels associés",
+  "Servir des images responsive avec srcset, sizes, picture",
+  "Connaître les attributs ARIA utiles (et savoir quand on n'en a PAS besoin)",
+  "Optimiser le SEO avec meta, OpenGraph, données structurées"
+]} />
+
+## La règle d'or
+
+> **First rule of ARIA : don't use ARIA.**
+
+Avant d'ajouter `role="button"` sur un `<div>`, **utilise simplement `<button>`**. La balise native te donne :
+
+- Le bon rôle ARIA (sans l'écrire).
+- Le focus clavier (Tab).
+- L'activation par Espace et Entrée.
+- L'état désactivé (`disabled`).
+
+90 % des problèmes d'accessibilité disparaissent juste en utilisant les **bonnes balises**.
+
+## Structure d'un document
+
+```html
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mon Site — Page d'accueil</title>
+  <meta name="description" content="Description de 150 caractères max, c'est ce qui apparaît dans Google." />
+
+  <!-- OpenGraph (Twitter, Facebook, Slack…) -->
+  <meta property="og:title" content="Mon Site" />
+  <meta property="og:description" content="Description" />
+  <meta property="og:image" content="https://example.com/og-image.png" />
+  <meta property="og:url" content="https://example.com" />
+  <meta property="og:type" content="website" />
+
+  <!-- Favicons -->
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+  <link rel="canonical" href="https://example.com/" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>...</header>
+  <nav>...</nav>
+  <main>...</main>
+  <footer>...</footer>
+</body>
+</html>
+```
+
+### `<head>` — les essentiels
+
+| Balise | Rôle |
+|--------|------|
+| `<meta charset="UTF-8">` | **Toujours en 1er** dans le head — assure le bon décodage |
+| `<meta name="viewport">` | Mobile-friendly (sans, le mobile zoome de force) |
+| `<title>` | Titre de l'onglet, **affiché dans Google** (50–60 caractères max) |
+| `<meta name="description">` | Description Google (150 caractères) |
+| `<link rel="canonical">` | URL canonique pour éviter le duplicate content |
+
+## Sectionnement HTML5
+
+<Aside type="note" title="Pourquoi du sémantique ?">
+**Lecteurs d'écran**, **bots SEO**, **mode lecture des navigateurs** comprennent ces balises. Un `<div>` ne dit rien ; un `<article>` dit *« voici un contenu autonome »*.
+</Aside>
+
+```html
+<body>
+  <header>
+    <a href="/">Logo</a>
+    <nav aria-label="Principal">
+      <ul>
+        <li><a href="/products">Produits</a></li>
+        <li><a href="/about">À propos</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Titre de la page</h1>
+
+    <article>
+      <h2>Article 1</h2>
+      <p>Contenu autonome — réutilisable hors contexte.</p>
+    </article>
+
+    <section aria-labelledby="témoignages">
+      <h2 id="témoignages">Témoignages</h2>
+      <!-- contenu d'un thème particulier -->
+    </section>
+
+    <aside>
+      <h2>Ailleurs sur le site</h2>
+      <!-- contenu connexe mais distinct -->
+    </aside>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 Mon Site</p>
+    <nav aria-label="Pied de page">...</nav>
+  </footer>
+</body>
+```
+
+### Quand quelle balise ?
+
+| Balise | Quand |
+|--------|-------|
+| `<header>` | En-tête d'une page **ou** d'une section |
+| `<nav>` | Bloc de navigation principal (pas tous les groupes de liens) |
+| `<main>` | **Une seule** par page — contenu principal unique |
+| `<article>` | Contenu **autonome** : article de blog, post, fiche produit, commentaire |
+| `<section>` | Regroupement thématique avec un titre (`<h2>` à l'intérieur) |
+| `<aside>` | Contenu connexe mais séparé : barre latérale, encart |
+| `<footer>` | Pied d'une page ou d'une section |
+| `<div>` | Quand **aucune autre balise sémantique** ne convient |
+
+### Hiérarchie des titres
+
+```html
+<h1>Une seule par page (le sujet principal)</h1>
+  <h2>Section</h2>
+    <h3>Sous-section</h3>
+    <h3>Sous-section</h3>
+  <h2>Section</h2>
+    <h3>Sous-section</h3>
+```
+
+**Règles** :
+
+- Un seul `<h1>` par page.
+- Pas de saut (`<h2>` puis `<h4>` direct = mauvais).
+- Le **niveau** indique la hiérarchie, pas la **taille visuelle** (CSS pour ça).
+
+## Formulaires accessibles
+
+### Le pattern de base
+
+```html
+<form action="/submit" method="post">
+  <div>
+    <label for="email">Adresse e-mail</label>
+    <input
+      type="email"
+      id="email"
+      name="email"
+      required
+      autocomplete="email"
+      aria-describedby="email-help"
+    />
+    <p id="email-help">On ne partage jamais ton e-mail.</p>
+  </div>
+
+  <div>
+    <label for="password">Mot de passe</label>
+    <input
+      type="password"
+      id="password"
+      name="password"
+      required
+      minlength="8"
+      autocomplete="current-password"
+    />
+  </div>
+
+  <button type="submit">Se connecter</button>
+</form>
+```
+
+### Toujours : `<label for="id">` ↔ `<input id="id">`
+
+Lier `label` et `input` permet :
+- **Cliquer le label** → le champ est focus.
+- **Lecteurs d'écran** annoncent le label.
+- **Conformité** WCAG.
+
+Alternative : envelopper l'input dans le label (`<label>Email <input ...></label>`).
+
+### Types d'input modernes
+
+| Type | Bénéfice |
+|------|----------|
+| `email` | Clavier @ sur mobile, validation native |
+| `tel` | Clavier numérique sur mobile |
+| `url` | Clavier avec `.` et `/` |
+| `number` | Spinner, validation numérique |
+| `date`, `time`, `datetime-local` | Sélecteur natif |
+| `search` | Croix pour effacer, comportement de recherche |
+| `password` | Masqué |
+| `color` | Picker de couleur natif |
+| `range` | Slider |
+
+### `autocomplete` — le grand oublié
+
+```html
+<input autocomplete="email" />
+<input autocomplete="given-name" />
+<input autocomplete="family-name" />
+<input autocomplete="street-address" />
+<input autocomplete="cc-number" />
+```
+
+Tu permets aux **gestionnaires de mots de passe** et au **remplissage auto navigateur** de fonctionner. C'est gratuit, énorme amélioration UX.
+
+### Validation native
+
+```html
+<input type="email" required />
+<input type="text" pattern="[A-Z]{2}\d{4}" required title="Format : 2 lettres + 4 chiffres" />
+<input type="number" min="1" max="100" step="0.5" />
+<textarea minlength="20" maxlength="500"></textarea>
+```
+
+Le navigateur valide avant l'envoi. Tu peux personnaliser les messages avec JS, mais commence par les attributs natifs.
+
+### `<fieldset>` + `<legend>` — grouper
+
+```html
+<fieldset>
+  <legend>Adresse de livraison</legend>
+  <label for="street">Rue</label>
+  <input id="street" name="street" />
+  <label for="city">Ville</label>
+  <input id="city" name="city" />
+</fieldset>
+```
+
+Les lecteurs d'écran annoncent *« Adresse de livraison, début du groupe »* puis annoncent chaque champ avec ce contexte.
+
+## Images responsive
+
+### `srcset` et `sizes` — l'image adaptée à la taille d'écran
+
+```html
+<img
+  src="/photo-800w.jpg"
+  srcset="
+    /photo-400w.jpg 400w,
+    /photo-800w.jpg 800w,
+    /photo-1600w.jpg 1600w
+  "
+  sizes="(max-width: 768px) 100vw, 50vw"
+  alt="Description de l'image"
+  loading="lazy"
+  width="800"
+  height="600"
+/>
+```
+
+Le navigateur choisit la version qui correspond à la résolution + densité de pixels de l'utilisateur. Téléphone classique → `400w`. iPad Retina → `1600w`.
+
+### `<picture>` — formats modernes et art direction
+
+```html
+<picture>
+  <source srcset="/photo.avif" type="image/avif" />
+  <source srcset="/photo.webp" type="image/webp" />
+  <img src="/photo.jpg" alt="..." width="800" height="600" />
+</picture>
+```
+
+AVIF est ~40 % plus léger que JPEG, WebP ~30 %. Le `<img>` final est le **fallback** universel.
+
+### `loading="lazy"` et `width`/`height`
+
+- `loading="lazy"` : ne charge l'image que quand elle approche de la zone visible.
+- **Toujours** spécifier `width` et `height` (en attributs HTML) → le navigateur réserve l'espace, **évite les sauts de layout** (CLS).
+
+### `alt` — la règle qui sauve l'accessibilité
+
+| Cas | `alt` |
+|-----|-------|
+| Image **informative** | Décrire ce qu'elle apporte (`alt="Marie souriant à l'école"`) |
+| Image **décorative** | `alt=""` (le lecteur d'écran l'ignore) |
+| Image **dans un lien** | Décrire la destination (`alt="Aller à la page produit"`) |
+| Image avec **texte par-dessus** | Mettre le texte dans `alt` |
+
+**Mauvais** : `alt="image"`, `alt="photo.jpg"`, `alt="img1"`. Ne mets **jamais** ça.
+
+## Médias — vidéo, audio
+
+```html
+<video controls width="800" poster="/preview.jpg">
+  <source src="/video.webm" type="video/webm" />
+  <source src="/video.mp4" type="video/mp4" />
+  <track kind="subtitles" src="/subs-fr.vtt" srclang="fr" label="Français" default />
+  <track kind="subtitles" src="/subs-en.vtt" srclang="en" label="English" />
+  <p>Ton navigateur ne supporte pas la vidéo. <a href="/video.mp4">Télécharger</a>.</p>
+</video>
+```
+
+- `<source>` permet plusieurs formats (le navigateur choisit).
+- `<track>` ajoute des sous-titres (en `.vtt`) — **obligatoire** pour l'accessibilité.
+- Texte de fallback dans le tag pour les très vieux navigateurs.
+
+## ARIA — quand l'utiliser
+
+### Quand TU N'AS PAS BESOIN d'ARIA
+
+- Si tu utilises un `<button>`, n'ajoute pas `role="button"`.
+- Si tu utilises un `<nav>`, n'ajoute pas `role="navigation"`.
+- Si l'image est décorative et a `alt=""`, n'ajoute pas `aria-hidden="true"`.
+
+### Quand l'ARIA aide vraiment
+
+```html
+<!-- Distinguer plusieurs nav -->
+<nav aria-label="Principal">...</nav>
+<nav aria-label="Secondaire">...</nav>
+
+<!-- Étiqueter un bouton sans texte (icône seule) -->
+<button aria-label="Fermer">
+  <svg><!-- icône X --></svg>
+</button>
+
+<!-- Lier une description à un input -->
+<input id="pwd" aria-describedby="pwd-help" />
+<p id="pwd-help">8 caractères minimum, dont 1 majuscule</p>
+
+<!-- Annoncer dynamiquement (live regions) -->
+<div role="status" aria-live="polite">
+  Panier mis à jour
+</div>
+
+<!-- Cacher visuellement mais garder pour les lecteurs d'écran -->
+<span class="sr-only">Ouvrir le menu</span>
+```
+
+```css
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+```
+
+## SEO de base
+
+### Données structurées (JSON-LD)
+
+Permet aux moteurs de recherche d'afficher des résultats enrichis (étoiles, recettes, événements…) :
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Comment apprendre HTML",
+  "author": {
+    "@type": "Person",
+    "name": "Marie Dupont"
+  },
+  "datePublished": "2026-01-15",
+  "image": "https://example.com/hero.jpg"
+}
+</script>
+```
+
+Catalogue : [schema.org](https://schema.org). Tester avec [Rich Results Test](https://search.google.com/test/rich-results).
+
+### `robots.txt` et `sitemap.xml`
+
+```
+# /robots.txt
+User-agent: *
+Allow: /
+Disallow: /admin/
+Sitemap: https://example.com/sitemap.xml
+```
+
+```xml
+<!-- /sitemap.xml -->
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/</loc>
+    <lastmod>2026-04-29</lastmod>
+  </url>
+  <url>
+    <loc>https://example.com/blog</loc>
+    <lastmod>2026-04-01</lastmod>
+  </url>
+</urlset>
+```
+
+La plupart des frameworks (Next.js, Astro, etc.) génèrent ça automatiquement.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu veux un bouton qui ouvre un modal. Quelle balise utilises-tu ?"
+  options={[
+    'Un <div role="button" tabindex="0" onclick="...">',
+    'Un <button> tout simplement',
+    'Un <a href="#">',
+    'Un <span> stylisé en bouton'
+  ]}
+  answerIndex={1}
+  explanation="<button> te donne gratuitement : focus clavier, activation Espace/Entrée, état disabled, rôle ARIA implicite. Les autres options demandent un travail manuel pour atteindre le même comportement, et oublient souvent un détail."
+/>
+
+<Quiz
+  question="Tu mets une image décorative (juste un fond visuel sans info). Quel alt ?"
+  options={[
+    'alt="image"',
+    'alt="" (chaîne vide)',
+    'alt="photo décorative"',
+    'Pas d\'attribut alt'
+  ]}
+  answerIndex={1}
+  explanation="alt='' indique que l'image est purement décorative — les lecteurs d'écran l'ignorent. Omettre l'attribut alt est mauvais (les lecteurs liraient le nom de fichier). Mettre un texte est inutile et bruyant pour les utilisateurs malvoyants."
+/>
+
+<Quiz
+  question="Tu construis un site marketing avec 4 sections : Hero, Caractéristiques, Témoignages, Tarifs. Quel sectionnement HTML ?"
+  options={[
+    'Tout en <div>, c\'est plus simple',
+    '<main> contenant 4 <section> avec chacune un <h2>',
+    '4 <article> dans <body>',
+    '4 <main> à la suite'
+  ]}
+  answerIndex={1}
+  explanation="<main> une seule fois, contenant des <section> thématiques avec leur titre. <article> serait pour un contenu autonome (article de blog) ; ici c'est du contenu d'une page entière. <div> aurait fonctionné mais sans bénéfice sémantique."
+/>
+
+## Pour aller plus loin
+
+- *MDN — Structurer le web avec HTML* — [developer.mozilla.org](https://developer.mozilla.org/fr/docs/Learn/HTML)
+- *HTML5 Doctor* — quelle balise pour quoi
+- *Web Accessibility Initiative — ARIA Authoring Practices* — [w3.org/WAI/ARIA/apg](https://www.w3.org/WAI/ARIA/apg/)
+- *Schema.org* — pour les données structurées
+- *Lighthouse* (intégré à Chrome DevTools) — auditer SEO + a11y
+
+---
+
+**Suite** : [5.2 — CSS moderne](/05-frontend-html-css/02-css/) pour donner vie à ce HTML proprement structuré.

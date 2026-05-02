@@ -1,0 +1,391 @@
+---
+title: 17.6 — Éthique & durabilité
+description: Accessibilité comme exigence (pas bonus), sobriété numérique, RGPD privacy by design, IA responsable. Comment intégrer ces dimensions dans ton métier sans le subir comme une contrainte.
+sidebar:
+  order: 6
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : développer en 2026 sans laisser à d'autres le soin des conséquences. Accessibilité, vie privée, sobriété, IA responsable — non pas comme « bonus du senior gentil » mais comme **partie intégrante** du métier.
+
+<ObjectiveList items={[
+  "Considérer l'accessibilité comme une exigence (pas un nice-to-have)",
+  "Comprendre l'empreinte écologique réelle du numérique et savoir où réduire",
+  "Mettre en œuvre la privacy by design et la sécurité by design",
+  "Utiliser l'IA générative de manière responsable (transparence, biais, droits)",
+  "Reconnaître les choix techniques aux conséquences éthiques"
+]} />
+
+<Level value="confirmé" reading="14 min" prereq="aucun (parallélisable dès l'axe 4)" />
+
+
+## Pourquoi cet axe à la fin
+
+Tu as appris à coder, déployer, scaler. La question maintenant : **dans quel monde laisses-tu ton code** ?
+
+Cet axe n'est pas un sermon. C'est une **liste de choix concrets** qui définissent le type de dev que tu es :
+
+- Le dev qui a poussé pour le **focus visible** sur le bouton — vs celui qui a écrit `outline: none`.
+- Celui qui n'a **pas tracké** un événement non utile — vs celui qui en a poussé 50.
+- Celui qui a **demandé pourquoi** on stockait l'IBAN en clair — vs celui qui a juste codé.
+
+> Les choix éthiques **se prennent au moment du code**. Pas dans une conférence le week-end.
+
+---
+
+## Accessibilité — ce n'est pas une option
+
+### Le contexte 2026
+
+Trois forces convergent :
+
+| Force | Effet |
+|-------|-------|
+| **European Accessibility Act** (en vigueur 2025-2026) | E-com, banque, transport, e-learning : **obligation légale** dans l'UE |
+| **WCAG 2.2** intégrée aux normes nationales (RGAA 4.1 en FR) | Conformité **AA** comme défaut |
+| **Procès ADA** aux US, **class actions** régulières | **Risque juridique** réel |
+
+Mais surtout :
+
+- **15-20 % de la population** a un handicap (visuel, moteur, cognitif, auditif).
+- Beaucoup plus en **situation temporaire** (bras cassé, écran solaire, tunnel SNCF).
+- Tes propres collègues, tes propres parents, **toi un jour**.
+
+### Ce que tu peux faire **maintenant**
+
+À chaque PR, te poser ces questions :
+
+- [ ] L'attribut `lang` est sur `<html>`.
+- [ ] Tous les `<img>` ont un `alt` (vide si décoratif).
+- [ ] Les boutons sont des `<button>`, pas des `<div onclick>`.
+- [ ] Les inputs ont des `<label>` liés.
+- [ ] Les couleurs ont un contraste **4.5:1** minimum.
+- [ ] `:focus-visible` est défini, pas `outline: none`.
+- [ ] L'erreur de formulaire est annoncée (texte + `aria-invalid`).
+- [ ] Les animations respectent `prefers-reduced-motion`.
+- [ ] Tab dans la page atteint tous les éléments dans un ordre logique.
+
+Voir [13.4 Accessibilité avancée](/13-performance-a11y/04-accessibilite/) pour le détail technique.
+
+### Argumenter — quand le PM dit « plus tard »
+
+Réponses concrètes :
+
+| Argument PM | Ta réponse |
+|-------------|------------|
+| « C'est cher / lent » | « Ajouter en V2 coûte 3-5× plus cher. WCAG AA prend 5-10 % de plus en V1, pas 50 % » |
+| « Personne ne s'en plaint » | « 90 % des utilisateurs avec handicap ne signalent pas — ils partent » |
+| « On le fera après le PMF » | « Le PMF inclut les utilisateurs handicapés. EAA + ADA = risque légal réel à partir de 2025 » |
+| « Pas dans le scope » | « Mettons-le explicitement dans la DoD » |
+
+> Tu n'es pas un militant. Tu es un dev qui fait son métier complètement.
+
+---
+
+## Sobriété numérique
+
+### Le numérique consomme
+
+| Donnée | Approximative |
+|--------|---------------|
+| Empreinte carbone du numérique mondiale | ~ 4 % du CO₂ (vs 2 % aviation) |
+| Tendance | **+6 % / an** sans action |
+| Part data centers | ~ 20 % de l'impact |
+| Part appareils utilisateurs (fabrication + usage) | ~ 60 % |
+| Part réseaux | ~ 20 % |
+
+**Sources** : ADEME, The Shift Project, GreenIT.
+
+### Ce que tu peux faire au niveau code
+
+| Levier | Effet | Difficulté |
+|--------|-------|------------|
+| **Optimiser les images** (AVIF, srcset, lazy) | -50 à -90 % du poids | Facile |
+| **Réduire le JS** (code split, tree-shake) | -30 à -70 % | Moyen |
+| **Pas de auto-play vidéo** | -1 à -10 MB par session | Facile |
+| **Cache HTTP** correct | -30 à -80 % de bande passante | Facile |
+| **Lighthouse perf 90+** | Corrélé directement avec sobriété | Continu |
+| **CDN edge** | Moins de latency = moins de retries inutiles | Moyen |
+
+### Au niveau infra
+
+| Levier | Détail |
+|--------|--------|
+| **Hébergeur green** | OVH (60 % renouvelables 2025), Cloudflare (100 % renouvelable depuis 2018), Hetzner (98 %), Scaleway (renouvelable + nuclear FR) |
+| **Région bas-carbone** | France (nucléaire), Suède (hydro), Norvège, Islande |
+| **Right-sizing** des VMs / pods | Pas surdimensionner par paranoia |
+| **Sleep / scale-to-zero** | Quand l'app n'est pas utilisée |
+| **Code efficient** | Rust, Go, Bun consomment moins que Node sur les mêmes calculs |
+
+### Anti-pattern : « green washing »
+
+Coller un widget « ce site est carbone-neutre » qui charge 200 KB de JS pour faire l'affichage = **contre-productif**. Sobriété est une **discipline**, pas un badge.
+
+### Outils de mesure
+
+- **WebsiteCarbon** ([websitecarbon.com](https://www.websitecarbon.com/)) — empreinte page.
+- **EcoIndex** ([ecoindex.fr](https://www.ecoindex.fr/)) — note A à G.
+- **Lighthouse** — perf et bandwidth (proxy d'impact).
+- **Carbon Footprint** GitHub Actions — empreinte de la CI.
+
+### Loi REEN (FR, en vigueur)
+
+La loi de **Réduction de l'Empreinte Environnementale du Numérique** (2021) impose :
+
+- Aux établissements publics > 10 k habitants : **stratégie numérique responsable** (depuis 2023).
+- Diagnostic d'impact pour les services numériques.
+- Sensibilisation des élèves et agents publics.
+
+Côté privé : pas obligation directe pour la majorité, mais **CSRD** (Corporate Sustainability Reporting Directive) impose le reporting d'impact carbone aux grandes entreprises depuis 2024-2025.
+
+---
+
+## RGPD & vie privée — privacy by design
+
+### Le minimum à savoir en 2026
+
+- **Tout citoyen UE** a des droits (accès, rectification, effacement, portabilité).
+- **Toute donnée personnelle** (email, IP, ID, données de comportement) est concernée.
+- **Sanctions** réelles : amendes max 4 % CA ou 20 M€.
+- **DPO** (Data Protection Officer) obligatoire pour orgs > 250 personnes ou traitements à risque.
+
+### Privacy by Design (PbD) — les 7 principes
+
+| Principe | Concrètement |
+|----------|--------------|
+| **Proactif** plutôt que réactif | Penser la privacy DÈS le design, pas après un incident |
+| **Privacy par défaut** | L'utilisateur n'a rien à activer pour être protégé |
+| **Encastré dans le design** | Pas un patch ajouté |
+| **Fonctionnalité positive** | Privacy + UX, pas l'un OU l'autre |
+| **Sécurité bout en bout** | Du collect au delete, chiffrement et accès |
+| **Visibilité et transparence** | Documenter le quoi, pourquoi, qui |
+| **Centré utilisateur** | L'utilisateur garde le contrôle |
+
+### Patterns concrets
+
+| Sujet | Pattern |
+|-------|---------|
+| **Minimisation** | Ne pas collecter ce qui n'est pas nécessaire |
+| **Anonymisation** | IPs hashées, plutôt que stockées en clair |
+| **Pseudonymisation** | UUID interne plutôt que email |
+| **Cookies** | Default no-track, opt-in explicite, pas de dark pattern |
+| **Logs** | Pas de PII (mots de passe, tokens, IBAN) |
+| **Backups** | Chiffrés, accès restreint |
+| **Tiers** | Audit (Stripe, Sentry, etc.) — DPA en place |
+| **Suppression** | Mécanisme effectif, pas seulement déactivation |
+| **Export** | Format standard (JSON, CSV) sur demande |
+
+### Cookies & analytics 2026
+
+- **Plausible**, **Fathom**, **Cloudflare Web Analytics** : sans cookie, sans tracking individuel, RGPD-friendly **par défaut**.
+- **PostHog**, **Mixpanel**, **Amplitude** : avec contrôles, mais nécessitent consent management.
+- **Google Analytics 4** : techniquement utilisable en UE mais litigieux. CNIL a sanctionné en 2022.
+
+> Le passage de **GA → Plausible** est l'un des changements les plus rapides à mettre en place pour réduire ton risque RGPD ET ta surface tracking.
+
+### Anti-patterns RGPD
+
+| Anti-pattern | Risque |
+|--------------|--------|
+| Bandeau cookie où « refuser » est caché | Dark pattern, sanction |
+| Stocker mots de passe en clair / MD5 | RGPD + sécu |
+| Logs avec IP / email en clair | Risque fuite |
+| Conserver indéfiniment les données | Doit avoir une durée |
+| Tiers US sans clauses adéquates | Schrems II, vérification |
+| Pas de DPO ou de registre des traitements | Si applicable |
+
+---
+
+## Sécurité by design
+
+Voir [axe 12 — Sécurité applicative](/12-securite/) pour le détail. Brièvement :
+
+| Pratique | Effet |
+|----------|-------|
+| Hash mot de passe **argon2id** | Standard 2026 |
+| **HttpOnly + Secure + SameSite** sur les cookies session | Bloque XSS et CSRF |
+| **CSP** strict | Bloque XSS injection |
+| **Rate-limit** sur les endpoints sensibles | Anti brute-force |
+| **Validation** Zod côté serveur | Pas confiance dans le client |
+| **Secrets** : jamais hardcodés, Vault / Doppler / cloud secrets | Auditabilité |
+| **MFA** obligatoire pour les admins | Standard sain |
+| **Audit log** des actions sensibles | Forensics + compliance |
+
+---
+
+## IA responsable
+
+### En tant que dev qui utilise l'IA
+
+L'IA générative (Copilot, Claude, GPT, Cursor) est devenue **omniprésente**. Avec elle, des choix éthiques :
+
+| Question | Discipline |
+|----------|------------|
+| **Comprends-tu** ce que tu colles ? | Toujours. Sinon tu introduis bugs et failles |
+| **Cites-tu** quand l'IA contribue significativement ? | Selon contexte (CV / mémoire académique : oui) |
+| **Vérifies-tu** les chiffres / dates fournis ? | Oui — hallucinations fréquentes |
+| **L'IA voit-elle des secrets** que tu ne devrais pas exposer ? | Vérifier la politique d'usage de l'outil |
+| **Respectes-tu la licence** des données générées ? | Lecture nécessaire des CGU |
+
+### En tant que dev qui construit des features IA
+
+Tu construis un chatbot RAG, un summarizer, un agent. Discipline :
+
+| Sujet | Discipline |
+|-------|------------|
+| **Transparence** | L'utilisateur sait que c'est l'IA qui répond |
+| **Limitations explicites** | « Cette IA peut se tromper. Vérifiez les infos critiques. » |
+| **Citations** | Forcer le LLM à citer ses sources |
+| **Biais** | Tester sur populations diverses, mesurer les disparités de qualité |
+| **Données d'entraînement** | Si tu fine-tunes : droits, consentement |
+| **Décisions automatisées** | RGPD art. 22 — décision purement auto avec impact significatif = cadre strict |
+| **Coûts et empreinte** | Un appel LLM consomme plus qu'une req SQL |
+| **Hallucinations** | Évaluations sur golden set, anti-hallucination par RAG strict |
+| **Sécu prompt** | Voir [16.4 IA appliquée](/16-specialisations/04-ia/) |
+
+### Cadre légal — AI Act (UE, 2024-2026)
+
+L'**AI Act** européen est en vigueur progressivement (interdictions août 2025, modèles GPAI août 2026, systèmes haut risque août 2027).
+
+| Catégorie | Obligation |
+|-----------|------------|
+| **Risque inacceptable** | Interdit (social scoring, manipulation cognitive) |
+| **Risque élevé** | Audit, transparence, conformité, supervision humaine |
+| **Risque limité** | Transparence (chatbot, deep fakes : doivent être déclarés) |
+| **Risque minimal** | Pas d'obligation |
+
+### IA et environnement
+
+Un appel LLM consomme **10 à 100×** plus qu'une recherche Google classique. À grande échelle, l'impact est sérieux. Discipline :
+
+- Choisir le modèle adapté (Haiku < Sonnet < Opus selon complexité).
+- Cache prompt (Anthropic, OpenAI : -50 à -90 %).
+- Pas de re-génération à chaque pageview — cacher les réponses fréquentes.
+- Pour batch : préférer les modèles moins gros + filter humain en aval.
+
+---
+
+## Choisir tes batailles
+
+Tu ne peux pas être 100 % parfait sur tous les axes. Le piège est l'**inaction par perfectionnisme**.
+
+> *« Be the change you can. The rest follows. »*
+
+Choisir 1-2 priorités personnelles :
+
+| Si tu te sens fort sur... | Tes batailles prioritaires |
+|---------------------------|---------------------------|
+| **Frontend** | Accessibilité + sobriété (poids de page) |
+| **Backend** | Privacy by design + sécurité |
+| **DevOps** | Sobriété infra + sécurité supply chain |
+| **Produit** | RGPD by design + transparence IA |
+| **Manager** | Imposer la DoD avec a11y + privacy |
+
+---
+
+## Refuser éthique
+
+Parfois tu seras face à un choix où ton employeur veut que tu fasses quelque chose qui te paraît contraire à l'éthique :
+
+- Tracker abusivement les utilisateurs.
+- Stocker des données illégalement.
+- Mettre en place un dark pattern.
+- Construire un système de surveillance interne déguisé.
+- Détourner les contrôles d'accès.
+
+### Tes options
+
+| Option | Quand |
+|--------|-------|
+| **Soulever en interne** par écrit (RFC, doc, mail) | Premier réflexe |
+| **Demander une décision documentée** | Protège juridiquement et professionnellement |
+| **Saisir le DPO** si question RGPD | Voie officielle |
+| **Whistleblowing** si illégalité avérée | Protection légale FR (loi Sapin II) |
+| **Démissionner** si rouge | Dernière option |
+
+> Documenter tes alertes par écrit te protège. *« On me l'a demandé verbalement »* ne tient pas devant un juge.
+
+### Le discernement
+
+Tout n'est pas un cas éthique. Distinguer :
+
+- **Préférence personnelle** (« je préférerais Vue à React »).
+- **Désaccord stratégique** (« je pense qu'on rate notre marché »).
+- **Vraie alerte éthique** (« on stocke des données médicales sans HDS »).
+
+Mélanger les trois affaiblit ta voix sur les vraies alertes.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Le PM dit : « L'accessibilité, on le fera après le PMF, pas grave si quelques contrastes ne passent pas ». Que réponds-tu ?"
+  options={[
+    'Acquiescer et passer',
+    'Soulever : 1) en V2 ça coûte 3-5× plus cher, 2) EAA + ADA exposent à un risque légal réel, 3) WCAG AA en V1 = 5-10 % d\'effort en plus, pas 50 %, 4) intégrons-le dans la DoD',
+    'Démissionner immédiatement',
+    'L\'écrire en commit message'
+  ]}
+  answerIndex={1}
+  explanation="L'accessibilité retroactive est plus chère et plus risquée. Argumenter calmement avec data (EAA, ADA, coûts) tient mieux qu'une posture morale. Mettre dans la DoD = ne plus argumenter à chaque sprint. Démissionner sur ce sujet seul est disproportionné — soulever puis ajuster est la voie."
+/>
+
+<Quiz
+  question="Vous utilisez Google Analytics depuis 5 ans. Tu apprends que la CNIL a sanctionné des sociétés FR à cause de GA. Que proposer ?"
+  options={[
+    'Continuer, on verra',
+    'Migrer vers Plausible / Fathom / Cloudflare Web Analytics — RGPD-friendly par défaut, sans cookie, sans tracking individuel. Effort technique : 1-2 jours. Risque réglementaire : significativement réduit',
+    'Désactiver toute analytics',
+    'Mettre un bandeau plus gros'
+  ]}
+  answerIndex={1}
+  explanation="GA en UE a un statut litigieux (Schrems II + transferts US). Plusieurs sanctions CNIL en 2022. Plausible / Fathom font 80 % de ce que tu fais avec GA, sans cookie, RGPD by design. La migration prend 1-2 jours. Le coût ~10-30 €/mois remplace le « gratuit » de GA dont le vrai coût est le risque réglementaire."
+/>
+
+<Quiz
+  question="Tu construis un chatbot RAG en interne. Comment l'utilisateur sait que ses inputs sont traités par une IA ?"
+  options={[
+    'On suppose qu\'ils savent',
+    'Transparence explicite : disclaimer « Vos questions sont envoyées à un modèle d\'IA tiers (Anthropic) pour générer des réponses. Ne partagez pas de données sensibles. » + politique de rétention claire + opt-in conscient',
+    'Ce n\'est pas important',
+    'Le mettre en CGU illisibles'
+  ]}
+  answerIndex={1}
+  explanation="L'AI Act EU exige la transparence des systèmes IA. RGPD exige la transparence du traitement. Ethique métier : tes utilisateurs doivent SAVOIR ce qui est fait avec leurs questions. Un disclaimer clair + opt-in respectent les 3 cadres et bâtissent confiance. Cacher en CGU illisible = dark pattern."
+/>
+
+<Quiz
+  question="Ton entreprise te demande de logger toutes les frappes claviers internes des employés sans information préalable. Que faire ?"
+  options={[
+    'Implémenter, c\'est mon job',
+    'Refuser et expliquer : surveillance massive sans information = illégal RGPD + Code du travail FR (information préalable obligatoire). Documenter ton refus par écrit, alerter DPO et RH. Si pression, voie de signalement interne ou Sapin II',
+    'Faire avec mais en mode soft',
+    'Quitter sans rien dire'
+  ]}
+  answerIndex={1}
+  explanation="C'est une vraie alerte éthique ET légale. Surveillance massive non informée = illégale en FR (Code du travail art. L1222-4). Tu te protèges par l'écrit. Le DPO et les délégués syndicaux ont des canaux pour ça. Implémenter te rend complice juridiquement. Quitter sans rien dire laisse le problème — la voie alerte interne est le bon premier réflexe."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Inclusive Design Patterns* — Heydon Pickering
+- *RGAA 4.1* — [accessibilite.numerique.gouv.fr](https://accessibilite.numerique.gouv.fr/)
+- *EAA — European Accessibility Act* — texte officiel UE
+- *The Shift Project — Lean ICT Report* — empreinte numérique
+- *GreenIT.fr* — communauté FR sobriété
+- *EcoIndex* — [ecoindex.fr](https://www.ecoindex.fr/)
+- *CNIL — Guide RGPD développeurs* — [cnil.fr](https://www.cnil.fr/fr/guide-rgpd-du-developpeur)
+- *AI Act EU* — texte officiel
+- *OWASP Top 10 for LLM Applications*
+- *Algorithmic Justice League* — [ajl.org](https://www.ajl.org/) (biais et IA)
+
+---
+
+**Retour** : [Index axe 17](/17-carriere/) — tu as terminé le parcours. Bonne carrière.

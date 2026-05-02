@@ -1,0 +1,14 @@
+{
+  "name": "lighthouse-tests",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node run.js"
+  },
+  "dependencies": {
+    "lighthouse": "^12.3.0",
+    "chrome-launcher": "^1.1.2",
+    "serve-handler": "^6.1.6"
+  }
+}

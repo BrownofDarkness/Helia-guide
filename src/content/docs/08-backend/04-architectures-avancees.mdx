@@ -1,0 +1,439 @@
+---
+title: 8.4 — Architectures backend avancées
+description: Monolith vs modulith vs microservices vs serverless, DDD light, hexagonal, clean architecture, event-driven, CQRS, sagas, outbox.
+sidebar:
+  order: 4
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Term from '../../../components/Term.astro';
+import Pitfall from '../../../components/Pitfall.astro';
+import Level from '../../../components/Level.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+<Level value="avancé" reading="50 min" prereq="axe 8 (concepts-communs + un parcours backend)" />
+
+> 🎯 **Objectif** : connaître les patterns d'architecture qu'on attend d'un dev senior — monolith vs microservices, DDD, hexagonal, event-driven — pour **savoir quand utiliser quoi** sans tomber dans le sur-engineering.
+
+<ObjectiveList items={[
+  "Choisir entre monolith, modulith, microservices et serverless selon le contexte (et savoir argumenter)",
+  "Appliquer Domain-Driven Design en mode léger : entités, agrégats, value objects, bounded contexts",
+  "Structurer un service avec hexagonal / ports & adapters",
+  "Comprendre clean architecture (use cases, inversion de dépendances)",
+  "Concevoir un système event-driven : event bus, queues, CQRS, outbox pattern",
+  "Reconnaître quand un sujet est de l'over-engineering pour ton contexte"
+]} />
+
+<Aside type="caution" title="Sujet senior — prérequis honnête">
+Cet axe est un **panorama de patterns senior 2026**. Tu n'as **pas besoin** de les maîtriser pour ton premier job dev, et 90 % des startups de moins de 30 personnes n'en ont pas besoin non plus. Mais quand tu candidateras à des postes de Lead/Staff, ou quand tu liras du code legacy d'entreprise, ces patterns reviennent en boucle.
+
+**Lis ce sous-axe une fois pour la culture, et reviens dessus quand tu rencontres un cas concret.** Ne tente pas d'appliquer tout ça à ton premier projet perso — tu vas sur-architecturer.
+</Aside>
+
+> 💡 **Termes glossaire** : <Term>DDD</Term>, <Term>CQRS</Term>, <Term>event sourcing</Term>, <Term>saga</Term>, <Term>bounded context</Term>.
+
+## 1. Monolith vs modulith vs microservices vs serverless
+
+### Le faux débat
+
+Trop souvent on oppose « monolith » à « microservices » comme si c'était binaire. La réalité est un **spectre** :
+
+```
+[ Monolith ] ─→ [ Modulith ] ─→ [ Microservices ] ─→ [ Serverless ]
+   1 process     1 process       N processes        N fonctions
+   1 codebase    N modules       N codebases        N déploiements
+   1 DB          1 DB            N DBs (idéal)      DBs partagés ou par fn
+```
+
+### Quand utiliser quoi — décideur en 4 questions
+
+| Question | Si oui → | Si non → |
+|----------|-----------|----------|
+| Tu es < 10 devs ? | **Monolith** ou **modulith** | Microservices peuvent commencer à se justifier |
+| Tu as des équipes qui scalent indépendamment ? | Microservices | Monolith |
+| Tu as du trafic burst (spike → 0) ? | **Serverless** | Monolith ou microservices avec instances réservées |
+| Tu maîtrises Kubernetes / observabilité distribuée ? | Microservices OK | Reste en monolith — tu vas souffrir |
+
+### Le **modulith** : le pattern oublié
+
+Le **monolith modulaire** (modulith) est **le bon défaut 2026** pour 80 % des cas :
+
+- **1 process, 1 codebase, 1 DB** (= simplicité opérationnelle d'un monolith)
+- **N modules avec des frontières strictes** (= pré-découpe pour microservices futurs)
+- Communication inter-modules via **events internes** (pas appels directs)
+
+```ts
+// Exemple modulith — chaque dossier = un module avec frontière stricte
+src/
+├── modules/
+│   ├── auth/         ← peut être extrait en microservice plus tard
+│   │   ├── domain/
+│   │   ├── application/
+│   │   └── infrastructure/
+│   ├── billing/
+│   └── tasks/
+└── shared/
+    └── events/       ← bus interne, pas HTTP
+```
+
+<Pitfall title="Le piège « microservices dès le jour 1 »" axe="8.4" category="archi">
+**Symptôme** : ton équipe de 4 devs déploie 12 microservices Kubernetes avec service mesh, observability stack, et 8 mois plus tard ne livre toujours pas de feature.
+
+**Cause** : on confond « ça scale » (tech) avec « ça scale humainement » (équipe). À 4 devs, le coût opérationnel des microservices > bénéfice technique. Tu paies le prix sans encaisser la valeur.
+
+**Fix** : commencer en **modulith** avec des modules clairs. Quand 2 modules sont touchés par 2 équipes différentes >50 % du temps, **extraire** ce module en microservice. Pas avant.
+</Pitfall>
+
+## 2. Domain-Driven Design light
+
+DDD complet (Eric Evans) = livre de 500 pages. La version utile au quotidien tient en 5 concepts.
+
+### Les 5 briques DDD à connaître
+
+#### 2.1 Entité
+
+Objet qui a une **identité** (un id) qui le distingue, même si ses propriétés changent.
+
+```ts
+class User {
+  constructor(public readonly id: UserId, public email: string) {}
+  // Deux User avec même id = même user, même si email diffère
+}
+```
+
+#### 2.2 Value Object
+
+Objet identifié par **ses valeurs**. Immuable. Pas d'id.
+
+```ts
+class Money {
+  constructor(public readonly amount: number, public readonly currency: 'EUR' | 'USD') {}
+  add(other: Money): Money {
+    if (this.currency !== other.currency) throw new Error('Currency mismatch');
+    return new Money(this.amount + other.amount, this.currency);
+  }
+}
+// Deux Money(100, 'EUR') sont strictement égaux
+```
+
+**Pourquoi c'est utile** : tu rends impossibles les bugs comme « ajouter 100 EUR à 100 USD ». Le compilateur (ou le constructeur) refuse.
+
+#### 2.3 Agrégat
+
+Un **groupe d'entités** qui forme une unité de cohérence. **Une seule racine** d'agrégat est exposée à l'extérieur ; les autres entités du groupe sont privées.
+
+```ts
+class Order {
+  // Order = racine d'agrégat
+  private items: OrderItem[] = [];   // OrderItem = entité interne, pas exposée
+  
+  addItem(product: Product, quantity: number) {
+    if (this.status !== 'draft') throw new Error('Order is locked');
+    this.items.push(new OrderItem(product.id, quantity));
+  }
+}
+// Tu ne peux PAS faire `order.items[0].quantity = 99` depuis l'extérieur
+// Tu DOIS passer par `order.changeItemQuantity(...)` qui peut valider
+```
+
+**Règle d'or** : 1 agrégat = 1 transaction DB. Si tu modifies 2 agrégats dans 1 transaction, tu mélanges des concepts qui devraient être séparés.
+
+#### 2.4 Bounded Context
+
+Un **périmètre** dans lequel un mot a un sens précis. **Le même mot peut avoir des sens différents dans 2 contextes**.
+
+```
+Context « Sales »          Context « Shipping »
+- User = client (CRM)      - User = destinataire (adresse)
+- Order = commande payée   - Order = colis à expédier
+- Product = SKU + prix     - Product = poids + dimensions
+```
+
+**Bénéfice** : tu n'es pas forcé d'avoir **un seul** modèle `User` ou `Order` qui couvre tous les cas. Chaque bounded context a son propre modèle, optimisé pour son besoin.
+
+C'est le **pattern qui justifie les microservices** : un microservice = un bounded context.
+
+#### 2.5 Repository
+
+Interface qui abstrait la persistance. Le domaine ne sait pas si c'est SQL, NoSQL, ou en mémoire.
+
+```ts
+// Domaine — pure, pas d'import DB
+interface UserRepository {
+  findById(id: UserId): Promise<User | null>;
+  save(user: User): Promise<void>;
+}
+
+// Infrastructure — implémentation concrète
+class PostgresUserRepository implements UserRepository {
+  async findById(id: UserId) { /* SELECT … */ }
+  async save(user: User) { /* INSERT/UPDATE … */ }
+}
+```
+
+C'est ce qui rend **l'inversion de dépendances** possible (cf. § 4 ci-dessous).
+
+## 3. Hexagonal architecture (ports & adapters)
+
+### Le principe
+
+Le **domaine** au centre. Tout ce qui touche au monde extérieur (HTTP, DB, queue, mail) est **branché via des ports** (interfaces) que des **adapters** implémentent.
+
+```
+                ┌──────────────────┐
+                │   HTTP Handler   │  ← adapter "primary" (entrée)
+                └────────┬─────────┘
+                         │ port (interface)
+                         ▼
+                ┌──────────────────┐
+                │      Domain      │  ← cœur, pure logique métier
+                │    + Use Cases   │
+                └────────┬─────────┘
+                         │ port (interface)
+                         ▼
+        ┌──────────┬──────────────┬─────────────┐
+        ▼          ▼              ▼             ▼
+   Postgres    Stripe         Resend        S3
+   (adapter)   (adapter)      (adapter)     (adapter)
+```
+
+### Avantages concrets
+
+| Bénéfice | Comment c'est possible |
+|----------|-------------------------|
+| **Tests unitaires sans mocking lourd** | Tu remplaces les adapters DB/Stripe par des fakes en mémoire pour tester le domaine |
+| **Swap d'infra** | Tu peux passer de Postgres à MongoDB en réécrivant juste l'adapter, sans toucher au domaine |
+| **Domaine indépendant du framework** | Tu peux changer Express → Hono sans toucher à la logique métier |
+
+### Structure de dossiers concrète
+
+```
+src/
+├── domain/              ← cœur, 0 import HTTP / DB / framework
+│   ├── entities/
+│   ├── value-objects/
+│   └── ports/           ← interfaces abstraites (UserRepository, EmailSender)
+│
+├── application/         ← orchestrateur, use cases
+│   └── use-cases/       ← CreateUser, SubmitOrder, …
+│
+├── infrastructure/      ← implémentations concrètes des ports
+│   ├── persistence/     ← PostgresUserRepository
+│   ├── messaging/       ← StripeAdapter, ResendAdapter
+│   └── http/            ← Express/Hono routes (adapters primary)
+│
+└── presentation/        ← UI ou API JSON (Hono routes, GraphQL resolvers, …)
+```
+
+<Pitfall title="L'hexagonal sur un projet de 500 lignes = sur-engineering" axe="8.4" category="archi">
+**Symptôme** : tu lances un side-project, tu prends 3 jours pour structurer en hexagonal avec ports / adapters / use cases avant d'écrire la 1re feature. Au bout de 2 semaines tu as 30 fichiers et 0 utilisateur.
+
+**Cause** : hexagonal a un coût initial fixe (ratio code structure / code métier) qui est rentable au-delà d'un certain seuil. En dessous, c'est de la dette.
+
+**Fix** : commence en monolith plat (`src/routes/`, `src/db/`). Quand tu as **3+ adapters** différents pour le même service (ex. tu envoies des emails via Resend en prod, MailHog en dev, Mailtrap en preview), c'est le signal pour passer en hexagonal. Pas avant.
+</Pitfall>
+
+## 4. Clean Architecture (Uncle Bob)
+
+Variante très proche de l'hexagonal, avec **4 couches concentriques** et la règle :
+
+> Les dépendances pointent **vers l'intérieur**. Une couche externe peut connaître l'interne, jamais l'inverse.
+
+```
+┌─────────────────────────────────────────────┐
+│  Frameworks & Drivers (Express, Postgres)   │   ← niveau 4 (extérieur)
+│  ┌───────────────────────────────────────┐  │
+│  │  Interface Adapters (controllers)     │  │   ← niveau 3
+│  │  ┌─────────────────────────────────┐  │  │
+│  │  │  Use Cases (business logic)    │  │  │   ← niveau 2
+│  │  │  ┌───────────────────────────┐  │  │  │
+│  │  │  │  Entities (domain core)   │  │  │  │   ← niveau 1 (cœur)
+│  │  │  └───────────────────────────┘  │  │  │
+│  │  └─────────────────────────────────┘  │  │
+│  └───────────────────────────────────────┘  │
+└─────────────────────────────────────────────┘
+```
+
+### En pratique avec TypeScript
+
+```ts
+// Niveau 1 — Entity (domaine pur)
+class User {
+  constructor(public readonly id: string, public email: string) {}
+}
+
+// Niveau 2 — Use Case
+class RegisterUser {
+  constructor(
+    private users: UserRepository,        // port
+    private hash: PasswordHasher,         // port
+    private events: EventBus              // port
+  ) {}
+  async execute(email: string, password: string) {
+    if (await this.users.findByEmail(email)) throw new EmailTaken();
+    const user = new User(generateId(), email);
+    await this.users.save(user, await this.hash.hash(password));
+    await this.events.publish(new UserRegistered(user.id));
+    return user;
+  }
+}
+
+// Niveau 3 — Controller (adapter primary)
+class UserController {
+  constructor(private registerUser: RegisterUser) {}
+  async post(req: Request) {
+    const user = await this.registerUser.execute(req.body.email, req.body.password);
+    return Response.json(user, { status: 201 });
+  }
+}
+
+// Niveau 4 — Framework (Express route)
+app.post('/users', (req, res) => userController.post(req, res));
+```
+
+**Différence avec hexagonal** : Clean Architecture ajoute une couche « Use Cases » entre l'entité et l'adapter. Hexagonal met les use cases avec le domaine. **En pratique, les deux sont équivalents** pour 95 % des projets.
+
+## 5. Event-driven architecture
+
+### Le pivot mental
+
+Au lieu de **« A appelle B qui appelle C »** (couplage fort), tu fais **« A publie un événement, B et C l'écoutent »** (couplage faible).
+
+```
+// Couplé (synchronous)
+async function placeOrder(order) {
+  await chargeCard(order);
+  await sendEmail(order);
+  await updateStock(order);
+  await notifyShipping(order);
+}
+// Si sendEmail() est lent, tout ralentit. Si updateStock() throw, l'order n'est pas créé.
+
+// Event-driven (asynchronous)
+async function placeOrder(order) {
+  await db.save(order);
+  await eventBus.publish(new OrderPlaced(order));
+  // sendEmail, updateStock, notifyShipping écoutent OrderPlaced indépendamment
+}
+```
+
+### Outils de message broker
+
+| Tool | Cas d'usage | Throughput |
+|------|-------------|-------------|
+| **Postgres LISTEN/NOTIFY** | Petite app monolith, pas de cluster | 10K msg/s |
+| **Redis Pub/Sub** | Petit broker simple | 100K msg/s |
+| **NATS** | Modern, léger, JetStream pour persistence | 1M msg/s |
+| **RabbitMQ** | Standard mature, AMQP, routing complexe | 50K msg/s |
+| **Apache Kafka** | High-throughput, event sourcing, streaming | 1M+ msg/s |
+| **AWS SQS / Cloud Pub/Sub** | Managed, serverless | 10K-100K msg/s |
+
+**Choix par défaut 2026** : NATS pour la simplicité ; Kafka si tu fais de l'event sourcing ou du streaming.
+
+### CQRS — Command Query Responsibility Segregation
+
+Sépare **les commandes** (qui modifient l'état) **des queries** (qui lisent).
+
+```
+Commands ──→ [ Write Model (normalized) ] ──events──→ [ Read Model (denormalized) ] ──→ Queries
+```
+
+**Bénéfice** : tu peux **dénormaliser** le read model (1 table par vue, JOINs faits à l'écriture) → queries ultra-rapides. Le coût : complexité accrue (2 modèles à maintenir).
+
+**Quand l'utiliser** : ratio reads/writes > 10:1 ET vues très différentes (dashboards, analytics, listings paginés).
+
+### Outbox pattern — la cohérence inter-services
+
+Problème : tu veux **garantir** que `db.save(order)` ET `eventBus.publish(OrderPlaced)` sont **atomiques**. Si l'un réussit et pas l'autre, ton système est cassé.
+
+**Solution outbox** :
+
+```sql
+-- Dans la même transaction que ton write métier
+BEGIN;
+  INSERT INTO orders (...) VALUES (...);
+  INSERT INTO outbox (event_type, payload) VALUES ('OrderPlaced', '{...}');
+COMMIT;
+```
+
+Puis un **worker séparé** :
+```
+1. SELECT * FROM outbox WHERE published_at IS NULL ORDER BY id LIMIT 100
+2. Pour chaque row : publier sur le bus + UPDATE outbox SET published_at = NOW()
+```
+
+**Garantie** : événement publié **au moins une fois**. Les consumers doivent être idempotents.
+
+### Saga — orchestration de transactions distribuées
+
+Quand tu as une transaction qui touche **N services**, tu ne peux pas faire un `BEGIN/COMMIT` global. Solution : **saga** = suite d'étapes locales avec **compensations** en cas d'échec.
+
+```
+1. ChargePayment       → si OK : continue
+                        → si KO : abort
+
+2. ReserveStock        → si OK : continue  
+                        → si KO : refundPayment ; abort
+
+3. CreateShipment      → si OK : commit
+                        → si KO : restoreStock ; refundPayment ; abort
+```
+
+**Implémentation** :
+- **Orchestration** : un service central pilote la saga (plus simple, point de bottleneck)
+- **Chorégraphie** : chaque service écoute les events et publie le suivant (plus distribué, plus dur à debug)
+
+<Aside type="tip" title="Tu n'auras probablement jamais besoin d'event sourcing">
+**Event sourcing** = stocker tous les changements d'état comme une séquence d'événements (au lieu de l'état actuel). C'est puissant pour l'auditabilité (banking, comptabilité) mais **massivement complexe à mettre en œuvre correctement**.
+
+90 % des entreprises qui implémentent event sourcing finissent par regretter. Réserve-le aux domaines où **l'historique complet est une exigence métier**, pas où c'est juste « cool ».
+</Aside>
+
+## 6. Auto-évaluation
+
+<Quiz
+  question="Tu pars seul sur un side-project pour valider une idée. Quelle archi commencer ?"
+  options={[
+    "Microservices sur Kubernetes — pour scaler quand ça décolle",
+    "Modulith Hono + Postgres en monolith déployé sur Fly.io",
+    "Serverless functions Cloudflare Workers — pas de serveur à gérer",
+    "Hexagonal architecture stricte avec ports/adapters dès jour 1"
+  ]}
+  correct={1}
+  explanation="Modulith en monolith = simplicité opérationnelle (1 process, 1 DB) + frontières modulaires si tu dois extraire plus tard. Microservices et hexagonal sont sur-architecturés pour valider une idée. Serverless peut être OK mais ajoute des contraintes (cold start, pas d'état partagé) qui ralentissent le prototypage."
+/>
+
+<Quiz
+  question="Quelle est la vraie différence entre un agrégat DDD et une « simple table SQL » ?"
+  options={[
+    "Aucune — c'est juste un mot à la mode",
+    "L'agrégat impose des règles de cohérence (1 agrégat = 1 transaction) et expose une API qui valide les invariants",
+    "Un agrégat est forcément stocké en NoSQL",
+    "Un agrégat fait toujours référence à une seule entité"
+  ]}
+  correct={1}
+  explanation="Un agrégat impose qu'on ne puisse pas modifier ses entités internes directement — on passe par la racine qui valide les règles métier. C'est ce qui empêche `order.items[0].quantity = 99` quand `order.status === 'paid'`. La table SQL en dessous peut être identique ; la différence est dans l'API et les invariants."
+/>
+
+<Quiz
+  question="Dans une saga, que doivent faire les compensations ?"
+  options={[
+    "Annuler exactement l'effet de l'étape précédente — comme un ROLLBACK SQL",
+    "Émettre un événement qui sera ignoré",
+    "Restaurer un état métier équivalent — pas forcément identique au point de départ",
+    "Suspendre la saga et attendre une intervention humaine"
+  ]}
+  correct={2}
+  explanation="Les compensations en saga ne sont pas des ROLLBACK : si tu as déjà envoyé un email de confirmation, tu ne peux pas « dé-envoyer ». Tu envoies un email d'annulation. La compensation rétablit un état métier cohérent, pas l'état exact d'avant."
+/>
+
+## Pour aller plus loin
+
+- **Domain-Driven Design Distilled** — Vaughn Vernon (200 pages, lisible en 1 weekend, le résumé de DDD)
+- **Implementing Domain-Driven Design** — Vaughn Vernon (le guide complet, 600 pages)
+- **Clean Architecture** — Robert C. Martin (le livre référence, dogmatique mais utile)
+- **Designing Data-Intensive Applications** — Martin Kleppmann (le standard 2026 pour comprendre les systèmes distribués)
+- **Microservices Patterns** — Chris Richardson (catalogues de patterns avec code Java/Spring)
+- **Event Storming workshops** — méthode pour découvrir les bounded contexts collectivement (Alberto Brandolini)
+- **microservices.io** — référence en ligne avec catalogue de patterns

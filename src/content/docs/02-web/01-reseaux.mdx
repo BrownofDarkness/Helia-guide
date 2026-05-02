@@ -1,0 +1,277 @@
+---
+title: 2.1 — Réseaux
+description: Du DNS au paquet TCP — comprendre les couches réseau qui transportent une requête web.
+sidebar:
+  order: 1
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : pouvoir expliquer ce qui se passe entre le moment où tu tapes `https://example.com` et celui où le serveur reçoit ta requête.
+
+<ObjectiveList items={[
+  "Citer les couches du modèle TCP/IP et savoir ce qu'elles font",
+  "Expliquer comment le DNS transforme un nom en adresse IP",
+  "Distinguer TCP de UDP et savoir quand utiliser chacun",
+  "Comprendre la différence entre HTTP/1.1, HTTP/2 et HTTP/3"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 1 lu" />
+
+
+## Du nom à la machine
+
+Quand tu tapes `https://example.com` dans la barre d'adresse, **rien ne part directement vers Internet**. D'abord, ton navigateur doit savoir **où** est `example.com`. C'est le rôle du DNS.
+
+### Le DNS — l'annuaire d'Internet
+
+Le **DNS (Domain Name System)** transforme un nom (`example.com`) en adresse IP (`93.184.216.34`).
+
+<Diagram
+  caption="Résolution DNS : 4 étapes pour transformer un nom en IP"
+  code={`
+    sequenceDiagram
+      participant Nav as Navigateur
+      participant Cache as Cache local
+      participant Resolver as Résolveur (FAI)
+      participant Root as Serveur racine
+      participant TLD as Serveur .com
+      participant Auth as Serveur autoritatif example.com
+
+      Nav->>Cache: example.com ?
+      alt cache miss
+        Cache->>Resolver: example.com ?
+        Resolver->>Root: où est .com ?
+        Root-->>Resolver: serveur TLD .com
+        Resolver->>TLD: où est example.com ?
+        TLD-->>Resolver: serveur autoritatif
+        Resolver->>Auth: example.com ?
+        Auth-->>Resolver: 93.184.216.34
+        Resolver-->>Cache: 93.184.216.34
+      end
+      Cache-->>Nav: 93.184.216.34
+  `}
+/>
+
+### Les enregistrements DNS courants
+
+| Type | Rôle | Exemple |
+|------|------|---------|
+| `A` | Nom → IPv4 | `example.com → 93.184.216.34` |
+| `AAAA` | Nom → IPv6 | `example.com → 2606:2800:220:1:248:1893:25c8:1946` |
+| `CNAME` | Alias vers un autre nom | `www.example.com → example.com` |
+| `MX` | Serveur mail du domaine | `example.com → mail.example.com` |
+| `TXT` | Texte libre (SPF, DKIM, vérifications) | `v=spf1 include:_spf.google.com ~all` |
+| `NS` | Serveurs DNS autoritatifs | `example.com → ns1.example.com` |
+
+### Le TTL (Time To Live)
+
+Chaque enregistrement DNS a un **TTL** — durée de vie en cache, en secondes. Un TTL court (60 s) permet des changements rapides ; un TTL long (24 h) réduit la charge mais retarde les mises à jour.
+
+```bash
+# Inspecter le DNS
+dig example.com           # tout l'enregistrement
+dig +short example.com    # juste l'IP
+nslookup example.com      # alternative simple
+
+# TTL en cache local (Linux)
+systemd-resolve --status
+```
+
+<Aside type="tip" title="Avant un changement DNS critique">
+Baisse le TTL à 60–300 secondes 24 heures avant. Le jour J, tes utilisateurs basculeront en quelques minutes au lieu d'attendre l'expiration du long TTL.
+</Aside>
+
+## Le modèle TCP/IP
+
+Internet fonctionne en couches qui s'empilent. Chaque couche a un rôle précis et n'a pas besoin de connaître ce que font les autres.
+
+<Diagram
+  caption="Les 4 couches TCP/IP — chaque couche encapsule la précédente"
+  code={`
+    flowchart TD
+      App["Couche Application<br/>HTTP, HTTPS, FTP, SMTP, DNS"]
+      Trans["Couche Transport<br/>TCP, UDP, QUIC"]
+      Net["Couche Internet<br/>IP, ICMP"]
+      Link["Couche Liaison<br/>Ethernet, Wi-Fi"]
+      App --> Trans --> Net --> Link
+  `}
+/>
+
+### IP — adresser une machine
+
+Chaque machine connectée a une **adresse IP** unique sur son réseau.
+
+- **IPv4** : 4 octets, ex. `192.168.1.42` (4 milliards d'adresses, épuisées depuis ~2011).
+- **IPv6** : 16 octets, ex. `2001:db8::1` (3.4 × 10³⁸ adresses, déploiement progressif).
+
+**Adresses privées** (non routables sur Internet) :
+- `10.0.0.0/8` (grandes entreprises)
+- `172.16.0.0/12` (Docker par défaut)
+- `192.168.0.0/16` (réseaux domestiques)
+
+Les box internet font du **NAT** (Network Address Translation) pour partager une seule IP publique entre tous les appareils du foyer.
+
+### Ports et sockets
+
+Une IP identifie une **machine**. Un **port** identifie un **service** sur cette machine.
+
+```
+93.184.216.34:443
+└─────┬──────┘└┬─┘
+      IP       port
+```
+
+Ports bien connus :
+
+| Port | Service |
+|------|---------|
+| 22 | SSH |
+| 53 | DNS |
+| 80 | HTTP |
+| 443 | HTTPS |
+| 3000–3999 | Souvent dev local |
+| 5432 | PostgreSQL |
+| 6379 | Redis |
+| 27017 | MongoDB |
+
+Un **socket** = combinaison `IP:port`. Une connexion TCP = paire de sockets (client ↔ serveur).
+
+### TCP vs UDP
+
+| | **TCP** | **UDP** |
+|---|---------|---------|
+| Fiabilité | Garantie (retransmission) | Aucune |
+| Ordre | Préservé | Non |
+| Latence | Plus élevée (handshake) | Très faible |
+| Cas d'usage | HTTP, SSH, e-mail | DNS, gaming, vidéo en direct, VoIP |
+
+### Le 3-way handshake TCP
+
+Avant tout échange TCP, le client et le serveur établissent une connexion en 3 messages :
+
+<Diagram
+  caption="Établissement d'une connexion TCP"
+  code={`
+    sequenceDiagram
+      participant C as Client
+      participant S as Serveur
+      C->>S: SYN (je veux parler)
+      S->>C: SYN-ACK (ok, je suis prêt)
+      C->>S: ACK (parfait)
+      Note over C,S: Connexion établie, données peuvent circuler
+  `}
+/>
+
+Ce handshake coûte **un aller-retour réseau** (RTT). À ~50 ms par RTT, ça fait beaucoup quand on multiplie les connexions courtes — c'est ce que HTTP/2 et HTTP/3 visent à éviter.
+
+## HTTP — les 3 versions
+
+### HTTP/1.1 (1997)
+
+- Une connexion TCP **par requête** (ou réutilisée séquentiellement avec `Keep-Alive`).
+- **Tête de blocage** (head-of-line blocking) : si une requête est lente, les suivantes attendent.
+- Les navigateurs ouvrent ~6 connexions simultanées par origine pour contourner.
+
+### HTTP/2 (2015)
+
+- **Multiplexage** : une seule connexion TCP, plusieurs requêtes/réponses en parallèle.
+- **En-têtes compressés** (HPACK).
+- **Server Push** (peu utilisé, déprécié).
+- Toujours sujet au blocage TCP (si un paquet est perdu, tout attend).
+
+### HTTP/3 (2022)
+
+- Tourne sur **QUIC** (basé sur UDP, pas TCP).
+- Pas de head-of-line blocking (chaque flux est indépendant).
+- Établissement plus rapide : **0-RTT** possible pour les reconnexions.
+- Adopté par Google, Cloudflare, Facebook.
+
+<Diagram
+  caption="Évolution HTTP — chaque version résout un problème de la précédente"
+  code={`
+    flowchart LR
+      H1[HTTP/1.1<br/>1 requête à la fois<br/>par connexion]
+      H2[HTTP/2<br/>multiplexage TCP<br/>blocage si paquet perdu]
+      H3[HTTP/3<br/>multiplexage QUIC/UDP<br/>pas de blocage]
+      H1 -->|+ multiplexage| H2 -->|+ QUIC| H3
+  `}
+/>
+
+## En résumé : le voyage d'une requête
+
+<Diagram
+  caption="De la frappe au pixel — 7 étapes"
+  code={`
+    sequenceDiagram
+      autonumber
+      participant U as Utilisateur
+      participant Nav as Navigateur
+      participant DNS as DNS
+      participant Net as Réseau
+      participant Srv as Serveur
+
+      U->>Nav: tape https://example.com
+      Nav->>DNS: résolution example.com
+      DNS-->>Nav: 93.184.216.34
+      Nav->>Net: TCP handshake :443
+      Net-->>Nav: connexion établie
+      Nav->>Srv: TLS handshake (axe 2.3)
+      Nav->>Srv: GET / HTTP/2
+      Srv-->>Nav: 200 OK + HTML
+      Nav->>U: rendu (axe 2.4)
+  `}
+/>
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu changes l'IP de ton serveur. Le TTL DNS est de 86400 (24 h). Combien de temps un visiteur dont la résolution est en cache verra encore l'ancienne IP ?"
+  options={[
+    'Quelques secondes — la mise à jour est instantanée',
+    'Jusqu\'à 24 heures dans le pire cas',
+    '1 heure exactement',
+    'Cela dépend du navigateur'
+  ]}
+  answerIndex={1}
+  explanation="Le TTL gouverne combien de temps les résolveurs gardent l'enregistrement en cache avant de redemander. C'est pourquoi on baisse le TTL avant un changement critique."
+/>
+
+<Quiz
+  question="Pourquoi le DNS utilise-t-il UDP plutôt que TCP ?"
+  options={[
+    'Pour la sécurité',
+    'Parce que les requêtes DNS sont petites et qu\'on préfère la rapidité à la fiabilité — un échec se rejoue facilement',
+    'TCP n\'existait pas quand le DNS a été conçu',
+    'Le DNS utilise toujours TCP'
+  ]}
+  answerIndex={1}
+  explanation="UDP évite le coût du handshake TCP. Les requêtes DNS sont typiquement < 512 octets et un échec se rejoue. (Pour les transferts de zone et DNSSEC, on bascule sur TCP.)"
+/>
+
+<Quiz
+  question="Sur quelle couche du modèle TCP/IP travaille HTTP ?"
+  options={[
+    'Couche liaison',
+    'Couche internet',
+    'Couche transport',
+    'Couche application'
+  ]}
+  answerIndex={3}
+  explanation="HTTP est un protocole de couche application — il s'appuie sur TCP (transport), qui s'appuie sur IP (internet), qui s'appuie sur Ethernet/Wi-Fi (liaison)."
+/>
+
+## Pour aller plus loin
+
+- *High Performance Browser Networking* — Ilya Grigorik (gratuit en ligne, la référence)
+- *How DNS Works* — illustré : [howdns.works](https://howdns.works/)
+- *HTTP/3 explained* — Daniel Stenberg (gratuit en ligne)
+- *Computer Networking: A Top-Down Approach* — Kurose & Ross (manuel universitaire)
+
+---
+
+**Suite** : [2.2 — HTTP en détail](/02-web/02-http/) pour ouvrir le capot d'une requête HTTP.

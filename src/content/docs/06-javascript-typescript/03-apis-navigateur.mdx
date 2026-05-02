@@ -1,0 +1,419 @@
+---
+title: 6.3 — APIs du navigateur
+description: DOM, fetch, Storage, Observers, Workers — manipuler la page sans framework.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<Level value="débutant" reading="30 min" prereq="axes 6.1 et 6.2 lus" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="4">
+Marie remarque que le panier se vide à chaque rechargement de page. Une cliente râle : « j'ai mis 12 articles, j'ai cliqué sur "voir CGV", retour, panier vide ». Marie découvre `localStorage` pour persister le panier dans le navigateur. Elle ajoutera plus tard la **géolocalisation** pour suggérer la boulangerie de Lina aux voisins.
+</Scenario>
+
+<Scenario parcours="B" episode="2">
+Hugo veut afficher les **dates au bon format français** (« vendredi 12 mai 10:30 ») partout dans Studio Pulse. Il découvre `Intl.DateTimeFormat` natif — pas besoin de moment.js. Pour le rappel J-1 du cours, il branche les **Web Notifications**, avec une demande de permission contextualisée (pas au boot).
+</Scenario>
+
+<Scenario parcours="C" episode="4">
+Sami a 200 produits dans son catalogue. Charger toutes les images au démarrage = 8 MB. Il découvre **IntersectionObserver** : ne charge l'image qu'au moment où elle devient visible. Le LCP passe de 4 s à 1,2 s sur mobile bridé. Pour la **géolocalisation** des créneaux de livraison, il utilise `navigator.geolocation` avec un fallback sur l'IP.
+</Scenario>
+
+<Scenario parcours="D" episode="4">
+CoupDeMain doit fonctionner **hors-ligne** (réseau du métro coupé) et envoyer une **notification push** quand un voisin répond. Léa découvre les Service Workers, le manifeste de la <Term>PWA</Term>, et l'API Push Notifications. Géolocalisation aussi : elle suggère les demandes proches (≤ 1 km).
+</Scenario>
+
+<Scenario parcours="E" episode="4">
+Yanis veut que le drag & drop kanban soit fluide, et qu'à l'envoi d'une tâche assignée, l'utilisateur reçoive une notification. Il branche l'**API Drag & Drop** native, et les **Notifications du navigateur**. Pour les onglets multiples (un coach sur 3 écrans), `BroadcastChannel` + `localStorage` event sync l'état.
+</Scenario>
+
+> 🎯 **Objectif** : connaître ce que le navigateur offre nativement avant de tirer un framework. Beaucoup de besoins se résolvent en 5 lignes de vanilla JS.
+
+<ObjectiveList items={[
+  "Manipuler le DOM (sélection, création, événements)",
+  "Faire des requêtes avec fetch et FormData",
+  "Choisir entre localStorage, sessionStorage, IndexedDB",
+  "Utiliser IntersectionObserver, MutationObserver, ResizeObserver",
+  "Décharger un calcul lourd vers un Web Worker"
+]} />
+
+
+## Le DOM — Document Object Model
+
+Le DOM est l'**arbre d'objets** qui représente la page. JavaScript peut le lire et le modifier.
+
+### Sélection
+
+```js
+// Un élément
+document.querySelector('#header')
+document.querySelector('.btn-primary')
+document.querySelector('input[type="email"]')
+document.getElementById('header')        // plus rapide mais moins flexible
+
+// Plusieurs (NodeList)
+document.querySelectorAll('.card')
+
+// Itérer
+document.querySelectorAll('.card').forEach(card => card.classList.add('visible'));
+```
+
+### Manipulation
+
+```js
+const el = document.querySelector('#title');
+
+// Texte
+el.textContent = 'Nouveau titre';        // brut, sécurisé
+el.innerHTML = '<strong>HTML</strong>';  // ⚠ XSS si la valeur vient de l'utilisateur
+
+// Attributs
+el.setAttribute('data-state', 'open');
+el.dataset.state = 'open';                // raccourci pour data-*
+el.classList.add('active');
+el.classList.toggle('active');
+el.classList.contains('active');
+
+// Style
+el.style.backgroundColor = 'blue';        // évite, préfère ajouter une classe
+el.style.setProperty('--color', '#f00');  // pour les variables CSS
+
+// Création
+const div = document.createElement('div');
+div.textContent = 'Nouveau';
+document.body.append(div);                // append : à la fin (1+ enfants ou strings)
+parent.prepend(child);                    // au début
+parent.insertBefore(newNode, refNode);    // avant un autre
+
+// Suppression
+el.remove();
+```
+
+### Événements
+
+```js
+button.addEventListener('click', (event) => {
+  console.log(event.target);
+  event.preventDefault();    // empêche le comportement par défaut
+});
+
+// Une fois seulement
+button.addEventListener('click', handler, { once: true });
+
+// Délégation — un seul listener pour de nombreux enfants
+document.querySelector('.list').addEventListener('click', (e) => {
+  if (e.target.matches('.item')) {
+    console.log('Item cliqué :', e.target.textContent);
+  }
+});
+```
+
+<Aside type="tip" title="Délégation d'événements">
+Pour une liste de 1000 items, mets **un seul listener** sur le parent. Tu évites 1000 listeners et c'est plus simple à gérer (les nouveaux items ajoutés dynamiquement marchent aussi).
+</Aside>
+
+## Fetch — requêtes HTTP
+
+```js
+// GET simple
+const response = await fetch('/api/users');
+if (!response.ok) throw new Error(`HTTP ${response.status}`);
+const users = await response.json();
+
+// POST JSON
+const r = await fetch('/api/users', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'Alice' }),
+});
+
+// FormData (upload, formulaires)
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+formData.append('name', 'Alice');
+
+await fetch('/api/upload', {
+  method: 'POST',
+  body: formData,    // pas besoin de Content-Type, le navigateur le met
+});
+
+// Avec credentials (cookies)
+fetch('/api/me', { credentials: 'include' });
+```
+
+### Status vs Network error
+
+```js
+try {
+  const r = await fetch('/api');
+  if (!r.ok) {
+    // 4xx/5xx — la requête est partie, mais le serveur a refusé
+    throw new Error(`HTTP ${r.status}`);
+  }
+  const data = await r.json();
+} catch (err) {
+  if (err instanceof TypeError) {
+    // erreur réseau (DNS, offline, CORS bloqué…)
+  }
+}
+```
+
+**Important** : `fetch` ne rejette pas sur 404 ou 500. Il faut tester `r.ok`. Il rejette uniquement sur erreurs réseau ou CORS.
+
+## URL et URLSearchParams
+
+```js
+const url = new URL('https://example.com/search?q=cat&page=2');
+url.protocol;        // "https:"
+url.hostname;        // "example.com"
+url.pathname;        // "/search"
+url.searchParams.get('q');         // "cat"
+url.searchParams.set('q', 'dog');
+url.searchParams.append('tag', 'pet');
+url.toString();       // "https://example.com/search?q=dog&page=2&tag=pet"
+
+// Construire à partir de paramètres
+const params = new URLSearchParams({ q: 'cat', page: 2 });
+fetch(`/search?${params}`);
+```
+
+Bien plus propre que la concat de strings.
+
+## Storage navigateur
+
+| API | Capacité | Persistance | API |
+|-----|----------|-------------|-----|
+| **localStorage** | ~5 Mo | Persistante | clé/valeur (string) |
+| **sessionStorage** | ~5 Mo | Onglet uniquement | idem |
+| **IndexedDB** | 50 % du disque | Persistante | base structurée async |
+| **Cookies** | ~4 Ko | Configurable | envoyé au serveur |
+
+### localStorage / sessionStorage
+
+```js
+localStorage.setItem('user', JSON.stringify({ id: 1, name: 'Alice' }));
+
+const user = JSON.parse(localStorage.getItem('user'));
+localStorage.removeItem('user');
+localStorage.clear();
+
+// Quota dépassé
+try {
+  localStorage.setItem('big', hugeData);
+} catch (err) {
+  if (err.name === 'QuotaExceededError') {
+    // 5 Mo dépassés
+  }
+}
+```
+
+**Limites** :
+- Synchrone (bloque le thread).
+- Stockage de strings uniquement → `JSON.stringify`.
+- Accessible en JS → **jamais** de tokens d'auth dedans.
+
+### IndexedDB
+
+```js
+// API native verbeuse — utilise plutôt une lib comme "idb"
+import { openDB } from 'idb';
+
+const db = await openDB('myApp', 1, {
+  upgrade(db) {
+    db.createObjectStore('todos', { keyPath: 'id', autoIncrement: true });
+  },
+});
+
+await db.add('todos', { title: 'Apprendre IndexedDB' });
+const todos = await db.getAll('todos');
+```
+
+Pour des **gros volumes** ou des **données structurées** (cache offline d'une PWA, par exemple).
+
+## Observers
+
+3 observers utiles pour réagir à des changements **sans polling**.
+
+### IntersectionObserver — détecter la visibilité
+
+Cas typiques : lazy-load d'images, scroll spy, animation à l'apparition.
+
+```js
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      observer.unobserve(entry.target);   // arrêter d'observer
+    }
+  });
+}, {
+  threshold: 0.1,                          // 10 % visible
+  rootMargin: '50px',                      // commence 50px avant
+});
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+```
+
+### MutationObserver — détecter les changements DOM
+
+```js
+const observer = new MutationObserver((mutations) => {
+  for (const m of mutations) {
+    if (m.type === 'childList') {
+      console.log('Enfants ajoutés/retirés');
+    }
+  }
+});
+
+observer.observe(document.querySelector('#content'), {
+  childList: true,
+  subtree: true,
+  attributes: true,
+});
+```
+
+Utile pour les libs tierces qui injectent du DOM (chats, widgets, etc.).
+
+### ResizeObserver — détecter les changements de taille
+
+```js
+const observer = new ResizeObserver((entries) => {
+  for (const e of entries) {
+    console.log(`Largeur : ${e.contentRect.width}`);
+  }
+});
+
+observer.observe(document.querySelector('.responsive-element'));
+```
+
+Bien plus performant que `window.addEventListener('resize')` couplé à des calculs : ne se déclenche que pour l'élément observé, et seulement quand sa taille change.
+
+## Web Workers — paralléliser les calculs lourds
+
+Un Web Worker tourne dans un **vrai thread parallèle**. Pas d'accès au DOM, mais utile pour les calculs CPU-intensifs.
+
+```js
+// main.js
+const worker = new Worker(new URL('./compute.js', import.meta.url), { type: 'module' });
+
+worker.postMessage({ data: hugeArray });
+
+worker.onmessage = (e) => {
+  console.log('Résultat :', e.data);
+};
+```
+
+```js
+// compute.js
+self.onmessage = (e) => {
+  const result = doHeavyCalculation(e.data.data);
+  self.postMessage(result);
+};
+```
+
+**Cas d'usage** : compression, encodage, parsing de gros JSON, machine learning côté client (tensorflow.js).
+
+## Service Workers — un proxy entre la page et le réseau
+
+Voir [axe 2.4](/02-web/04-navigateur/#service-workers-et-pwa). Permet :
+
+- Mode hors-ligne (cache des ressources).
+- Notifications push.
+- Background sync.
+
+C'est la base d'une **PWA**.
+
+## History API — manipuler l'URL sans recharger
+
+```js
+// Ajouter à l'historique
+history.pushState({ id: 42 }, '', '/products/42');
+
+// Remplacer l'URL actuelle
+history.replaceState(null, '', '/login');
+
+// Réagir au bouton retour
+window.addEventListener('popstate', (e) => {
+  console.log('État précédent :', e.state);
+  router.navigate(location.pathname);
+});
+```
+
+**C'est la base d'un router SPA** : on change l'URL sans recharger, on rend une nouvelle vue.
+
+## Clipboard, geolocation, file system — APIs récentes
+
+```js
+// Clipboard
+await navigator.clipboard.writeText('hello');
+const text = await navigator.clipboard.readText();
+
+// Geolocation (demande permission)
+navigator.geolocation.getCurrentPosition(
+  (pos) => console.log(pos.coords.latitude, pos.coords.longitude),
+  (err) => console.error(err),
+);
+
+// File System Access API (Chrome surtout)
+const [handle] = await window.showOpenFilePicker();
+const file = await handle.getFile();
+const text = await file.text();
+```
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu fetches /api/foo, le serveur renvoie 500. Que vaut response.ok ?"
+  options={[
+    'true (la requête est arrivée au serveur)',
+    'false (statut HTTP indique une erreur)',
+    'undefined',
+    'fetch a rejeté la Promise'
+  ]}
+  answerIndex={1}
+  explanation="response.ok est vrai uniquement pour les statuts 2xx. fetch ne rejette PAS sur 4xx/5xx (contrairement à ce qu'on attend). Il faut tester r.ok manuellement avant d'utiliser le corps."
+/>
+
+<Quiz
+  question="Tu veux animer l'apparition d'éléments au scroll. Outil natif idéal ?"
+  options={[
+    'window.addEventListener(\'scroll\', ...) avec calcul de getBoundingClientRect',
+    'IntersectionObserver',
+    'MutationObserver',
+    'requestAnimationFrame'
+  ]}
+  answerIndex={1}
+  explanation="IntersectionObserver est conçu exactement pour ça : déclencher du code quand un élément devient visible (ou invisible). Plus performant que scroll + getBoundingClientRect car le navigateur le calcule pour toi, hors du thread principal."
+/>
+
+<Quiz
+  question="Tu veux stocker un JWT côté navigateur. Choix sécurisé ?"
+  options={[
+    'localStorage — simple et persistant',
+    'sessionStorage — plus sûr car éphémère',
+    'Cookie HttpOnly Secure SameSite=Lax géré côté serveur',
+    'window.JWT en variable globale'
+  ]}
+  answerIndex={2}
+  explanation="local/sessionStorage sont accessibles au JS donc volables par XSS. HttpOnly Secure SameSite=Lax interdit l'accès au JS, exige HTTPS, limite l'envoi cross-site. C'est le combo standard moderne pour les sessions."
+/>
+
+## Pour aller plus loin
+
+- *MDN — Web APIs* : [developer.mozilla.org/en-US/docs/Web/API](https://developer.mozilla.org/en-US/docs/Web/API)
+- *web.dev — Patterns* : [web.dev/patterns](https://web.dev/patterns/)
+- *Can I use* : [caniuse.com](https://caniuse.com/) — vérifier le support navigateur d'une API
+
+---
+
+**Suite** : [6.4 — TypeScript](/06-javascript-typescript/04-typescript/) — typer ton JS pour éliminer une catégorie entière de bugs.

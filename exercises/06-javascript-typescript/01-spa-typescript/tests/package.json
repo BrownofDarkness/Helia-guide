@@ -1,0 +1,14 @@
+{
+  "name": "spa-tests",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "vitest run --environment=jsdom"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "jsdom": "^25.0.0",
+    "vitest": "^3.2.4"
+  }
+}

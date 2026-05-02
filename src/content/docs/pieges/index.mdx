@@ -1,0 +1,224 @@
+---
+title: 🪤 Pièges réels rencontrés
+description: Les vrais bugs et galères qu'on a eu en construisant ce guide. Symptôme · Cause · Fix · Leçon — pour que tu n'aies pas à les redécouvrir.
+sidebar:
+  order: 1
+  label: 🪤 Pièges réels
+---
+
+import { pieges } from '../../../data/pieges';
+import PiegeCard from '../../../components/PiegeCard.astro';
+import PiegesFilterScript from '../../../components/PiegesFilterScript.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+export const CATEGORY_LABELS = {
+  deps: '📦 Dépendances',
+  build: '🔧 Build / Native modules',
+  auth: '🔐 Authentification',
+  security: '🛡️ Sécurité',
+  tests: '🧪 Tests',
+  perf: '⚡ Performance',
+  a11y: '♿ Accessibilité',
+  env: '⚙️ Environnement / config',
+  cors: '🌐 CORS',
+  db: '🗄️ Base de données',
+};
+
+export const grouped = pieges.reduce((acc, p) => {
+  (acc[p.category] ??= []).push(p);
+  return acc;
+}, {});
+
+export const presentAxes = [...new Set(pieges.map((p) => p.axe).filter(Boolean))]
+  .sort((a, b) => {
+    const na = parseFloat(a);
+    const nb = parseFloat(b);
+    if (na !== nb) return na - nb;
+    return String(a).localeCompare(String(b));
+  });
+
+> 🎯 **Pourquoi cette page existe.** Aucun tutoriel ne t'enseigne ce qui **casse vraiment** quand tu codes. Cette page le fait. Chaque entrée est un **vrai bug** rencontré en construisant ce guide ou en exécutant les exercices, capturé dans le format **Symptôme → Cause → Fix → Leçon**.
+
+<Aside type="tip" title="Comment l'utiliser">
+- Tu galères avec un message d'erreur ? **Tape-le dans la recherche** ci-dessous.
+- Tu apprends sereinement ? **Filtre par catégorie ou par axe** pour parcourir uniquement ce qui te concerne.
+- Tu remarques un nouveau bug ? **Garde le format** dans tes propres notes — c'est aussi bien que les apprendre par cœur.
+</Aside>
+
+<div class="pieges-controls">
+  <label class="pieges-search-label">
+    <span class="pieges-search-icon" aria-hidden="true">🔍</span>
+    <input
+      type="search"
+      id="pieges-search"
+      placeholder="Rechercher dans les symptômes, causes, titres..."
+      aria-label="Rechercher dans les pièges"
+      autocomplete="off"
+    />
+    <span class="pieges-count" id="pieges-count" aria-live="polite">{pieges.length} pièges</span>
+  </label>
+
+  <div class="pieges-filters" role="toolbar" aria-label="Filtrer par catégorie">
+    <span class="filter-label">Catégorie&nbsp;:</span>
+    <button type="button" class="cat-pill active" data-cat="all">Toutes</button>
+    {Object.entries(grouped).map(([cat, list]) => (
+      <button type="button" class="cat-pill" data-cat={cat}>
+        {CATEGORY_LABELS[cat] ?? cat} <span class="cat-count">{list.length}</span>
+      </button>
+    ))}
+  </div>
+
+  <div class="pieges-filters" role="toolbar" aria-label="Filtrer par axe">
+    <span class="filter-label">Axe&nbsp;:</span>
+    <button type="button" class="axe-pill active" data-axe="all">Tous</button>
+    {presentAxes.map((axe) => (
+      <button type="button" class="axe-pill" data-axe={axe}>{axe}</button>
+    ))}
+  </div>
+</div>
+
+<section class="pieges-list">
+{Object.entries(grouped).map(([cat, list]) => (
+  <section class="pitfall-cat-section" data-cat={cat}>
+    <h3 id={cat}>
+      {CATEGORY_LABELS[cat] ?? cat}
+      <span class="cat-counter" data-cat-counter={cat}>({list.length})</span>
+    </h3>
+    {list.map((p) => <PiegeCard piege={p} />)}
+  </section>
+))}
+</section>
+
+<p class="pieges-empty" id="pieges-empty" hidden>
+  Aucun piège ne correspond. Réinitialise les filtres ou modifie ta recherche.
+</p>
+
+<PiegesFilterScript />
+
+<style>{`
+.pieges-controls {
+  position: sticky;
+  top: var(--sl-nav-height, 4rem);
+  z-index: 5;
+  background: var(--sl-color-bg);
+  padding: 0.75rem 0;
+  margin-block-end: 1.5rem;
+  border-block-end: 1px solid var(--sl-color-gray-5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.pieges-search-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--sl-color-gray-7, var(--sl-color-bg));
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.pieges-search-label:focus-within {
+  border-color: var(--sl-color-accent);
+  box-shadow: 0 0 0 4px var(--sl-color-accent-low);
+}
+.pieges-search-icon { font-size: 1rem; opacity: 0.6; }
+
+#pieges-search {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  outline: none;
+}
+
+.pieges-count {
+  font-size: 0.8rem;
+  color: var(--sl-color-gray-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pieges-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.filter-label {
+  font-size: 0.78rem;
+  color: var(--sl-color-gray-2);
+  margin-inline-end: 0.25rem;
+}
+.cat-pill, .axe-pill {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--sl-color-gray-5);
+  background: var(--sl-color-bg);
+  color: inherit;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.cat-pill:hover, .axe-pill:hover {
+  border-color: var(--sl-color-accent);
+  color: var(--sl-color-accent);
+}
+.cat-pill.active, .axe-pill.active {
+  background: var(--sl-color-accent);
+  border-color: var(--sl-color-accent);
+  color: white;
+}
+.cat-count {
+  font-size: 0.7rem;
+  background: var(--sl-color-gray-5);
+  color: var(--sl-color-gray-1);
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.cat-pill.active .cat-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.cat-counter {
+  margin-inline-start: 0.4rem;
+  opacity: 0.5;
+  font-size: 0.75em;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.pieges-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--sl-color-gray-2);
+  font-style: italic;
+}
+
+.pitfall-cat-section { scroll-margin-top: 12rem; }
+`}</style>
+
+---
+
+## 🧰 Le format en détail
+
+Chaque piège suit la même structure :
+
+| Champ | Quoi |
+|-------|------|
+| **🩹 Symptôme** | Ce que tu vois quand le bug survient (message d'erreur exact, comportement bizarre, signe extérieur). Conçu pour être **searchable** : si tu cherches dans Google, c'est ce que tu copies. |
+| **🔍 Cause** | Le **pourquoi** sous-jacent. Pas juste « ça plante » — la mécanique qui cause le crash. |
+| **🩺 Fix** | Ce que tu fais **concrètement** pour résoudre. Souvent du code à coller, parfois une commande, parfois un changement de stratégie. |
+| **🧠 Leçon** | Le **principe général** à retenir. Pour ne pas seulement résoudre CE bug, mais éviter les bugs **similaires** dans l'avenir. |
+
+## 📝 Contribuer
+
+Si en suivant le guide tu rencontres un piège qui n'est pas listé ici, c'est précieux : ouvre une issue sur le repo avec ces 4 champs remplis, on l'ajoute. La meilleure ressource pédagogique est celle que les apprenants enrichissent.

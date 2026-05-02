@@ -1,0 +1,13 @@
+---
+import Default from '@astrojs/starlight/components/Head.astro';
+import { ClientRouter } from 'astro:transitions';
+import ProgressTracker from './ProgressTracker.astro';
+import CommandPalette from './CommandPalette.astro';
+import PersonaSwitcher from './PersonaSwitcher.astro';
+---
+
+<Default><slot /></Default>
+<ClientRouter />
+<ProgressTracker />
+<CommandPalette />
+<PersonaSwitcher />

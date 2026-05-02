@@ -1,0 +1,103 @@
+---
+title: 🤝 Léa · CoupDeMain
+description: Léa, étudiante, crée une plateforme d'entraide entre voisins. Le parcours le plus complet — temps réel, mobile, IA modération.
+sidebar:
+  order: 4
+  label: Léa
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Le pitch
+
+**Léa**, 22 ans, étudiante en informatique. Le canal Telegram bordélique de son quartier (Bagnolet, banlieue est de Paris) est plein de demandes : *« qui prête un escabeau ? »*, *« besoin d'aide pour déménager samedi »*, *« cherche garde de chat 3 jours »*. C'est précieux mais ingérable — les messages se perdent, pas de modération, pas de profil.
+
+Léa propose à 30 voisins de migrer vers une vraie plateforme. C'est son projet de fin de licence + son potentiel premier produit indie.
+
+## Le projet : « CoupDeMain »
+
+| | |
+|---|---|
+| **Type** | Plateforme d'entraide locale, multi-quartier, mobile-first |
+| **Cible** | Habitants d'un quartier (rayon ~ 1 km) |
+| **Volume** | ~ 50-200 utilisateurs actifs par quartier |
+| **Stack frontend** | Next.js 16 + PWA installable |
+| **Stack backend** | Hono (Node 24) + Yjs server pour le temps réel |
+| **Base de données** | Postgres + Drizzle |
+| **Auth** | Better Auth (email + magic link + Apple Sign-In) |
+| **Paiement** | Aucun (gratuit, modèle communautaire) |
+| **Real-time** | WebSocket + Yjs pour les conversations |
+| **IA** | Claude Haiku pour la pré-modération des signalements |
+| **Hébergement** | Fly.io (multi-région européen pour latence) |
+
+## L'arc narratif (axes 5 à 8)
+
+### Axe 5 — Vitrine
+
+| Sous-axe | Épisode |
+|---|---|
+| 5.1 HTML | Léa structure : feed des demandes, profil voisin, formulaire de demande. Mobile-first dès le début. |
+| 5.2 CSS | Grid pour le feed, Flex pour les cartes. Mode sombre par défaut (économie batterie mobile). |
+| 5.3 A11y | Plusieurs voisins âgés ou malvoyants. WCAG 2.2 AA visé. Contrastes ≥ 4.5:1, focus visibles partout. |
+
+### Axe 6 — JS / TS
+
+| Sous-axe | Épisode |
+|---|---|
+| 6.1 JS | Filtres du feed : par type (objet, service, info), par distance, par date. État local complexe. |
+| 6.2 Async | Création de demande : photo + titre + description, upload progressif, prévisualisation. |
+| 6.3 APIs navigateur | Géolocalisation, Web Notifications (push), Service Worker (offline + sync différée). |
+| 6.4 TypeScript | Léa type le domaine : Demande, User, Message, Signalement. Discriminated unions pour les types de demande. |
+
+### Axe 7 — Frameworks
+
+| Sous-axe | Épisode |
+|---|---|
+| 7.1 Concepts communs | Le feed temps réel + chat partagé impose un framework moderne. |
+| 7.2 React | Composants : Feed, DemandeCard, ChatDrawer, ProfileSheet. |
+| 7.3 Alternatives | Léa teste Svelte 5 sur un prototype, séduisant mais reste sur React (écosystème PWA + Yjs). |
+| 7.4 Next.js | App Router + Server Components pour le feed initial, client pour les updates live. |
+| 7.5 Build | PWA : manifeste, icônes adaptatives, Service Worker via Workbox. Score Lighthouse PWA 100. |
+| 7.6 Design system | Tailwind v4 + Radix UI pour les modales, drawers et menus accessibles. |
+
+### Axe 8 — Backend
+
+| Sous-axe | Épisode |
+|---|---|
+| 8.0 Concepts communs | API REST pour les demandes, WebSocket pour le chat et la présence. |
+| 8.1 Node + Hono | API + Yjs server. Premier déploiement multi-région Fly.io. |
+| 8.2 Auth + sécu | Magic link + Apple Sign-In. Isolation forte des messages privés (RLS Postgres). |
+| 8.3 Modération | Endpoint signalement → Claude Haiku qui pré-classe (spam / harcèlement / OK) → file de modération humaine. |
+
+## Spécialisations couvertes (axe 16)
+
+C'est **le parcours le plus complet** sur l'axe 16 :
+
+| Sous-axe 16 | Couverture |
+|---|---|
+| 16.1 Mobile & cross-platform | ✅ PWA installable, push notifications |
+| 16.2 Temps réel & collaboratif | ✅ WebSocket, Yjs pour le chat collaboratif |
+| 16.3 3D, jeu, créatif | ❌ pas pertinent |
+| 16.4 IA appliquée | ✅ Claude Haiku pour modération |
+| 16.5 Edge & WebAssembly | ⚠️ multi-région Fly mais pas Cloudflare Workers |
+| 16.6 Web3 | ❌ pas pertinent |
+
+## Incidents naturels qu'on rencontre plus loin
+
+- **Axe 12 sécu** : un voisin tente de récupérer la liste des emails via une faille IDOR. Léa découvre l'autorisation par ressource.
+- **Axe 12 RGPD** : messages privés entre voisins → registre des traitements + DPO bénévole.
+- **Axe 13 perf** : feed scroll infini sur mobile bas-de-gamme. Léa virtualise la liste.
+- **Axe 13 a11y** : un voisin malentendant veut être notifié visuellement plutôt qu'au son. Customisation des notifs.
+- **Axe 14 DevOps** : sticky sessions Fly + Redis pub/sub pour le fan-out des messages.
+- **Axe 16.4 IA** : faux positif sur la modération (Claude classe une demande de garde d'enfant comme suspecte). Léa ajoute une boucle humaine.
+
+## Pourquoi Léa te conviendrait
+
+- Tu es motivé par le **social, la communauté, l'inclusion**.
+- Tu veux toucher au **temps réel** (chat, présence) et au **mobile PWA**.
+- Tu t'intéresses à l'**IA appliquée** (modération automatisée).
+- Tu veux un parcours qui couvre **tout** sans bascule, axe 1 à axe 16.
+
+<Aside type="tip">
+**Le plus complet techniquement**. Si tu veux un seul fil rouge qui te porte du débutant au senior tout en touchant aux spécialisations modernes (real-time, PWA, IA), prends Léa.
+</Aside>

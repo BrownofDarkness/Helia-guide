@@ -1,0 +1,499 @@
+---
+title: 17.4 — Cadrage stratégique d'un projet
+description: SWOT, PESTEL, Porter, Business Model Canvas, Lean Canvas, TAM/SAM/SOM, OKR, KPI, RACI — les frameworks pour cadrer un side project, un SaaS ou un positionnement freelance.
+sidebar:
+  order: 4
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : savoir cadrer un projet **avant** d'écrire la première ligne de code. Que ce soit ton SaaS, ton positionnement freelance, ou un projet pitché en interne, ces outils te disent **où mettre l'effort** et **ce qui doit attendre**.
+
+<ObjectiveList items={[
+  "Faire un SWOT honnête (perso ou produit) en 30 minutes",
+  "Identifier les forces concurrentielles avec Porter et le contexte macro avec PESTEL",
+  "Modéliser un produit en une page avec le Lean Canvas",
+  "Dimensionner un marché TAM / SAM / SOM",
+  "Piloter avec des OKR mesurables, pas des vœux pieux",
+  "Distribuer les responsabilités d'un projet avec RACI"
+]} />
+
+<Level value="confirmé" reading="20 min" prereq="aucun (parallélisable dès l'axe 4)" />
+
+
+## Pourquoi un dev devrait connaître ces outils
+
+Tu n'as **pas besoin** d'un MBA. Mais ces frameworks sont des **lentilles** : ils forcent à se poser les bonnes questions avant de plonger dans le code. À la moindre prise d'initiative, tu en croiseras au moins un :
+
+| Situation | Framework utile |
+|-----------|-----------------|
+| Tu lances un side project SaaS | **Lean Canvas** + **TAM/SAM/SOM** |
+| Tu te repositionnes en freelance | **SWOT personnel** + **Porter** |
+| Tu pitches une refonte en interne | **OKR** + **KPI** + mini-SWOT |
+| Tu cadres un projet d'équipe | **RACI** + **OKR** |
+| Tu ouvres un nouveau marché géo | **PESTEL** |
+| Tu réponds à un appel d'offres | **Business Model Canvas** + Porter |
+
+<Aside type="tip" title="Lien avec l'axe 3">
+Ces outils ne sont pas réservés aux entrepreneurs. Quand tu fais le **recueil du besoin** [(axe 3.1)](/03-analyse-conception/01-recueil-besoin/) et la **formalisation** [(axe 3.2)](/03-analyse-conception/02-formalisation/), un mini-SWOT *du projet* (forces de l'existant, menaces concurrentielles, opportunités tech) éclaire la priorisation MoSCoW. Et un **RACI** au démarrage évite les « je croyais que c'était toi qui devais le faire » trois mois plus tard. Cadrage stratégique et ingénierie des exigences se complètent : l'un donne **le pourquoi**, l'autre **le quoi**.
+</Aside>
+
+---
+
+## SWOT — l'introspection en 4 cases
+
+**Strengths / Weaknesses / Opportunities / Threats** — la matrice 2×2 la plus universelle du monde de l'entreprise. Elle croise une analyse **interne** (forces/faiblesses) et **externe** (opportunités/menaces).
+
+<Diagram
+  caption="Matrice SWOT — interne vs externe, positif vs négatif"
+  code={`
+    flowchart TB
+      subgraph Interne
+        S[Strengths<br/>Forces internes<br/>✅]
+        W[Weaknesses<br/>Faiblesses internes<br/>❌]
+      end
+      subgraph Externe
+        O[Opportunities<br/>Opportunités<br/>✅]
+        T[Threats<br/>Menaces<br/>❌]
+      end
+  `}
+/>
+
+### SWOT d'un produit
+
+Exemple : SaaS de gestion de notes de frais pour PME (10-50 personnes).
+
+| | ✅ Positif | ❌ Négatif |
+|---|------------|------------|
+| **Interne** | **S** : équipe technique forte, OCR maison déjà fonctionnel, MRR 8 k€ existant | **W** : aucune force commerciale, pas d'intégration comptable, support en anglais uniquement |
+| **Externe** | **O** : facturation électronique obligatoire en France 2026, IA permet automatisation | **T** : Pennylane et Qonto étendent leur périmètre, marché saturé en haut de gamme |
+
+### SWOT personnel (positionnement freelance)
+
+| | ✅ Positif | ❌ Négatif |
+|---|------------|------------|
+| **Interne** | **S** : 5 ans React, 1 contribution open source visible, anglais courant | **W** : pas de réseau client, jamais facturé, peu de visibilité (LinkedIn vide) |
+| **Externe** | **O** : tension forte sur le marché Next.js, IA crée de la demande nouvelle | **T** : commodification des front simples par les outils no-code |
+
+### Comment l'utiliser sans tomber dans le piège
+
+Un SWOT mal fait est **une liste de bullet points qui finit dans un tiroir**. Pour qu'il serve :
+
+1. Limite-toi à **3-5 items par case**. Au-delà, tu noies l'essentiel.
+2. **Croise les cases** pour générer des actions :
+   - **S × O** → comment exploiter une force pour saisir une opportunité ? (axe d'attaque)
+   - **W × T** → quelle faiblesse expose à une menace ? (à corriger en priorité)
+3. Chaque case doit déboucher sur **une action concrète** (pas juste une description).
+
+<Aside type="caution" title="Le piège classique">
+Confondre **interne et externe**. « La concurrence est forte » est une menace (externe), pas une faiblesse. « Mon code est lent » est une faiblesse (interne), pas une menace. Si tu hésites : « est-ce que je peux changer ça en ne touchant que mon produit / mon équipe ? » → oui = interne, non = externe.
+</Aside>
+
+---
+
+## PESTEL — le contexte macro
+
+Quand SWOT regarde la situation immédiate, **PESTEL** balaye les 6 grandes forces externes qui peuvent transformer ton marché à moyen terme.
+
+| Lettre | Domaine | Question type | Exemple côté tech |
+|--------|---------|---------------|-------------------|
+| **P** | Politique | Quelle décision politique affecte le secteur ? | Souveraineté numérique, cloud act |
+| **E** | Économique | Inflation, taux, pouvoir d'achat ? | Récession → baisse de budget SaaS B2B |
+| **S** | Social | Quelles attentes sociétales évoluent ? | Télétravail durable, vie privée |
+| **T** | Technologique | Quelle techno émerge / disparaît ? | LLM, edge computing, WebAssembly |
+| **E** | Écologique | Empreinte, sobriété, régulation ? | Green IT, Loi REEN, TCO carbone |
+| **L** | Légal | Quelle régulation arrive ? | RGPD, AI Act, NIS2, DSA, eIDAS 2 |
+
+### Quand l'utiliser
+
+- Tu lances un produit qui touche au **paiement, à la santé, à l'éducation, à la défense** (régulé).
+- Tu cibles un **nouveau pays** (le contexte L et P change radicalement).
+- Tu prépares une **roadmap à 3 ans** (la tech change, les usages aussi).
+
+<Aside type="note" title="Le L compte vraiment en 2026">
+2026 est une année charnière côté légal pour le tech européen :
+- **AI Act** : obligations renforcées sur les systèmes IA à haut risque.
+- **NIS2** : cybersécurité étendue aux ETI / fournisseurs critiques.
+- **DSA / DMA** : très grandes plateformes contraintes (transparence, interop).
+- **CRA** (Cyber Resilience Act) : sécurité by design pour tout produit avec composant numérique.
+
+Un PESTEL fait il y a 18 mois est probablement déjà obsolète sur la lettre L.
+</Aside>
+
+---
+
+## Les 5 forces de Porter — comprendre la concurrence
+
+Modèle d'analyse concurrentielle de Michael Porter. Au lieu de regarder seulement « mes concurrents », il regarde **5 sources de pression** sur les marges du secteur.
+
+<Diagram
+  caption="Les 5 forces qui pèsent sur ta rentabilité"
+  code={`
+    flowchart TD
+      C[Concurrence<br/>directe]
+      N[Nouveaux<br/>entrants] -->|menace| C
+      S[Substituts] -->|menace| C
+      F[Fournisseurs] -->|pouvoir de<br/>négociation| C
+      A[Acheteurs/<br/>clients] -->|pouvoir de<br/>négociation| C
+  `}
+/>
+
+### Les 5 forces appliquées à un SaaS
+
+| Force | Question | Exemple SaaS gestion RH |
+|-------|----------|--------------------------|
+| **Rivalité** | À combien sont mes concurrents directs ? | PayFit, Lucca, Personio — féroce |
+| **Nouveaux entrants** | Combien coûte de lancer un concurrent ? | Faible avec IA / no-code → menace forte |
+| **Substituts** | Qu'est-ce qui résout autrement le même besoin ? | Excel partagé, cabinet RH externalisé |
+| **Pouvoir des fournisseurs** | Suis-je dépendant d'un acteur ? | OpenAI, AWS, Stripe → dépendance forte |
+| **Pouvoir des acheteurs** | Mes clients peuvent-ils me dicter le prix ? | PME : non. Grands comptes : oui |
+
+### Lecture
+
+Plus une force est **forte**, plus la marge du secteur est **comprimée**. Si les 5 forces sont fortes, fuis. Si 1-2 sont faibles, c'est une niche défendable.
+
+<Aside type="tip" title="Cas freelance : ton « secteur »">
+En freelance, les 5 forces se traduisent ainsi :
+- **Rivalité** : autres freelances de ta spécialité.
+- **Nouveaux entrants** : juniors qui sortent de bootcamp + IA qui automatise.
+- **Substituts** : agences, ESN, no-code, LLMs.
+- **Fournisseurs** : plateformes (Malt, Comet) qui prennent une commission.
+- **Acheteurs** : clients (DSI, CTO) qui négocient.
+
+Une niche **forte sur 4 des 5 forces** (ex : ingénieur IA spécialisé en RAG entreprise) garde le pricing power. Une niche **faible sur 4** (front HTML/CSS générique) subit les prix.
+</Aside>
+
+---
+
+## Business Model Canvas — comment tu gagnes de l'argent
+
+Le **BMC** d'Alexander Osterwalder modélise un business sur **9 blocs**, en une page. Lecture de droite à gauche : ce que tu apportes au client, comment tu le fais, et combien ça coûte / rapporte.
+
+<Diagram
+  caption="Business Model Canvas — 9 blocs"
+  code={`
+    flowchart LR
+      KP[Partenaires<br/>clés] --> KA[Activités<br/>clés]
+      KA --> VP[Proposition<br/>de valeur]
+      KR[Ressources<br/>clés] --> VP
+      VP --> CR[Relation<br/>client]
+      VP --> CH[Canaux]
+      CR --> CS[Segments<br/>clients]
+      CH --> CS
+      CS --> RS[Sources de<br/>revenus]
+      KA --> CO[Structure<br/>de coûts]
+      KR --> CO
+  `}
+/>
+
+### Exemple — SaaS notes de frais PME
+
+| Bloc | Contenu |
+|------|---------|
+| **Segments clients** | PME 10-50 salariés, secteur tertiaire, France |
+| **Proposition de valeur** | Note de frais en 10 secondes via photo + IA, intégration paie automatique |
+| **Canaux** | SEO content, partenariats experts-comptables, Product Hunt |
+| **Relation client** | Self-service + chat support FR, onboarding 30 min |
+| **Sources de revenus** | Abonnement 4 €/mois/utilisateur, tier gratuit ≤ 3 utilisateurs |
+| **Ressources clés** | Équipe ML (OCR), équipe produit, base clients existante |
+| **Activités clés** | Dev produit, support, content marketing |
+| **Partenaires clés** | OpenAI (LLM), Stripe (paiement), 3 cabinets compta partenaires |
+| **Structure de coûts** | Salaires (60%), infra (15%), API IA (10%), marketing (10%), divers (5%) |
+
+Le BMC répond à **« est-ce que tu gagnes plus que tu ne dépenses ? »** sans tableur.
+
+---
+
+## Lean Canvas — la variante startup
+
+Ash Maurya a adapté le BMC pour les startups en remplaçant 4 cases par des questions **plus risquées** au démarrage. C'est la version à utiliser **avant** d'avoir des clients.
+
+| Lean Canvas remplace BMC par… | Pourquoi |
+|-------------------------------|----------|
+| Partenaires clés → **Problème** (top 3) | Pas d'utilisateurs = pas de partenaires. Le vrai risque, c'est le problème. |
+| Activités clés → **Solution** (top 3 features) | Idem |
+| Ressources clés → **Métriques clés** (3 KPIs qui bougent) | À l'amorçage, ce qu'on mesure est plus utile que ce qu'on possède |
+| Relation client → **Avantage déloyal** | Ce qu'aucun concurrent ne peut copier facilement |
+
+**Astuce** : remplis le Lean Canvas dans cet ordre — Problème → Segments → Proposition de valeur → Solution → Canaux → Revenus → Coûts → Métriques → Avantage déloyal. Si tu rédiges *Solution* avant *Problème*, tu es déjà en train de te tromper.
+
+<Aside type="caution" title="Le piège du Lean Canvas">
+**« Avantage déloyal »** est la case la plus importante et la plus mal remplie. Ce n'est pas « notre tech est meilleure » (copiable en 6 mois), ni « on a 2 ans d'avance » (rattrapable). C'est : un réseau exclusif, une exclusivité contractuelle, une marque communautaire, un effet réseau, une donnée propriétaire. Si tu n'as rien à mettre, écris-le honnêtement — c'est un signal qu'il faut construire ce moat.
+</Aside>
+
+---
+
+## TAM / SAM / SOM — dimensionner le marché
+
+Trois cercles concentriques pour répondre à *« combien d'argent il y a, et combien je peux en prendre ? »*.
+
+<Diagram
+  caption="TAM > SAM > SOM — du marché total à la part atteignable"
+  code={`
+    flowchart TB
+      TAM[TAM — Total Addressable Market<br/>Tout le besoin mondial]
+      SAM[SAM — Serviceable Addressable Market<br/>Ce que tu peux servir<br/>géo/segment/canal]
+      SOM[SOM — Serviceable Obtainable Market<br/>Ce que tu vises sur 3 ans<br/>réaliste]
+      TAM --> SAM
+      SAM --> SOM
+  `}
+/>
+
+### Exemple — SaaS notes de frais PME France
+
+| Niveau | Calcul | Résultat |
+|--------|--------|----------|
+| **TAM** | 200 M de PME mondiales × 4 €/mois × 12 × 20 utilisateurs moy. | **~190 Md€ / an** |
+| **SAM** | PME France 10-50 salariés ~140 000 × 30 utilisateurs moy. × 4 €/mois × 12 | **~200 M€ / an** |
+| **SOM** | Réaliste 3 ans : 0,5 % du SAM (700 PME × 30 utilisateurs × 4 € × 12) | **~1 M€ / an ARR** |
+
+### Règles d'or
+
+1. **TAM trop gros → suspect**. Si tu écris 500 Md€, c'est qu'il s'applique pas vraiment à ton produit.
+2. **SOM ≠ vœu**. Justifie-le par un canal (SEO + 2 % de conversion sur X visiteurs).
+3. **Les 3 chiffres dans une slide**. Pas plus.
+
+<Aside type="tip" title="Bottom-up bat top-down">
+Calculer TAM = « toutes les entreprises × prix » est un calcul **top-down** que tout investisseur démonte. Préfère le **bottom-up** : « j'ai aujourd'hui X clients, ils paient Y, mon canal me donne Z leads/mois → voici ma trajectoire à 3 ans ». C'est plus petit, plus crédible, beaucoup plus vendable.
+</Aside>
+
+---
+
+## OKR — aligner objectif et mesure
+
+**Objectives & Key Results**, popularisé par Intel puis Google. Format extrêmement simple :
+
+```
+Objectif : [direction qualitative ambitieuse, 1 phrase]
+KR1 : [résultat chiffré observable]
+KR2 : [résultat chiffré observable]
+KR3 : [résultat chiffré observable]
+```
+
+Un OKR bien formé tient en **5 lignes** et se lit en 15 secondes.
+
+### Exemple OKR équipe produit (trimestre)
+
+```
+Objectif : Faire de l'onboarding une force commerciale, pas un goulot d'étranglement.
+KR1 : Réduire le time-to-first-value de 4 j à 30 min (mesuré via évent "first-export").
+KR2 : Atteindre 60 % de complétion du tutoriel en J+1 (vs 22 % actuel).
+KR3 : Passer le NPS post-onboarding de 12 à 35.
+```
+
+### Exemple OKR perso (freelance, semestre)
+
+```
+Objectif : Devenir un freelance Next.js identifiable sur le marché parisien.
+KR1 : Publier 6 articles techniques (≥ 1500 mots, démo de code).
+KR2 : Atteindre 20 leads entrants qualifiés (mail / LinkedIn / Malt).
+KR3 : Booker 3 missions à TJM ≥ 700 € net.
+```
+
+### Règles
+
+| Règle | Explication |
+|-------|-------------|
+| **3 KR max** | Au-delà, c'est une checklist, pas un OKR. |
+| **Ambition** | Atteindre 70 % d'un OKR = bon. 100 % = pas assez ambitieux. |
+| **Chiffré et observable** | « Améliorer la qualité » → ❌. « Couverture tests > 80 % » → ✅. |
+| **Cadence** | Trimestre standard, semestre pour solo / freelance. |
+| **Public** | Visible par toute l'équipe, pas un secret de manager. |
+
+<Aside type="caution" title="OKR ≠ tâches ≠ KPI">
+Erreur courante : empiler les **tâches** dans les KR (« publier la doc API »). Une tâche est binaire (faite/pas faite), un KR est une **mesure** (« doc API génère 200 visites uniques/sem »). Et un **KPI** (Key Performance Indicator) est une métrique permanente que tu suis tout le temps (revenu mensuel, churn, NPS) — l'OKR est ponctuel.
+</Aside>
+
+---
+
+## KPI — les métriques qui font le pilotage
+
+Les **KPI** ne fixent pas un cap (ça, c'est l'OKR), ils décrivent **l'état de santé** du produit ou de l'activité.
+
+### KPI essentiels par contexte
+
+**SaaS B2B**
+
+| KPI | Ce que ça mesure | Cible saine |
+|-----|------------------|-------------|
+| **MRR** (Monthly Recurring Revenue) | Revenu récurrent mensuel | Croissance > 10 %/mois early stage |
+| **Churn** | % clients qui partent / mois | < 2 % B2B, < 5 % B2C |
+| **CAC** (Coût d'acquisition client) | Coût moyen pour gagner 1 client | < LTV/3 |
+| **LTV** (Lifetime Value) | Revenu total moyen par client | LTV/CAC > 3 |
+| **NPS** | Recommanderais-tu ? (-100 à +100) | > 30 |
+| **Time-to-value** | Temps avant 1ʳᵉ valeur perçue | < 1 j idéalement |
+
+**Freelance / consultant**
+
+| KPI | Cible |
+|-----|-------|
+| Taux journalier moyen (TJM) | > marché de ta niche |
+| Taux d'occupation (jours facturés / dispo) | 60-80 % (au-delà = pas de marketing) |
+| Délai de paiement moyen | < 30 j |
+| Pipeline (nb missions à 1-3 mois) | ≥ 2× ta capacité |
+
+**Product / Growth**
+
+| KPI | Définition |
+|-----|------------|
+| Activation | % nouveaux qui font l'action clé |
+| Rétention D1/D7/D30 | % revenus à 1, 7, 30 jours |
+| DAU / MAU | Engagement quotidien |
+
+### Anti-patterns KPI
+
+- **Vanity metrics** : nb d'inscrits, pages vues, followers. Impressionnent en pitch, ne pilotent rien.
+- **Trop de KPI** : un dashboard à 40 chiffres = personne ne regarde. **5-7 KPI max** sur le North Star.
+- **Manque de target** : un KPI sans seuil (« on regarde le churn ») n'aide à rien décider.
+
+---
+
+## RACI — qui fait quoi, qui décide
+
+Sur tout projet à 3+ personnes, les ambiguïtés de responsabilité tuent les délais. **RACI** est une matrice qui croise **tâches × personnes**.
+
+| Lettre | Sens | Pluralité |
+|--------|------|-----------|
+| **R** — Responsible | Fait le travail | Plusieurs possibles |
+| **A** — Accountable | Rend des comptes, valide | **Une seule personne** |
+| **C** — Consulted | Donne un avis avant la décision | Plusieurs possibles |
+| **I** — Informed | Mis au courant après la décision | Plusieurs possibles |
+
+### Exemple — déploiement d'une refonte API
+
+| Tâche | Lead Tech | Devs | Produit | Sécu | DSI |
+|-------|-----------|------|---------|------|-----|
+| Définir la spec OpenAPI | A | R | C | C | I |
+| Implémenter les endpoints | A | R | I | I | I |
+| Auditer la sécu | C | I | I | A/R | I |
+| Déployer en prod | A | R | I | C | I |
+| Communiquer aux clients | I | I | A/R | I | C |
+
+### Règles
+
+- **Un seul A par ligne**. Si deux A, personne ne décide vraiment.
+- **R sans A possible** (un dev fait sans valider), **A sans R impossible** (faut bien que quelqu'un fasse).
+- **R + A = la même personne** sur les tâches solo.
+- **Évite C inflationniste** : consulter 8 personnes paralyse. 2-3 C max par tâche.
+
+<Aside type="tip" title="Variantes RACI">
+- **RASCI** ajoute *Support* (qui aide).
+- **DACI** échange R contre **Driver** et **Decider** — utile pour les décisions, pas les tâches.
+- **MOCHA** (Manager / Owner / Consulted / Helper / Approver) — variante non-profit.
+
+Choisis-en **une seule** par projet et tiens-toi-y. Mélanger les notations rend la matrice illisible.
+</Aside>
+
+---
+
+## Choisir le bon framework selon le moment
+
+```
+Idée → Problème exploré → Produit → Marché → Croissance → Équipe
+```
+
+| Phase | Framework principal | Frameworks d'appui |
+|-------|---------------------|--------------------|
+| Idée brute | **Lean Canvas** | SWOT |
+| Validation problème | **JTBD** (axe 3.1) + **Lean Canvas** | PESTEL si secteur régulé |
+| Validation marché | **TAM/SAM/SOM** + **Porter** | BMC |
+| Lancement | **OKR** trimestriels | KPI dashboard minimal |
+| Croissance / scale | **OKR** + **KPI complets** | RACI dès 3-4 personnes |
+| Pivot | **SWOT** + **Lean Canvas** v2 | Re-PESTEL si contexte changé |
+
+---
+
+## Mini-exo — le pitch d'un side project
+
+Prends une idée que tu as en tête (ou une fictive : *« app de partage de courses entre voisins »*) et remplis ces 3 livrables, 30 min chacun, jamais plus :
+
+1. **Lean Canvas** complet (1 page A4, à la main).
+2. **SWOT** focalisé produit (3 items max par case).
+3. **OKR du trimestre 1** (1 objectif, 3 KR chiffrés).
+
+Si après ces 90 min tu réalises que tu ne sais pas qui paiera (case Sources de revenus du Lean Canvas vide ou floue) ou que tu n'as aucun **avantage déloyal**, tu viens d'économiser **3 mois de dev**. C'est tout l'intérêt du cadrage stratégique : **tuer ses idées avant qu'elles ne te tuent**.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu pitches en interne une refonte de l'authentification. Ton manager te demande : « combien ça nous rapporte ? ». Quel framework structure le mieux la réponse ?"
+  options={[
+    'PESTEL — pour montrer le contexte légal',
+    'OKR avec 3 KR chiffrés (réduction des tickets support, taux d\'activation, churn)',
+    'Business Model Canvas du produit complet',
+    'Lean Canvas'
+  ]}
+  answerIndex={1}
+  explanation="OKR force à exprimer la valeur en métriques mesurables que ton manager partage avec sa direction. Le BMC ou Lean Canvas concernent un produit complet, pas une feature interne. PESTEL n'éclaire pas un ROI court terme."
+/>
+
+<Quiz
+  question="Dans un Lean Canvas, tu écris « notre tech est la plus rapide » dans la case « Avantage déloyal ». Quel est le souci ?"
+  options={[
+    'Aucun, c\'est pertinent',
+    'C\'est rattrapable en 6-12 mois par tout concurrent motivé : ce n\'est pas un vrai moat',
+    'Il faut le mettre dans Solution, pas Avantage déloyal',
+    'C\'est trop technique pour un Lean Canvas'
+  ]}
+  answerIndex={1}
+  explanation="Un avantage déloyal est ce qu'un concurrent ne peut PAS copier facilement : effet réseau, donnée propriétaire, marque, exclusivité contractuelle. La performance technique est un avantage temporaire, pas un moat. Si la case est vide ou faible, c'est un signal qu'il faut construire le moat — pas un détail à enjoliver."
+/>
+
+<Quiz
+  question="Sur un projet à 4 personnes, tu mets 2 personnes en « Accountable » sur la même tâche du RACI. Pourquoi c'est un anti-pattern ?"
+  options={[
+    'Ça double la charge de travail',
+    'Quand deux personnes valident, en pratique aucune ne valide vraiment et la décision ne se prend pas',
+    'RACI n\'autorise pas plusieurs A',
+    'Ça oblige à organiser des réunions'
+  ]}
+  answerIndex={1}
+  explanation="La règle « un seul A par ligne » n'est pas dogmatique : elle reflète qu'une responsabilité partagée à deux est une responsabilité dont personne ne se sent porteur. Dans le doute, chacun pense que l'autre va trancher. Le R peut être pluriel, le A doit être unique."
+/>
+
+<Quiz
+  question="Tu calcules un TAM de 850 milliards d'euros pour un SaaS RH France. Quel signal cela envoie ?"
+  options={[
+    'Excellent, le marché est énorme',
+    'Probablement faux : le TAM est top-down et confond marché de la RH mondiale avec ton segment réel',
+    'Il faut multiplier par 1,3 pour la croissance',
+    'C\'est cohérent si tu vises l\'Europe'
+  ]}
+  answerIndex={1}
+  explanation="850 Md€ correspond au marché mondial des logiciels RH et services associés, pas à un SaaS PME français. Un TAM trop gros est un signal de calcul top-down (« tout × prix unique »). Un investisseur préfère un TAM plus petit calculé bottom-up (X PME × Y €/an), avec un SOM réaliste à 3 ans."
+/>
+
+---
+
+## Limites à connaître
+
+Ces frameworks sont des **outils de pensée**, pas des oracles :
+
+- **SWOT et PESTEL** dépendent de ton honnêteté. Ils sont utiles si tu écris ce que tu vois, pas ce que tu veux voir.
+- **Porter** suppose un secteur stable. Sur des marchés à très forte vitesse (IA, crypto), le modèle s'épuise vite.
+- **Lean Canvas** ne remplace **jamais** une conversation avec un vrai client. Le canvas est un sommaire, pas une preuve.
+- **OKR mal utilisés** deviennent une bureaucratie. Si tu passes plus de temps à les rédiger qu'à exécuter, tu fais l'inverse.
+- **TAM/SAM/SOM** sont des estimations. Pas des chiffres exacts à 2 décimales.
+
+> *« Tous les modèles sont faux, certains sont utiles. »* — George Box
+
+---
+
+## Pour aller plus loin
+
+- *Business Model Generation* — Osterwalder & Pigneur (le livre original du BMC, format atypique très visuel)
+- *Running Lean* — Ash Maurya (Lean Canvas + validation client)
+- *Measure What Matters* — John Doerr (la bible OKR, par celui qui les a apportés à Google)
+- *The Mom Test* — Rob Fitzpatrick (avant tout Lean Canvas, parle à 10 clients)
+- *Competitive Strategy* — Michael Porter (long mais source primaire des 5 forces)
+- *strategyzer.com* — templates BMC / Lean Canvas téléchargeables
+
+---
+
+**Retour** : [Index axe 17](/17-carriere/) — la suite (modes d'exercice, éthique) est à venir.

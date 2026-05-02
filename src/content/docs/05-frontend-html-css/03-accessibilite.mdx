@@ -1,0 +1,389 @@
+---
+title: 5.3 — Accessibilité (a11y)
+description: WCAG 2.2 AA, lecteurs d'écran, contraste, navigation clavier — un site pour tout le monde, pas juste pour les valides.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<Level value="débutant" reading="25 min" prereq="axes 5.1 et 5.2 lus" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="3">
+Marie reçoit un mail d'une cliente fidèle de Lina, **Madame Dupond, 78 ans, malvoyante** : « J'ai voulu commander, mais sur l'écran je ne distingue pas le bouton "valider". Le texte est trop pâle. ». Marie réalise qu'elle code pour **elle**, pas pour ses utilisateurs. Elle va apprendre WCAG 2.2 AA, tester avec un lecteur d'écran, et corriger ses contrastes. C'est court, c'est rentable, et ça change la vie de Madame Dupond.
+</Scenario>
+
+<Scenario parcours="B" episode="3">
+Une élève d'Inès appelle : « impossible de cocher "yoga prénatal" dans le formulaire d'inscription, je suis sur smartphone, le bouton est minuscule ». Hugo découvre la **target size 24×24** de WCAG 2.2 et le focus visible. Il apprend aussi qu'**aria-label** sans contexte n'aide personne — il préfère utiliser des balises sémantiques natives.
+</Scenario>
+
+<Scenario parcours="C" episode="3">
+Sami sait que son catalogue va passer un audit RGAA externe (l'EAA entre en vigueur, son cabinet d'avocat l'a alerté). Il vise **WCAG 2.2 niveau AA** dès la V1 — moins cher que de patcher après. Il code avec axe DevTools ouvert en permanence et teste systématiquement à la souris ET au clavier ET avec NVDA.
+</Scenario>
+
+<Scenario parcours="D" episode="3">
+Plusieurs voisins de Léa sont âgés ou en situation de handicap — c'est même **eux qui ont le plus besoin de CoupDeMain** pour demander de l'aide. Si l'app n'est pas accessible, Léa rate sa cible. Elle vise WCAG AA strict : navigation clavier complète, NVDA-friendly, contrastes ≥ 4.5:1, focus visibles partout.
+</Scenario>
+
+<Scenario parcours="E" episode="3">
+Yanis sait que dans une vraie boîte, l'a11y est **non négociable** sur les apps internes (loi française, EAA, etc.). Il code Tasky comme s'il devait passer un audit interne. Le drag & drop kanban devient son cas dur : comment **déplacer une tâche au clavier seul** ? Il découvre les patterns ARIA et la lib `dnd-kit`.
+</Scenario>
+
+> 🎯 **Objectif** : produire des sites utilisables par les **15 % de personnes** ayant une situation de handicap (visuel, moteur, cognitif, auditif). Et accessoirement : **tu y gagnes en SEO et en UX pour tout le monde**.
+
+<ObjectiveList items={[
+  "Comprendre les 4 principes WCAG (POUR : Perceptible, Opérable, compréhensible, Robuste)",
+  "Atteindre la conformité WCAG 2.2 niveau AA",
+  "Tester avec axe-core, Lighthouse et un lecteur d'écran",
+  "Construire des composants courants (modal, menu, tabs) accessibles",
+  "Vérifier la navigation clavier complète"
+]} />
+
+
+## Pourquoi l'accessibilité ?
+
+3 raisons (par ordre d'importance) :
+
+1. **Éthique** : ~15 % de la population est en situation de handicap. Les écarter = exclusion active.
+2. **Légal** : la directive européenne 2025 oblige les sites privés > certain CA à être accessibles. Amendes possibles.
+3. **Business** : meilleur SEO (Google récompense l'accessibilité), meilleure UX **pour tous** (mobile, situations dégradées, navigation clavier des power users).
+
+## Le cadre WCAG — 4 principes
+
+**WCAG 2.2** (Web Content Accessibility Guidelines) repose sur **4 principes** : POUR.
+
+| Principe | Sens |
+|----------|------|
+| **P**erceptible | Les utilisateurs perçoivent l'information (texte alt, sous-titres, contraste) |
+| **O**pérable | Tout est utilisable au clavier, sans piège |
+| **U**ompréhensible | Lisible, prévisible, aide à la saisie |
+| **R**obuste | Compatible avec assistive tech (lecteurs d'écran, zoom, etc.) |
+
+3 niveaux : **A** (minimum), **AA** (cible légale), **AAA** (rare en pratique).
+
+**Cible standard pour un projet web : AA.**
+
+## Les 10 vérifications qui couvrent 80 %
+
+### 1. Texte alternatif sur les images (Perceptible)
+
+```html
+<!-- Informative -->
+<img src="/marie.jpg" alt="Marie souriant à l'école" />
+
+<!-- Décorative -->
+<img src="/decoration.svg" alt="" />
+
+<!-- Pour le bouton avec icône -->
+<button aria-label="Fermer la modale">
+  <svg aria-hidden="true">...</svg>
+</button>
+```
+
+### 2. Contraste suffisant (Perceptible)
+
+WCAG AA exige :
+
+- **Texte normal** (< 18pt) : ratio **≥ 4.5:1**
+- **Texte large** (≥ 18pt ou 14pt gras) : ratio **≥ 3:1**
+- **Composants UI et éléments graphiques** : **≥ 3:1**
+
+```css
+/* ❌ Insuffisant : 3.4:1 */
+body { color: #888; background: #fff; }
+
+/* ✅ AA : 4.5:1 */
+body { color: #595959; background: #fff; }
+
+/* ✅ AAA : 7:1 */
+body { color: #333; background: #fff; }
+```
+
+**Outils** : [Stark](https://www.getstark.co/), [Coolors contrast checker](https://coolors.co/contrast-checker), DevTools Chrome (color picker affiche le ratio).
+
+### 3. Navigation 100 % clavier (Opérable)
+
+Tous les éléments interactifs doivent être atteignables et utilisables au clavier (Tab, Espace, Entrée, Flèches).
+
+**Test minute** : appuie sur Tab depuis le début de ta page. Peux-tu **tout** atteindre ? L'**ordre** est-il logique ? Y a-t-il des **pièges** (focus qui ne peut plus sortir d'un élément) ?
+
+```css
+/* Toujours visible le focus */
+:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* JAMAIS ça */
+*:focus { outline: none; }   /* ❌ tu casses l'accessibilité */
+```
+
+### 4. Skip links (Opérable)
+
+Pour permettre aux utilisateurs clavier d'éviter de re-tabber dans la nav à chaque page :
+
+```html
+<body>
+  <a href="#main" class="skip-link">Aller au contenu principal</a>
+
+  <header>...</header>
+  <main id="main">...</main>
+</body>
+```
+
+```css
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: black;
+  color: white;
+  padding: 0.5rem 1rem;
+  z-index: 100;
+}
+.skip-link:focus {
+  top: 0;
+}
+```
+
+### 5. Labels associés aux inputs (Compréhensible)
+
+```html
+<!-- ✅ Bon -->
+<label for="email">E-mail</label>
+<input id="email" type="email" required />
+
+<!-- ✅ Aussi bon -->
+<label>
+  E-mail
+  <input type="email" required />
+</label>
+
+<!-- ❌ Mauvais : placeholder ≠ label -->
+<input type="email" placeholder="E-mail" />
+```
+
+Le `placeholder` disparaît dès que l'utilisateur tape. **Toujours un label visible** ; le placeholder peut servir d'**indication** complémentaire.
+
+### 6. Messages d'erreur clairs (Compréhensible)
+
+```html
+<label for="pwd">Mot de passe</label>
+<input id="pwd" type="password" aria-describedby="pwd-error" aria-invalid="true" />
+<p id="pwd-error" role="alert">Le mot de passe doit contenir au moins 8 caractères.</p>
+```
+
+- `aria-describedby` lie l'input au message.
+- `aria-invalid="true"` annonce l'état d'erreur aux lecteurs d'écran.
+- `role="alert"` fait annoncer immédiatement le message dès qu'il apparaît.
+
+### 7. Hiérarchie de titres logique (Compréhensible)
+
+Un seul `<h1>`. Pas de saut. Le texte des titres reflète le contenu, pas le style. **Voir [5.1](/05-frontend-html-css/01-html/)**.
+
+### 8. Lang sur `<html>` (Robuste)
+
+```html
+<html lang="fr">
+```
+
+Permet aux lecteurs d'écran de **prononcer correctement** (un même mot ne se lit pas pareil en français et en anglais).
+
+### 9. Touch targets ≥ 44×44 px (Opérable, WCAG 2.2)
+
+Les boutons / liens cliquables doivent faire au moins **44 × 44 pixels** (zone tap confortable au doigt).
+
+```css
+button, .btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+}
+```
+
+### 10. Mouvement réduit (Perceptible)
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+```
+
+Pour les utilisateurs avec troubles vestibulaires, animations rapides = vertige.
+
+## Tester l'accessibilité
+
+### Tests automatiques (50 % des bugs)
+
+```bash
+# Lighthouse intégré à Chrome — F12 puis onglet Lighthouse
+# Auditer le panel Accessibility
+
+# axe DevTools (extension Chrome/Firefox) — plus précis que Lighthouse
+
+# CLI pour CI :
+npx @axe-core/cli https://example.com
+npx pa11y https://example.com
+```
+
+### Tests manuels (50 % qu'on rate sinon)
+
+| Test | Comment |
+|------|---------|
+| Tab sur toute la page | Ordre logique ? rien d'oublié ? |
+| Activer un bouton au clavier | Espace et Entrée fonctionnent ? |
+| Zoom 200 % | Le contenu reste utilisable ? |
+| Texte 200 % uniquement (`Ctrl++`) | Pas de débordement ? |
+| Lecteur d'écran (NVDA gratuit / VoiceOver Mac) | Tu comprends la page sans la voir ? |
+
+### Tester avec un lecteur d'écran
+
+**Sur Mac** : `Cmd+F5` pour activer VoiceOver. Tab pour naviguer, `Ctrl+Opt+→` pour explorer.
+
+**Sur Windows** : [NVDA](https://www.nvaccess.org/) (gratuit). `Insert+down arrow` pour lire en continu.
+
+C'est **inconfortable les premières fois**, mais une heure passée à tester avec NVDA t'apprend plus que 10 articles.
+
+## Composants courants — patterns accessibles
+
+### Modal / dialog
+
+```html
+<button id="open-modal" type="button">Ouvrir</button>
+
+<dialog id="modal" aria-labelledby="modal-title">
+  <h2 id="modal-title">Confirmer la suppression</h2>
+  <p>Êtes-vous sûr ?</p>
+  <button autofocus>Annuler</button>
+  <button>Supprimer</button>
+</dialog>
+```
+
+```js
+const modal = document.getElementById('modal');
+document.getElementById('open-modal').addEventListener('click', () => {
+  modal.showModal();   // <dialog> natif gère focus trap, Esc, etc.
+});
+```
+
+L'élément **`<dialog>` natif** (2022+) gère gratuitement :
+- Focus trap (le focus reste dans la modale).
+- Touche `Escape` pour fermer.
+- Backdrop (fond grisé).
+- Lecteurs d'écran : annonce le rôle de dialog.
+
+**Évite les libs JS** si la balise native suffit.
+
+### Menu déroulant
+
+Pour un vrai menu (pas juste un dropdown), regarde le [pattern WAI-ARIA officiel](https://www.w3.org/WAI/ARIA/apg/patterns/menu/) — c'est subtil. En pratique, utilise une lib éprouvée (Radix UI, Headless UI) qui gère les claviers, focus, ARIA correctement.
+
+### Tabs
+
+Pareil — pattern complexe. **Radix Tabs** ou `<details>`/`<summary>` natifs si l'UX le permet (accordion plutôt que tabs).
+
+### Tooltips
+
+```html
+<button aria-describedby="tip-info">
+  Info
+</button>
+<span id="tip-info" role="tooltip" hidden>Plus d'infos</span>
+```
+
+Mais **les tooltips sont fragiles côté a11y** (mobile, navigation clavier…). Utilise-les avec parcimonie ; préfère afficher l'info directement quand possible.
+
+## Outils du dev quotidien
+
+### En continu
+
+- **`eslint-plugin-jsx-a11y`** : détecte des erreurs a11y dans les PR (React/JSX).
+- **`Pa11y CI`** ou **`@axe-core/playwright`** : tests E2E qui échouent si l'a11y baisse.
+
+### Audit ponctuel
+
+- **Lighthouse** (intégré Chrome) — vue d'ensemble.
+- **axe DevTools** — plus précis que Lighthouse.
+- **WAVE** — bookmarklet.
+- **HeadingsMap** — visualise la hiérarchie des titres.
+
+### Outils visuels
+
+- **Stark** (Figma, Chrome) — contraste, simulateur de daltonisme.
+- **Color Oracle** — simulateur daltonisme système-wide.
+
+## Erreurs à ne jamais commettre
+
+| ❌ Erreur | Pourquoi |
+|-----------|----------|
+| `outline: none` sans alternative | Cassé pour les utilisateurs clavier |
+| `<div onclick>` au lieu de `<button>` | Pas de focus, pas de Espace/Entrée, pas accessible |
+| Texte uniquement sur image | Pas indexable, pas zoomable, pas modifiable |
+| Police < 14px | Illisible pour les seniors, malvoyants |
+| Couleur seule pour transmettre l'info | Daltoniens (8 % des hommes) ne voient pas |
+| Texte mince et clair sur fond clair | Contraste insuffisant |
+| Animations qui bougent en permanence | Vestibulaire + distraction |
+| Boutons qui font moins de 24×24 px | Touch impossible sur mobile |
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu enlèves outline sur les boutons (`button:focus { outline: none; }`). Conséquence ?"
+  options={[
+    'Aucune, c\'est juste cosmétique',
+    'Les utilisateurs au clavier perdent toute indication visuelle de l\'élément focusé — bug d\'accessibilité majeur',
+    'Le SEO baisse',
+    'Le contraste change'
+  ]}
+  answerIndex={1}
+  explanation="Si tu retires l'outline, RIEN ne montre où on est dans la page au clavier. C'est l'erreur d'a11y la plus courante. Solution : retire l'outline laid si tu veux, mais ajoute `:focus-visible { outline: 2px solid blue; outline-offset: 2px; }`."
+/>
+
+<Quiz
+  question="Texte gris #888 sur fond blanc. Conforme WCAG AA ?"
+  options={[
+    'Oui, c\'est dans la zone confortable',
+    'Non, ratio 3.4:1 — il faut au moins 4.5:1 pour le texte normal en AA',
+    'Cela dépend de la police',
+    'Cela dépend du navigateur'
+  ]}
+  answerIndex={1}
+  explanation="#888 sur blanc donne ~3.4:1 — insuffisant. AA exige 4.5:1 pour le texte normal. Sois plus sombre : #595959 atteint 4.5:1. Vérifie toujours avec un outil — l'œil est mauvais juge."
+/>
+
+<Quiz
+  question="Tu as un bouton avec juste une icône X (fermer). Quel attribut ARIA ajouter ?"
+  options={[
+    'role="button"',
+    'aria-label="Fermer" sur le bouton, et aria-hidden="true" sur l\'icône SVG',
+    'tabindex="0"',
+    'Aucun, l\'icône est lisible'
+  ]}
+  answerIndex={1}
+  explanation="Un <button> a déjà role implicite. tabindex est natif. Mais sans texte, le lecteur d'écran annoncerait juste 'bouton'. aria-label='Fermer' donne un nom accessible. aria-hidden='true' sur le SVG empêche le lecteur de tenter de lire l'icône."
+/>
+
+## Pour aller plus loin
+
+- *WCAG 2.2 — Quick Reference* : [w3.org/WAI/WCAG22/quickref](https://www.w3.org/WAI/WCAG22/quickref/)
+- *Web Accessibility Initiative — ARIA Authoring Practices* : [w3.org/WAI/ARIA/apg](https://www.w3.org/WAI/ARIA/apg/)
+- *A11y Project* : [a11yproject.com](https://www.a11yproject.com/) — checklists et patterns
+- *Inclusive Components* — Heydon Pickering (livre + site, gratuit)
+- *Smashing Magazine — Accessibility* : tag avec articles de référence
+
+---
+
+**Fin de l'axe 5.** Direction l'[axe 6 — JavaScript & TypeScript](/06-javascript-typescript/), ou attaque l'exercice [Refonte Lighthouse](/05-frontend-html-css/#projet-de-laxe).

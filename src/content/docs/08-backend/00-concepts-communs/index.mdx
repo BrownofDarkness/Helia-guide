@@ -1,0 +1,581 @@
+---
+title: Concepts communs (agnostiques au langage)
+description: HTTP, REST, middlewares, validation, auth, files de messages — tout ce qui est vrai dans n'importe quel framework backend.
+sidebar:
+  order: 1
+---
+
+import Diagram from '../../../../components/Diagram.astro';
+import ObjectiveList from '../../../../components/ObjectiveList.astro';
+import Quiz from '../../../../components/Quiz.astro';
+import Scenario from '../../../../components/Scenario.astro';
+import ScenarioTabs from '../../../../components/ScenarioTabs.astro';
+import Term from '../../../../components/Term.astro';
+import Pitfall from '../../../../components/Pitfall.astro';
+import Level from '../../../../components/Level.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+<Level value="confirmé" reading="35 min" prereq="axes 5-7 lus" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="12">
+Lina arrive un matin chez Marie : « j'aimerais voir mes commandes du jour, sans qu'un client puisse voir celles des autres ». Marie réalise qu'elle a besoin d'**un vrai backend** : pas seulement un endpoint, mais des **utilisateurs authentifiés**, des **rôles** (Lina = admin, clients = users), une **file** pour envoyer les emails de confirmation, des **logs** pour debugger. Elle plonge dans HTTP, REST, middlewares, auth.
+</Scenario>
+
+<Scenario parcours="B" episode="11">
+Studio Pulse passe en prod. Hugo doit gérer : auth (élève / prof / admin), réservation **transactionnelle** (pas d'overbooking), paiement Stripe avec webhook idempotent, email Resend. Tous ces sujets sont **agnostiques au langage** — il les comprend ici avant de plonger dans Hono/Express.
+</Scenario>
+
+<Scenario parcours="C" episode="12">
+Sami structure le backend de GreenBox : produits, panier, commandes, créneaux livraison. Il veut une <Term>API</Term> <Term>REST</Term> propre (méthodes, codes, idempotence), validation systématique avec Zod, <Term>JWT</Term> pour l'auth, et une queue pour les emails de confirmation.
+</Scenario>
+
+<Scenario parcours="D" episode="12">
+Léa code l'API de CoupDeMain : demandes, profils, messages privés, signalements. Sécurité critique (messages privés = RGPD). Elle apprend les patterns auth (cookies HttpOnly), <Term>RLS</Term> Postgres pour l'isolation par utilisateur, et les <Term>webhook</Term> entrants.
+</Scenario>
+
+<Scenario parcours="E" episode="12">
+Yanis attaque le backend Tasky. Il ouvre l'exo `taskly-api` du guide (axe 8.1) qu'il va reprendre. Avant de plonger dans Hono, il veut comprendre les **concepts agnostiques** : pipeline middleware → handler, validation Zod, auth cookie, RBAC (président / coach / bénévole).
+</Scenario>
+
+> 🎯 **Objectif** : maîtriser le **vocabulaire et les patterns** que tu retrouveras à l'identique dans Node, Python ou PHP. Ces 6 thèmes couvrent **80 %** de ce qu'on fait sur un backend web.
+
+<ObjectiveList items={[
+  "Décrire le pipeline d'une requête : middlewares → handler → réponse",
+  "Concevoir une API REST conforme (méthodes, codes, idempotence, pagination)",
+  "Valider toutes les entrées avec un schéma (Zod, Pydantic, Symfony Validator)",
+  "Choisir entre sessions, JWT, Passkeys ; entre RBAC et ABAC",
+  "Faire tourner un job de fond avec une file (Redis/BullMQ, Celery, Symfony Messenger)",
+  "Configurer logs structurés et variables d'environnement façon 12-factor"
+]} />
+
+## A. HTTP, routing, middleware
+
+Avant tout : tu as déjà couvert HTTP en profondeur dans l'**[axe 2](/02-web/02-http/)**. Ici, on regarde **ce que le serveur fait** quand une requête arrive.
+
+### Le pipeline
+
+<Diagram
+  caption="Pipeline d'une requête HTTP côté serveur"
+  code={`
+    flowchart LR
+      Req[Requête HTTP] --> M1[Logger]
+      M1 --> M2[CORS]
+      M2 --> M3[Body parser]
+      M3 --> M4[Auth]
+      M4 --> M5[Validation]
+      M5 --> H[Handler<br/>logique métier]
+      H --> Resp[Réponse HTTP]
+      H -.erreur.-> EH[Error handler]
+      EH --> Resp
+  `}
+/>
+
+### Middlewares
+
+Un **middleware** est une fonction qui intercepte la requête, fait quelque chose, puis **passe la main** à la suivante (ou court-circuite). C'est le pattern universel — qu'on l'appelle middleware (Express, Fastify, Koa), interceptor (NestJS), middleware (Django/FastAPI/Laravel), ou guard (NestJS, Symfony).
+
+**Exemple en Node/Hono** :
+
+```ts
+import { Hono } from 'hono';
+import { logger } from 'hono/logger';
+import { cors } from 'hono/cors';
+
+const app = new Hono();
+app.use('*', logger());
+app.use('*', cors());
+app.use('/admin/*', async (c, next) => {
+  if (!c.req.header('X-Admin-Key')) return c.json({ error: 'Unauthorized' }, 401);
+  await next();
+});
+```
+
+**L'ordre compte** : logger en premier (sinon il rate les erreurs), auth avant validation (sinon on valide pour rien), gestion d'erreur en dernier.
+
+### Bonnes pratiques
+
+- **Logger structuré** (JSON) : permet le grep efficace en prod.
+- **CORS** restrictif : pas `*` en prod sauf API publique.
+- **Rate-limit** sur les endpoints sensibles (login, signup, reset password).
+- **Body size limit** : un POST de 100 Mo non attendu = DoS.
+- **Helmet** ou équivalent : ajoute en-têtes de sécu (X-Frame-Options, etc.).
+
+## B. Conception d'API
+
+### REST — les principes utiles
+
+Pour les **80 %** des cas, REST suffit. Les principes essentiels :
+
+| Principe | Exemple |
+|----------|---------|
+| **Ressource** identifiée par URL | `/tasks/42`, pas `/getTask?id=42` |
+| **Méthode HTTP** par action | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` |
+| **Codes de statut** standards | `201` à la création, `204` pour DELETE, `404`, `422`, `429` |
+| **Idempotence** | `PUT /tasks/42` 10 fois = 1 fois |
+| **Sans état** | Pas de session serveur dépendante de la requête précédente |
+
+### Pagination, filtrage, tri
+
+```
+GET /tasks?status=done&sort=-created_at&page=2&limit=20
+```
+
+3 styles courants :
+
+| Style | Exemple | Quand utiliser |
+|-------|---------|----------------|
+| **Offset** | `?offset=40&limit=20` | Petits volumes, tri stable |
+| **Cursor** | `?after=abc123&limit=20` | Gros volumes, pagination temps réel |
+| **Page** | `?page=3&limit=20` | UX simple, frontends classiques |
+
+**Réponse paginée** standard :
+
+```json
+{
+  "data": [...],
+  "pagination": {
+    "total": 142,
+    "page": 3,
+    "limit": 20,
+    "next_cursor": "abc123"
+  }
+}
+```
+
+### Versioning
+
+3 façons de versionner une API :
+
+| Méthode | Exemple | Verdict |
+|---------|---------|---------|
+| URL | `/v1/tasks` | Le plus lisible, le plus utilisé |
+| Header | `Accept: application/vnd.api.v1+json` | Plus propre, plus strict |
+| Query | `?version=1` | À éviter, mal conventionnel |
+
+**Conseil pratique** : versionne **dès le 1er release public** (`/v1`). Ajouter une version après coup est pénible.
+
+### OpenAPI / Swagger
+
+Spécification standard pour décrire ton API. Outils : génération de doc (Swagger UI, Redoc), génération de clients (TypeScript, Python, Go), validation de contrat.
+
+```yaml
+# openapi.yaml — extrait
+paths:
+  /tasks/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          schema: { type: integer }
+      responses:
+        '200':
+          description: La tâche
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '404': { description: Introuvable }
+```
+
+**FastAPI** la génère gratuitement, **NestJS** via décorateurs, **Symfony API Platform** également. C'est le **gold standard**.
+
+### Alternatives — GraphQL, gRPC, tRPC
+
+| | Quand préférer |
+|---|---|
+| **GraphQL** | Frontends qui agrègent beaucoup de données ; mobile (1 requête au lieu de 10) |
+| **gRPC** | Microservices internes, performance critique, stream bidirectionnel |
+| **tRPC** | Stack 100 % TypeScript end-to-end ; pas d'API publique exposée |
+
+REST reste le **défaut universel** en 2026. Les autres ont leur niche.
+
+## C. Validation et sérialisation
+
+> **Règle absolue** : **valider TOUS les inputs** côté serveur. Le client est hostile par défaut.
+
+### Schémas, partout
+
+Au lieu de `if (!body.email || !body.email.includes('@'))`, déclare un **schéma** qui valide ET type :
+
+| Langage | Lib |
+|---------|-----|
+| **TypeScript** | **Zod** (le plus utilisé), Valibot, ArkType |
+| **Python** | **Pydantic** (cœur de FastAPI) |
+| **PHP** | **Symfony Validator**, **Laravel Validation** |
+| **Java/Kotlin** | Bean Validation (`@NotNull`, `@Email`) |
+
+### Exemple Zod
+
+```ts
+import { z } from 'zod';
+
+const CreateTaskSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  due_at: z.string().datetime().optional(),
+  priority: z.enum(['low', 'medium', 'high']).default('medium'),
+});
+
+type CreateTaskInput = z.infer<typeof CreateTaskSchema>;
+
+// Dans le handler
+const body = CreateTaskSchema.parse(await req.json());
+//   ^ throw ZodError si invalide
+//   body est typé CreateTaskInput
+```
+
+### Sérialisation et DTO
+
+Quand tu retournes une ressource, **tu choisis** ce que tu exposes :
+
+```ts
+// ❌ Tu exposes le password hash, l'IP de connexion, le token de reset…
+res.json(await db.user.findById(id));
+
+// ✅ Tu exposes uniquement ce qui doit l'être
+const user = await db.user.findById(id);
+res.json({
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  // password, ip, reset_token NON exposés
+});
+```
+
+Beaucoup d'ORM proposent des **mécanismes** : `select` Prisma, serializers DRF, view objects Symfony. Utilise-les **systématiquement**.
+
+## D. Authentification et autorisation
+
+**Authentification** = qui es-tu ?
+**Autorisation** = qu'as-tu le droit de faire ?
+
+Deux questions distinctes, à ne pas confondre.
+
+### Stratégies d'auth
+
+| Stratégie | Comment ça marche | Quand l'utiliser |
+|-----------|-------------------|------------------|
+| **Session + cookie** | Le serveur stocke la session, le client renvoie un cookie | Apps web monolithes (Rails, Django, Laravel) |
+| **JWT (Bearer)** | Token signé contenant les claims, vérifié par le serveur | API stateless, mobile, microservices |
+| **JWT en cookie HttpOnly** | Le meilleur des deux | SPA + API (recommandé) |
+| **OAuth 2.1 + OIDC** | Délégué à un fournisseur (Google, GitHub) | « Sign in with X » |
+| **Magic links** | Email → lien à usage unique | Passwordless, UX simple |
+| **Passkeys (WebAuthn)** | Clé publique stockée côté serveur, signature côté device | **Standard 2026+** — sécurité maximale, UX excellente |
+
+### Le pattern moderne : JWT en cookie HttpOnly
+
+```
+1. Login : POST /auth/login { email, password }
+2. Serveur vérifie, génère un JWT, pose un cookie HttpOnly Secure SameSite=Lax
+3. Requêtes suivantes : le navigateur envoie le cookie auto, le serveur valide la signature
+4. Logout : suppression du cookie
+```
+
+✅ Inaccessible au JS (donc pas volable par XSS).
+✅ Auto-envoyé sur toutes les requêtes.
+✅ `SameSite=Lax` protège du CSRF.
+
+### Hash des mots de passe
+
+**Jamais** en clair. **Jamais** SHA-256 simple. **Toujours** un algo lent et salé conçu pour ça :
+
+| Algo | Avis |
+|------|------|
+| **argon2id** | ✅ Recommandé en 2026 |
+| **bcrypt** | ✅ Toujours valide |
+| **scrypt** | ✅ Acceptable |
+| MD5, SHA-1, SHA-256 | ❌ Cassés ou trop rapides |
+
+```ts
+import { hash, verify } from '@node-rs/argon2';
+
+const hashed = await hash(plainPassword);
+// ...
+const ok = await verify(hashed, plainPassword);
+```
+
+### Autorisation — RBAC et ABAC
+
+| Modèle | Sens | Exemple |
+|--------|------|---------|
+| **RBAC** (Role-Based) | Rôles fixes : admin, editor, viewer | « Les éditeurs peuvent créer un article » |
+| **ABAC** (Attribute-Based) | Règles sur attributs de l'utilisateur ET de la ressource | « Un user peut éditer son propre profil mais pas celui des autres » |
+| **Policy-as-Code** | DSL ou langage dédié | OPA (Rego), Cerbos |
+
+**En pratique** : commence en RBAC. Bascule vers ABAC quand des règles deviennent contextuelles. Policy-as-code pour gros systèmes.
+
+```ts
+// Exemple ABAC simple
+function canEditTask(user: User, task: Task): boolean {
+  if (user.role === 'admin') return true;
+  if (task.ownerId === user.id) return true;
+  if (task.team.members.includes(user.id) && user.role === 'editor') return true;
+  return false;
+}
+```
+
+## E. Tâches asynchrones et messagerie
+
+### Pourquoi sortir du cycle requête-réponse ?
+
+Si une action prend > 1 seconde (envoi d'email, génération PDF, ré-encodage vidéo), **ne la fais PAS dans le handler**. Tu :
+
+1. Pousses la tâche dans une **file** (queue).
+2. Réponds **immédiatement** au client.
+3. Un **worker** consomme la file en arrière-plan.
+
+<Diagram
+  caption="Architecture worker — la file découple producteur et consommateur"
+  code={`
+    flowchart LR
+      C((Client)) --> API[API HTTP]
+      API -->|push job| Q[(Queue<br/>Redis/RabbitMQ)]
+      API -->|reponse 202<br/>immediate| C
+      Q --> W1[Worker 1]
+      Q --> W2[Worker 2]
+      W1 --> DB[(DB)]
+      W2 --> Email[Service email]
+  `}
+/>
+
+### Brokers courants
+
+| Broker | Style | Cas typique |
+|--------|-------|-------------|
+| **Redis** + lib applicative | Simple, in-memory, persistant | BullMQ (Node), Celery (Python), Sidekiq (Ruby) |
+| **RabbitMQ** | AMQP, riche en routage | Apps complexes avec topics |
+| **Kafka** | Pub/sub haut volume, durable | Event streaming, microservices à l'échelle |
+| **AWS SQS / GCP Pub-Sub** | Cloud managé | AWS-native, peu d'ops |
+
+### Patterns à connaître
+
+- **Idempotence du job** : un même job réexécuté ne doit pas créer de doublons. Utilise un `idempotency_key`.
+- **Retry exponentiel** : 1 s, 5 s, 30 s, 2 min… Plafonne le nombre de retries (5 souvent).
+- **Dead Letter Queue (DLQ)** : les jobs qui échouent N fois vont dans une queue séparée pour analyse manuelle.
+- **Cron / scheduled tasks** : pour des jobs récurrents (rapport quotidien, cleanup hebdo). Soit cron OS, soit scheduler applicatif (BullMQ Cron, Celery Beat).
+
+### Exemple BullMQ
+
+```ts
+import { Queue, Worker } from 'bullmq';
+
+const emailQueue = new Queue('emails', { connection: { host: 'localhost', port: 6379 } });
+
+// Producteur (dans le handler)
+await emailQueue.add('welcome', { userId: 42 }, {
+  attempts: 5,
+  backoff: { type: 'exponential', delay: 1000 },
+});
+
+// Worker (process séparé)
+new Worker('emails', async (job) => {
+  await sendEmail(job.data.userId);
+}, { connection: { host: 'localhost', port: 6379 } });
+```
+
+## F. Logs, erreurs, configuration
+
+### 12-factor app — la check-list
+
+[12factor.net](https://12factor.net/) — une référence essentielle. Les points clés pour un backend :
+
+| Facteur | Action concrète |
+|---------|-----------------|
+| **Config dans l'environnement** | `process.env.DATABASE_URL`, jamais en dur |
+| **Logs en flux d'événements** | `console.log` → stdout, pas de fichier |
+| **Stateless** | Pas d'état dans le process |
+| **Disposable** | Démarrage rapide, arrêt propre (SIGTERM gracieusement géré) |
+| **Dev/prod parity** | Mêmes outils en dev qu'en prod (Docker, Postgres) |
+
+### Logs structurés (JSON)
+
+```ts
+// ❌ Texte plat, dur à parser
+console.log('User 42 logged in from 1.2.3.4');
+
+// ✅ JSON structuré
+logger.info({ event: 'user_login', userId: 42, ip: '1.2.3.4' });
+```
+
+Avec un agrégateur (Datadog, Loki, Sentry), tu peux :
+- Filtrer par champ (`userId: 42`).
+- Détecter des patterns.
+- Corréler les événements (par `requestId` injecté en début de pipeline).
+
+**Libs recommandées** :
+
+| Langage | Lib |
+|---------|-----|
+| Node | **pino**, winston |
+| Python | **structlog**, logging stdlib |
+| PHP | **Monolog** (standard Symfony/Laravel) |
+
+### Gestion d'erreur centralisée
+
+```ts
+// ❌ try/catch dans chaque handler
+app.get('/users/:id', async (req, res) => {
+  try {
+    const user = await getUser(req.params.id);
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ✅ Middleware d'erreur global
+app.get('/users/:id', async (req, res) => {
+  const user = await getUser(req.params.id);   // throw si problème
+  res.json(user);
+});
+
+app.use((err, req, res, next) => {
+  if (err instanceof NotFoundError) return res.status(404).json({ error: err.message });
+  if (err instanceof ZodError) return res.status(422).json({ errors: err.issues });
+  logger.error({ err, path: req.path });
+  res.status(500).json({ error: 'Server error' });
+});
+```
+
+Couplé à **Sentry** ou équivalent : tu vois en quasi-temps réel chaque exception en prod, avec stacktrace, breadcrumbs, contexte utilisateur.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu reçois un POST /users avec un body JSON. Que fais-tu en premier ?"
+  options={[
+    "Tu insères directement en DB, c'est plus rapide",
+    "Tu valides le body avec un schéma (Zod, Pydantic, Symfony Validator) avant tout traitement",
+    "Tu fais une requête de pré-vérification au client",
+    "Tu logs l'IP"
+  ]}
+  answerIndex={1}
+  explanation="Valider TOUTES les entrées avec un schéma est le filet de sécurité fondamental. Le client peut envoyer n'importe quoi (utilisateur malveillant, bug, version de client incompatible). Sans validation : injections, données corrompues, exceptions imprévisibles. Avec : tu rejettes proprement avec un 422 et tu vois exactement où c'est invalide."
+/>
+
+<Quiz
+  question="Tu envoies un email de confirmation à l'inscription. Le service email met 800 ms. Comment structurer ?"
+  options={[
+    'Attendre dans le handler — l\'utilisateur attend',
+    'Pousser un job dans une queue, répondre 201 immédiatement, le worker envoie l\'email',
+    'Faire en parallèle avec Promise.all',
+    'Lancer un setTimeout'
+  ]}
+  answerIndex={1}
+  explanation="Au-delà de ~200 ms d'opération non-essentielle pour la réponse, sors-la du handler : la queue. Bénéfices : latence utilisateur basse, retry automatique si le service email tombe, scale indépendant des workers. C'est le pattern fondamental d'un backend solide."
+/>
+
+<Quiz
+  question="Tu hashes un mot de passe avec SHA-256 + sel. Avis ?"
+  options={[
+    'OK si le sel est unique par utilisateur',
+    'Insuffisant : SHA-256 est trop rapide. Un attaquant peut tester des milliards de hashes/sec sur GPU. Utilise argon2id ou bcrypt qui sont DÉLIBÉREMENT lents',
+    'Parfait',
+    'Il faudrait MD5 à la place'
+  ]}
+  answerIndex={1}
+  explanation="SHA-256 est conçu pour être rapide (gigahashs/sec sur GPU). argon2id et bcrypt sont délibérément lents (~100 ms par hash) et configurables : un brute-force devient infiniment plus coûteux. C'est la spécificité des algos de hash de mots de passe, à ne JAMAIS confondre avec les hashs cryptographiques généraux."
+/>
+
+## Pour aller plus loin
+
+- *RESTful Web APIs* — Leonard Richardson (la bible REST)
+- *Designing Data-Intensive Applications* — Martin Kleppmann (au-delà du backend simple)
+- *OpenAPI Specification* — [openapis.org](https://www.openapis.org/)
+- *OAuth 2.1* — [oauth.net/2.1](https://oauth.net/2.1/)
+- *The Twelve-Factor App* — [12factor.net](https://12factor.net/)
+- *OWASP Cheat Sheets* — [cheatsheetseries.owasp.org](https://cheatsheetseries.owasp.org/)
+
+---
+
+## 🪤 Pièges réels rencontrés
+
+<Pitfall title="hono/jwt verify échoue : « JwtAlgorithmRequired »" category="auth" axe="8.0">
+
+**🩹 Symptôme**
+
+```
+JwtAlgorithmRequired: JWT verification requires "alg" option to be specified
+    at verifyToken (src/lib/jwt.ts:22)
+```
+
+**🔍 Cause**
+
+Depuis Hono 4.x, `verify(token, secret)` ne prend plus d'algorithme par défaut — il faut le passer explicitement. C'est une **mesure de sécurité** : ne pas spécifier l'algorithme rend l'app vulnérable à l'attaque dite **alg-confusion** (un attaquant qui forge un token avec `alg=none`, ou en HS256 contre une clé RS256 publique).
+
+**🩺 Fix**
+
+Passer explicitement l'algorithme à `sign` ET `verify` :
+
+```ts
+const ALG = 'HS256' as const;
+
+export async function signToken(userId: number) {
+  return sign({ sub: String(userId), exp: ... }, JWT_SECRET, ALG);
+}
+export async function verifyToken(token: string) {
+  return verify(token, JWT_SECRET, ALG);
+}
+```
+
+**🧠 Leçon**
+
+Pour les libs sécurité, **toujours lire le changelog avant d'upgrader**. Quand une lib bouge ses defaults dans le sens « plus strict », c'est généralement parce qu'on a corrigé une vulnérabilité connue.
+
+</Pitfall>
+
+<Pitfall title="@hono/zod-validator renvoie 400 au lieu de 422" category="tests" axe="8.0">
+
+**🩹 Symptôme**
+
+```ts
+expect(res.status).toBe(422);
+// AssertionError: expected 400 to be 422
+```
+
+**🔍 Cause**
+
+Le `zValidator` de Hono renvoie un **400 Bad Request** par défaut quand la validation échoue. Mais la convention REST moderne dit que **422 Unprocessable Entity** est plus précis quand la requête est syntaxiquement valide mais sémantiquement invalide (un email mal formé, un champ requis absent…).
+
+**🩺 Fix**
+
+Wrapper `zValidator` dans un helper qui force 422 :
+
+```ts
+// src/lib/validator.ts
+import { zValidator } from '@hono/zod-validator';
+import type { ZodSchema } from 'zod';
+
+export function validate<T extends ZodSchema>(
+  target: 'json' | 'query' | 'param',
+  schema: T
+) {
+  return zValidator(target, schema, (result, c) => {
+    if (!result.success) {
+      return c.json(
+        { error: 'Validation failed', issues: result.error.issues },
+        422
+      );
+    }
+  });
+}
+```
+
+Puis dans les routes : `validate('json', MySchema)` au lieu de `zValidator(...)`.
+
+**🧠 Leçon**
+
+Quand un framework expose des defaults qui ne matchent pas ta convention (codes HTTP, format d'erreur, schéma de réponse), **wrap-le dans un helper** plutôt que de l'utiliser brut partout. Tu écris la convention **une fois**, et tu peux la changer **une fois** au lieu de 30 fois.
+
+</Pitfall>
+
+> 🔍 Tous les pièges du guide sont sur la page **[/pieges/](/pieges/)** — searchable par symptôme.
+
+---
+
+**Suite** : choisis ton parcours :
+- [Node.js / TypeScript](/08-backend/01-nodejs-typescript/) — le plus pratique en full-stack JS, avec Hono comme défaut moderne
+- [Python](/08-backend/02-python/) — Django pour CRUD complets, Flask pour minimaliste, FastAPI pour API async typée
+- [PHP](/08-backend/03-php/) — PHP 8.4 + Laravel ou Symfony

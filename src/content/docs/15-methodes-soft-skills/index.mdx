@@ -1,0 +1,73 @@
+---
+title: Axe 15 — Méthodes & soft skills
+description: Agile, communication, écriture technique, apprendre à apprendre.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : devenir le coéquipier que les autres veulent dans leur équipe — méthode adaptée au contexte, communication claire, feedback constructif, et une discipline d'apprentissage durable.
+
+## Prérequis
+
+Aucun prérequis technique, mais cet axe prend tout son sens après quelques projets en équipe.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Choisir Scrum, Kanban, ShapeUp ou XP selon le contexte (et les combiner)",
+  "Configurer Linear / Jira / GitHub Projects et écrire des tickets exploitables",
+  "Rédiger RFC, ADR, post-mortem suivant des templates éprouvés",
+  "Donner et recevoir un feedback de revue de code respectueux et utile",
+  "Construire une routine d'apprentissage durable (Feynman, espacement, IA raisonnée)"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="15.1 — Méthodes agiles"
+    href="/15-methodes-soft-skills/01-methodes-agiles/"
+    description="Manifeste agile, Scrum, Kanban, ShapeUp, XP. Cérémonies, rôles, métriques (lead time, throughput, WIP). Quand chaque méthode brille / souffre. Anti-patterns courants."
+  />
+  <LinkCard
+    title="15.2 — Outils"
+    href="/15-methodes-soft-skills/02-outils/"
+    description="Linear, Jira, GitHub Projects, Notion. Anatomie d'un bon ticket, DoR / DoD, nomenclature de labels, doc qui ne pourrit pas, automations utiles."
+  />
+  <LinkCard
+    title="15.3 — Communication & collaboration"
+    href="/15-methodes-soft-skills/03-communication/"
+    description="Async par défaut, RFC, ADR, post-mortem blameless, code review (Conventional Comments), pair / mob programming, feedback SBI, sécurité psychologique, réunions justifiées."
+  />
+  <LinkCard
+    title="15.4 — Apprendre à apprendre"
+    href="/15-methodes-soft-skills/04-apprendre/"
+    description="Méthode Feynman, espacement et active recall, lecture de doc / code source, veille soutenable (sans FOMO), usage raisonné de l'IA, projets fil rouge, anti-burn-out."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Faux sprint d'équipe — 2 semaines de vrais rituels.** DoR/DoD, backlog priorisé MoSCoW, sprint planning, dailies, PR avec Conventional Comments, ADR, post-mortem blameless, rétro qui produit 2 actions concrètes. **Aucun code à écrire** — tu vis les rituels en équipe (ou en solo split-brain) sur n'importe quel mini-projet existant.
+
+<ExerciseDownload
+  axe="15-methodes-soft-skills"
+  slug="01-faux-sprint"
+  title="Faux sprint d'équipe — 7 rituels en pratique"
+  description="Pré-requis : un repo Git existant + un compte GitHub Projects ou Linear. Tu apprends à écrire un ticket que les autres peuvent prendre, à reviewer une PR sans froisser, à mener une rétro qui produit des actions, à rédiger un post-mortem blameless. La discipline qui distingue un dev solo d'un coéquipier."
+/>
+
+## Ressources clés
+
+- *The Pragmatic Programmer* — Hunt & Thomas
+- *ShapeUp* — Ryan Singer (gratuit, Basecamp)
+- *The Manager's Path* — Camille Fournier
+- *Crucial Conversations* — Patterson et al.
+- *The Fearless Organization* — Amy Edmondson
+- *Make It Stick* — Brown, Roediger, McDaniel
+- *Conventional Comments* — [conventionalcomments.org](https://conventionalcomments.org/)
+- *Diátaxis* — [diataxis.fr](https://diataxis.fr/)

@@ -1,0 +1,325 @@
+---
+title: 1.2 — Ligne de commande
+description: Le terminal est l'outil le plus rentable que tu apprendras. Navigation, inspection, redirections, scripts.
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : être à l'aise dans un terminal pour naviguer, inspecter des fichiers, enchaîner des commandes et écrire un petit script utilitaire.
+
+<ObjectiveList items={[
+  "Naviguer dans le système de fichiers (cd, ls, pwd) sans cliquer",
+  "Inspecter et chercher dans des fichiers (cat, less, grep, find)",
+  "Combiner des commandes avec pipes et redirections",
+  "Comprendre les permissions Unix et les modifier",
+  "Écrire un script shell avec variables, conditions et boucles"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="aucun" />
+
+
+## Pourquoi le terminal ?
+
+Trois raisons :
+
+1. **Vitesse** : `mv *.jpg images/` est plus rapide que glisser-déposer 1 000 photos.
+2. **Reproductibilité** : tu peux scripter ce que tu fais, le partager, le rejouer.
+3. **Universalité** : sur tout serveur Linux, c'est ta seule interface.
+
+Si tu as fait l'[axe 1.1](/01-fondations/01-materiel-os/) et installé WSL2 (ou tu es sous macOS/Linux), tu peux suivre. Sous PowerShell pur, la plupart des commandes existent en équivalent.
+
+## L'invite et l'environnement
+
+Quand tu ouvres un terminal, tu vois quelque chose comme :
+
+```
+user@machine:~/projects$
+```
+
+- `user` : ton nom d'utilisateur
+- `machine` : nom de la machine
+- `~/projects` : ton **répertoire courant** (`~` = ton home, `~/projects` = `/home/user/projects`)
+- `$` : tu es un utilisateur normal (`#` apparaît si tu es root)
+
+## Les 10 commandes vitales
+
+### Navigation
+
+```bash
+pwd                 # print working directory : où suis-je ?
+ls                  # list : que contient le dossier ?
+ls -la              # tout afficher, format détaillé
+cd Documents        # change directory
+cd ..               # remonter d'un cran
+cd ~                # aller dans ton home
+cd -                # revenir au dossier précédent
+```
+
+### Manipulation de fichiers
+
+```bash
+mkdir nouveau              # créer un dossier
+mkdir -p a/b/c             # créer toute l'arborescence
+touch fichier.txt          # créer un fichier vide (ou maj de date)
+cp source dest             # copier
+cp -r dossier/ copie/      # copier récursivement (dossiers)
+mv ancien nouveau          # déplacer ou renommer
+rm fichier                 # supprimer (irréversible !)
+rm -rf dossier/            # supprimer récursivement et de force
+```
+
+<Aside type="danger" title="rm -rf est dangereux">
+`rm -rf /` peut effacer tout le système. La commande mythique *« j'ai cassé mon serveur de prod »* commence souvent par là. **Toujours vérifier le chemin avant.** Mieux : alias `rm` vers `rm -i` (interactif) sur ta machine de dev.
+</Aside>
+
+### Inspection
+
+```bash
+cat fichier.txt            # afficher tout
+less fichier.txt           # lire page par page (q pour quitter)
+head -n 20 fichier.txt     # 20 premières lignes
+tail -n 50 fichier.txt     # 50 dernières lignes
+tail -f log.txt            # suivre en temps réel (très utile pour les logs)
+wc -l fichier.txt          # compter les lignes
+file image                 # deviner le type d'un fichier
+```
+
+### Recherche
+
+```bash
+find . -name "*.js"                  # tous les .js dans le dossier courant
+find . -type f -size +10M            # fichiers > 10 Mo
+grep "TODO" fichier.txt              # chercher dans un fichier
+grep -r "TODO" .                     # chercher récursivement
+grep -rn "TODO" . --include="*.js"   # avec numéro de ligne, dans les .js
+```
+
+<Aside type="tip" title="ripgrep, le grep moderne">
+Installe [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) et tu ne reviendras pas à `grep`. 10× plus rapide, respecte `.gitignore` par défaut, syntaxe identique.
+
+```bash
+rg "TODO"                  # cherche partout, en ignorant node_modules
+rg "TODO" -t js            # uniquement dans les fichiers JS
+```
+</Aside>
+
+## Pipes et redirections
+
+Le **pipe** (`|`) connecte la sortie d'une commande à l'entrée de la suivante. C'est l'idée géniale d'Unix.
+
+```bash
+# Compter les fichiers .js dans un projet
+find . -name "*.js" | wc -l
+
+# Trouver les 10 plus gros fichiers
+du -ah . | sort -rh | head -n 10
+
+# Lister les processus consommant le plus de RAM
+ps aux | sort -rk 4 | head -n 5
+```
+
+Les **redirections** envoient la sortie ailleurs que vers l'écran :
+
+```bash
+echo "ligne 1" > fichier.txt        # > écrase le fichier
+echo "ligne 2" >> fichier.txt       # >> ajoute à la fin
+commande 2> erreurs.log              # 2> redirige stderr
+commande > sortie.log 2>&1           # tout (stdout + stderr) dans le même fichier
+commande < entree.txt                # < lit depuis un fichier
+```
+
+## Permissions Unix
+
+Chaque fichier a un **propriétaire**, un **groupe**, et trois ensembles de permissions : lecture (`r`), écriture (`w`), exécution (`x`).
+
+```bash
+ls -l
+# -rw-r--r--  1 alice  users  1024 Apr 29 14:00 notes.txt
+#  ↑ ↑↑↑↑↑↑↑↑↑
+#  type | propriétaire | groupe | autres
+```
+
+**Lire les permissions de gauche à droite** :
+- 1er caractère : `-` fichier, `d` dossier, `l` lien
+- 3 suivants : permissions du **propriétaire**
+- 3 suivants : permissions du **groupe**
+- 3 derniers : permissions des **autres**
+
+### Modifier
+
+```bash
+chmod +x script.sh         # rendre exécutable
+chmod 755 script.sh         # rwxr-xr-x (notation octale)
+chown alice fichier         # changer le propriétaire
+chgrp devs fichier          # changer le groupe
+```
+
+**Notation octale** : `rwx` = `4+2+1` = `7`. Donc `755` = propriétaire `rwx`, groupe `r-x`, autres `r-x`.
+
+| Octal | Permissions | Cas typique |
+|-------|-------------|-------------|
+| `644` | `rw-r--r--` | Fichier de config |
+| `755` | `rwxr-xr-x` | Script ou binaire |
+| `600` | `rw-------` | Clé SSH privée |
+| `700` | `rwx------` | Dossier `~/.ssh` |
+
+## Variables d'environnement et `PATH`
+
+```bash
+echo $HOME                  # /home/alice
+echo $PATH                  # liste des dossiers où le shell cherche les exécutables
+export API_KEY="abc123"     # définir une variable pour la session
+unset API_KEY               # la supprimer
+```
+
+Quand tu tapes `node`, le shell cherche `node` dans chaque dossier de `$PATH` (séparés par `:`). C'est pour ça que `npm install -g` doit installer dans un dossier du PATH.
+
+## Scripts shell
+
+Un script, c'est une suite de commandes dans un fichier :
+
+```bash
+#!/usr/bin/env bash
+# La 1re ligne (shebang) dit : exécute ce fichier avec bash
+
+set -euo pipefail
+# -e : sortir si une commande échoue
+# -u : sortir si une variable n'existe pas
+# -o pipefail : sortir si une commande dans un pipe échoue
+
+echo "Bonjour $USER, on est $(date +%A)"
+
+# Variables
+nom="Alice"
+echo "Salut $nom"
+
+# Conditions
+if [ -f "config.json" ]; then
+  echo "Config trouvée"
+else
+  echo "Pas de config"
+fi
+
+# Boucles
+for fichier in *.txt; do
+  echo "Traitement de $fichier"
+  wc -l "$fichier"
+done
+
+# Fonctions
+saluer() {
+  local prenom="$1"
+  echo "Bonjour $prenom"
+}
+saluer "Bob"
+```
+
+Pour le rendre exécutable et le lancer :
+
+```bash
+chmod +x mon_script.sh
+./mon_script.sh
+```
+
+<Aside type="note" title="`set -euo pipefail` — pourquoi toujours">
+Sans ces flags, Bash continue après une erreur, écrase silencieusement des fichiers, et ignore les échecs de pipes. Avec, tu transformes Bash en langage qui *crashe vite et clairement*. À mettre en haut de **tous** tes scripts non-triviaux.
+</Aside>
+
+## Cheat sheet à imprimer
+
+<Tabs>
+  <TabItem label="Linux / macOS / WSL">
+    | Action | Commande |
+    |--------|----------|
+    | Où suis-je | `pwd` |
+    | Lister | `ls -la` |
+    | Aller | `cd dossier` |
+    | Créer dossier | `mkdir -p a/b/c` |
+    | Copier dossier | `cp -r src/ dest/` |
+    | Supprimer dossier | `rm -rf dossier/` |
+    | Chercher fichier | `find . -name "*.js"` |
+    | Chercher contenu | `grep -rn "texte" .` |
+    | Voir un fichier | `less fichier` |
+    | Suivre un log | `tail -f log` |
+    | Compter lignes | `wc -l fichier` |
+    | Permissions | `chmod 755 fichier` |
+    | Variables env | `export X=y` puis `echo $X` |
+  </TabItem>
+  <TabItem label="PowerShell (Windows)">
+    | Action | Commande |
+    |--------|----------|
+    | Où suis-je | `Get-Location` (alias `pwd`) |
+    | Lister | `Get-ChildItem` (alias `ls`, `dir`) |
+    | Aller | `Set-Location dossier` (alias `cd`) |
+    | Créer dossier | `New-Item -ItemType Directory -Path a/b/c -Force` |
+    | Copier dossier | `Copy-Item src dest -Recurse` |
+    | Supprimer dossier | `Remove-Item dossier -Recurse -Force` |
+    | Chercher fichier | `Get-ChildItem -Recurse -Filter "*.js"` |
+    | Chercher contenu | `Select-String -Path *.js -Pattern "texte"` |
+    | Voir un fichier | `Get-Content fichier` (alias `cat`) |
+    | Suivre un log | `Get-Content log -Wait` |
+    | Variables env | `$env:X = "y"` puis `$env:X` |
+  </TabItem>
+</Tabs>
+
+## Auto-évaluation
+
+<Quiz
+  question="Quelle commande affiche les 5 fichiers les plus récemment modifiés du dossier courant ?"
+  options={[
+    'ls -t | head -n 5',
+    'find . -type f | head -n 5',
+    'cat * | head -n 5',
+    'grep -r recent .'
+  ]}
+  answerIndex={0}
+  explanation="ls -t trie par date de modification décroissante ; head -n 5 garde les 5 premiers."
+/>
+
+<Quiz
+  question="Que signifie chmod 600 fichier.key ?"
+  options={[
+    'Tout le monde peut lire le fichier',
+    'Le propriétaire peut lire et écrire, personne d\'autre n\'a accès',
+    'Le groupe peut exécuter le fichier',
+    'Le fichier est partagé avec tous les utilisateurs'
+  ]}
+  answerIndex={1}
+  explanation="6 = 4 (lecture) + 2 (écriture) → rw-, et 0 → ---. Donc rw------- : seul le propriétaire peut lire et écrire. C'est la permission attendue d'une clé SSH privée."
+/>
+
+<Quiz
+  question="Pourquoi met-on set -euo pipefail au début d'un script bash ?"
+  options={[
+    'Pour rendre le script plus rapide',
+    'Pour activer la coloration syntaxique',
+    'Pour que le script s\'arrête immédiatement à la première erreur, plutôt que de continuer en silence',
+    'Pour autoriser les variables non définies'
+  ]}
+  answerIndex={2}
+  explanation="-e arrête à la 1re commande qui échoue, -u interdit les variables non définies, -o pipefail propage les erreurs dans un pipe. Ensemble ils transforment Bash en langage qui crashe vite et clairement."
+/>
+
+<Aside type="tip" title="🎯 Tu as les prérequis du projet de l'axe">
+Avec ce que tu viens de lire, tu peux **attaquer le [projet de l'axe — Tri automatique des téléchargements](/01-fondations/#projet-de-laxe)** sans attendre.
+
+Deux options valides :
+- **Maintenant** : pratique à chaud, le shell est frais. Reviens lire 1.3 et 1.4 après.
+- **Après 1.3 et 1.4** : tu auras le contexte algorithmie pour mieux comprendre la fonction `categorie()` du script.
+</Aside>
+
+## Pour aller plus loin
+
+- *MIT Missing Semester — Lecture 2 : Shell Tools and Scripting*
+- *Bash Guide* — Greg Wooledge ([mywiki.wooledge.org/BashGuide](https://mywiki.wooledge.org/BashGuide))
+- *Explainshell* — colle une commande, il l'explique morceau par morceau ([explainshell.com](https://explainshell.com/))
+- *Modern Unix* — outils modernes (bat, eza, ripgrep, fd, fzf…) ([github.com/ibraheemdev/modern-unix](https://github.com/ibraheemdev/modern-unix))
+
+---
+
+**Suite** : [1.3 — Représentation des données](/01-fondations/03-donnees/) pour comprendre comment les ordinateurs stockent texte et nombres.

@@ -1,0 +1,17 @@
+{
+  "name": "tasky-pricing-canevas",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "test": "vitest"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  }
+}

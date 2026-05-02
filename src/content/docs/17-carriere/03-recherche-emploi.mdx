@@ -1,0 +1,488 @@
+---
+title: 17.3 — Recherche d'emploi
+description: Sourcing d'offres, candidature ciblée, entretiens (algo raisonnable, system design, comportemental STAR), test technique, négociation salariale 2026.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : passer de « j'envoie 80 CV/sem sans réponse » à « 3-5 entretiens / mois sur des postes ciblés ». Et savoir négocier sans laisser 5-15 % de salaire sur la table.
+
+<ObjectiveList items={[
+  "Cibler 10-20 entreprises plutôt que postuler en masse",
+  "Préparer les 3 types d'entretien : algo raisonnable, system design, comportemental STAR",
+  "Savoir ce qu'attend un take-home test vs un live coding",
+  "Lire une grille salariale (levels.fyi, Glassdoor, payscale)",
+  "Négocier base + variable + équité avec data — pas avec émotion"
+]} />
+
+<Level value="confirmé" reading="15 min" prereq="aucun (parallélisable dès l'axe 4)" />
+
+
+## Sourcing — où chercher
+
+| Canal | Force | Faiblesse |
+|-------|-------|-----------|
+| **LinkedIn** | Volume | Beaucoup de bruit |
+| **Welcome to the Jungle** (FR) | Curé, transparent salaires | Sur-représenté startup early |
+| **Wellfound** (ex-AngelList) | Startup global | Anglophone |
+| **HelloWork** (FR) | Volume mid-market | UX |
+| **Indeed** | Volume | Bruit |
+| **Recommandation** (réseau) | **Conversion 5-10× supérieure** | Demande du temps de cultiver |
+| **Twitter / X / Bluesky** | Niche tech, hiring threads | Hit-or-miss |
+| **Discord / Slack communities** | Postes cachés | Peu de structure |
+| **GitHub Jobs / Hacker News « Who's hiring »** | Tech-friendly, transparence | Moins de volume |
+| **AngelList Talent** | International | Anglo |
+
+> En 2026, **les recommandations** restent le canal #1. Cultive ton réseau LinkedIn AVANT d'avoir besoin (mois 0 pas mois 12).
+
+### Approche ciblée vs masse
+
+Spammer 80 CV/sem amène 1-3 entretiens — mauvais taux. Cibler **10 entreprises** avec lettres customisées et message LinkedIn → 3-5 entretiens / mois.
+
+**Liste de 20 entreprises cibles** :
+
+- 5 que tu **respectes** techniquement.
+- 5 dans ton **domaine** (e-com, fintech, AI, etc.).
+- 5 où tu connais **quelqu'un**.
+- 5 « stretches » (un cran au-dessus).
+
+Tu suis chacune sur 6 mois : actualités, recrutements, posts. Ça va beaucoup plus vite que ça en a l'air.
+
+---
+
+## La candidature qui converti
+
+### CV adapté
+
+Voir [17.2 Portfolio](/17-carriere/02-portfolio/). Le CV par défaut existe, mais **2-3 lignes adaptées** par poste cible (réordonner skills, mettre le projet le plus pertinent en haut).
+
+### Lettre / message LinkedIn — court, ciblé
+
+**3 paragraphes max** :
+
+```
+Bonjour [Prénom],
+
+[1] Je viens de lire votre offre [titre] — votre stack [Next + Drizzle + Postgres]
+correspond exactement à ce que je pratique sur [projet perso / précédent poste].
+
+[2] Je suis particulièrement intéressé par [un détail spécifique de l'offre,
+type de produit, défi mentionné]. Sur mon dernier projet [lien],
+j'ai [résultat chiffré pertinent].
+
+[3] J'aimerais 30 min pour échanger sur la mission et voir si mon profil correspond.
+Disponible cette semaine ou la prochaine.
+
+[Lien CV] · [Lien GitHub] · [Lien projet]
+```
+
+| ✅ À faire | ❌ À éviter |
+|-----------|-------------|
+| Mentionner LE truc spécifique du poste | Lettre générique réutilisée |
+| Lien direct vers UN projet pertinent | Liste de 10 liens |
+| Réalisation chiffrée précise | « Passionné par les défis » |
+| Demande explicite (30 min) | « Je serais ravi d'échanger » sans CTA |
+
+### Suivre
+
+J+5 sans réponse → **un seul** message de follow-up. Pas plus.
+
+---
+
+## Les 3 types d'entretien
+
+```
+1. Algorithmique         → ~30-60 min — résoudre un problème de code en live
+2. System design         → 30-60 min — architecturer un système
+3. Comportemental (BEI)  → 30-60 min — STAR sur situations passées
+```
+
+Selon l'entreprise tu auras 1, 2 ou les 3.
+
+---
+
+## L'entretien algorithmique
+
+### Niveau 2026 par type d'entreprise
+
+| Profil | Niveau LeetCode |
+|--------|-----------------|
+| Startup early-stage | Faible — peut être absent ou très light |
+| Scale-up tech | Medium |
+| Big Tech (FAANG, OpenAI, Anthropic) | Hard |
+| Banques d'investissement | Medium-hard |
+
+> **Reality check** : la grande majorité des postes web/full-stack ne te demandent **pas** de Hard. Connaître proprement les structures de base (array, map/set, stack/queue, tree, graph) + les patterns courants (two pointers, sliding window, BFS/DFS, DP simple) couvre 80 % des cas.
+
+### Patterns à maîtriser
+
+- Two pointers / sliding window.
+- Hashmap pour la lookup O(1).
+- Stack / queue / deque.
+- BFS / DFS sur grille ou graphe.
+- Recherche binaire.
+- Tri (souvent pour préparer le terrain, pas pour réinventer).
+- Récursion + memoization (DP simple).
+- Heap / priority queue.
+
+### Préparation — 50-100 problèmes ciblés
+
+| Source | Force |
+|--------|-------|
+| **Blind 75** | 75 problèmes essentiels |
+| **NeetCode Roadmap** | Visualisé, vidéos pédagogiques |
+| **LeetCode** par tags | Cibler un pattern à la fois |
+| **CodeSignal** | Format proche entretien |
+| **Codecrafters** | Plus avancé, projet style |
+
+Ne pas viser **1000 problèmes**. **50-100 bien compris** > 500 mal absorbés.
+
+### Pendant l'entretien — la méthode
+
+1. **Reformuler** la question. *« Donc on cherche à... ? »*
+2. **Clarifier** edge cases (vide, négatif, doublons).
+3. **Discuter** une approche brute-force d'abord. Annoncer la complexité.
+4. **Optimiser** : *« Je peux faire mieux avec un hashmap... »*
+5. **Coder** — proprement, à voix haute.
+6. **Tester** sur 1-2 cas, dont 1 edge case.
+
+Ce qu'ils évaluent : **comment tu raisonnes**, pas si tu finis. Un candidat qui explique tout son cheminement gagne presque toujours sur celui qui termine en silence.
+
+### Anti-patterns
+
+- Coder sans clarifier les hypothèses.
+- Sauter directement à l'optimisation.
+- Pas commenter (l'examinateur ne sait pas ce que tu fais).
+- Continuer si tu es bloqué — préfère « j'ai besoin d'une indication ».
+
+---
+
+## L'entretien system design
+
+### Quand tu en auras
+
+- À partir de **mid-level** (3+ ans XP).
+- Systématique en **senior+**.
+- Souvent en parallèle de l'entretien algo (1 fois chacun).
+
+### Format typique
+
+```
+Question : "Conçois Twitter / un raccourcisseur d'URL / un système de notifications..."
+Durée : 45-60 min
+```
+
+L'examinateur veut voir :
+
+1. **Tu poses des questions** sur les contraintes (volume, latence, géo).
+2. **Tu chiffres** (~ 1M users, ~ 10k req/s peak).
+3. **Tu choisis des composants** justifiés (Postgres vs Cassandra, push vs pull...).
+4. **Tu identifies les bottlenecks** (DB, fan-out, cache).
+5. **Tu discutes les trade-offs** (consistency vs availability).
+6. **Tu réfléchis au scaling** au-delà du V1.
+
+### Préparation 2026
+
+| Ressource | Force |
+|-----------|-------|
+| *System Design Interview* — Alex Xu vol. 1 + 2 | Bible |
+| *Designing Data-Intensive Applications* — Martin Kleppmann | Profondeur |
+| *ByteByteGo* | Visualisations |
+| *system-design-primer* (GitHub) | OSS, exhaustif |
+| Papier *« Dynamo »* (Amazon) | Classique |
+
+### Concepts à maîtriser
+
+- Load balancer (round-robin vs sticky).
+- Cache (CDN, Redis, in-process).
+- DB SQL vs NoSQL, sharding, read replicas.
+- Message queue (Kafka, RabbitMQ, SQS).
+- Pub/Sub, fan-out.
+- Eventual consistency vs strong.
+- CAP theorem (en pratique, pas l'image).
+- WebSocket scaling.
+- Rate limiting (token bucket, sliding window).
+- Idempotence et exactly-once delivery.
+
+> Tu ne dois pas tout savoir par cœur. Tu dois savoir **où chercher** chaque concept et l'expliquer simplement.
+
+---
+
+## L'entretien comportemental — méthode STAR
+
+### Le format
+
+L'examinateur te pose des questions du type :
+
+- *« Décris un conflit avec un collègue. »*
+- *« Une fois où tu as livré sous pression. »*
+- *« Un échec dont tu as appris. »*
+- *« Une décision technique que tu regrettes. »*
+
+### STAR — Situation, Task, Action, Result
+
+| Lettre | Contenu |
+|--------|---------|
+| **S** ituation | Le contexte (1-2 phrases) |
+| **T** ask | Ce qui t'incombait |
+| **A** ction | Ce que TU as fait spécifiquement (« je », pas « nous ») |
+| **R** esult | Le résultat **chiffré** ou tangible |
+
+### Exemple — « Décris un échec »
+
+```
+S — Sur mon poste précédent, on a déployé une migration DB en pleine journée
+    qui a planté la prod 30 min.
+T — J'étais lead sur ce déploiement, ma responsabilité.
+A — J'ai mené le rollback en 12 min, puis j'ai animé un post-mortem blameless.
+    On en a tiré 3 actions : env validation au boot, parité staging/prod
+    automatisée, fenêtre de déploiement encadrée.
+R — Aucun incident similaire depuis 6 mois. Le post-mortem a été présenté
+    en all-hands et le pattern adopté par 2 autres équipes.
+```
+
+### Préparer ton stock STAR
+
+**Avant** l'entretien, prépare 5-7 stories :
+
+- 1 succès majeur.
+- 1 échec assumé + apprentissage.
+- 1 conflit avec un collègue résolu.
+- 1 prise de décision difficile.
+- 1 livraison sous pression.
+- 1 fois où tu as appris quelque chose de gros.
+- 1 situation où tu as remis en question le statu quo.
+
+Chaque story tient en **2-3 minutes** racontée. Tu pioches selon la question.
+
+### Ce qu'ils écoutent
+
+- Tu prends ta **responsabilité** (« J'aurais dû... »).
+- Tu tires des **leçons** concrètes.
+- Tu n'es pas **arrogant** ni **victime**.
+- Tu sais parler **données** (« ça a réduit X de Y % »).
+- Tu sais **simplifier** une situation complexe.
+
+### Pièges
+
+- *« Mon plus grand défaut ? Je suis perfectionniste. »* → faux humble brag, démasqué immédiatement.
+- Blâmer ses anciens collègues / managers.
+- Story tellement vague qu'on ne sait pas ce que TU as fait.
+- Trop long (5+ min) → l'examinateur perd le fil.
+
+---
+
+## Le test technique — take-home vs live
+
+### Take-home (devoir à la maison)
+
+| Format | Quand |
+|--------|-------|
+| Implémenter une mini-app sur 4-8 h | Junior / mid |
+| Repo open avec consigne | Standard |
+| Délai 1-7 jours | Variable |
+
+**Bonnes pratiques** :
+
+- **Time-box** : tu ne dois pas dépasser 2× le temps annoncé. Sinon, livre l'imparfait avec un README qui explique « ce que je ferais avec plus de temps ».
+- **README** soigné : pourquoi, quoi, comment, trade-offs assumés.
+- **Tests** : au moins 30 % couverture sur la logique.
+- **Pas d'over-engineering** : le but est de montrer du pragmatisme.
+- **Code review-friendly** : commits petits, descriptions claires.
+
+### Live coding
+
+| Format | Détails |
+|--------|---------|
+| Coderpad / partage écran | 30-60 min |
+| Petit problème + suivi de questions | Souvent algo + design |
+
+Astuces :
+
+- **Verbalise** tout.
+- Si tu connais une lib (lodash debounce), **dis-le** mais code la version simple.
+- N'aie pas peur de **chercher** dans la doc si autorisé (en 2026, c'est de plus en plus toléré).
+- Pour **AI assistance** (Copilot/Claude/Cursor) : demande la politique. Certains acceptent, d'autres non.
+
+### Pair coding (live, ensemble)
+
+Plus rare mais excellent. L'examinateur code avec toi sur un vrai bout de code de leur produit. Très révélateur des soft skills (écoute, questions, pas trop dominant).
+
+---
+
+## Lire une grille salariale
+
+### Sources fiables 2026
+
+| Source | Force |
+|--------|-------|
+| **levels.fyi** | Big tech, niveaux internes (L3, L4, IC4...) |
+| **Glassdoor** | Volume, employee-reported |
+| **Welcome to the Jungle** | FR, transparence |
+| **payscale.com** | Mid-range global |
+| **TechWorker** (Discord) | Anonyme, FR / EU |
+| **levels.fyi/?country=132** (FR) | Spécifique pays |
+
+### Composants d'une rémunération
+
+```
+Total Compensation = Base + Variable + Equity (PAS un salaire seul)
+```
+
+| Composant | Détail |
+|-----------|--------|
+| **Base** | Le salaire mensuel × 12-13 |
+| **Variable** (bonus) | Cible % atteignable (5-25 %) |
+| **Equity** (BSPCE / RSU / stock options) | Vesting 3-4 ans typique |
+| **Avantages** | Mutuelle, RTT, télétravail, formation budget |
+| **Sign-on bonus** | Prime à la signature, parfois 5-15 k€ |
+| **Relocation** | Si déménagement |
+
+> En 2026, sur la tech US, **l'equity représente souvent 30-50 %** du total comp. Comprendre le vesting et la dilution est crucial.
+
+### Ne PAS comparer base à base
+
+Comparer 60 k€ d'une PME à 55 k€ d'une scale-up sans regarder l'équité, le bonus, le télétravail, le PTO, c'est comparer sans contexte. **Toujours raisonner en TC** (Total Comp) **+ qualité de vie**.
+
+---
+
+## Négocier — la phase qui paie le mieux
+
+### La règle d'or
+
+> **Tu ne négocies PAS tant que tu n'as pas une offre.**
+
+Donner ton attendu trop tôt, c'est se piéger soi-même (anchoring).
+
+### Phases de négo
+
+```
+1. Filtre RH      → "Quelles sont vos prétentions ?"
+                   → "Selon le poste et le total comp, j'ai des fourchettes
+                      mais préfère discuter une fois le périmètre clair."
+
+2. Entretiens     → focus sur le fit, pas sur l'argent
+
+3. Offre verbale  → Premier chiffre
+
+4. Négo           → ICI tu pousses
+```
+
+### Réponse type au filtre RH
+
+> *« Je préfère évaluer le total comp (base + variable + equity + avantages) une fois que je connais le périmètre. Pour info, je suis dans une fourchette ouverte ; on en parlera quand vous aurez une offre. »*
+
+Ça te protège du low-anchoring sans paraître évasif.
+
+### À l'offre — structurer ta contre-proposition
+
+```
+Composant     | Offre  | Ma cible
+Base          | 55 k€  | 62 k€
+Variable      | 5 %    | 10 %
+Equity        | 0      | sign-on 5 k€
+Télétravail   | 2 j/sem| 3 j/sem
+PTO           | 25 j   | (OK)
+Total comp    | ~58 k€ | ~71 k€
+```
+
+Toujours **basé sur des data** : levels.fyi, ton offre concurrente, ta progression de salaire.
+
+### Phrases utiles
+
+- *« Sur la base des comparaisons levels.fyi pour ce niveau, je ciblais X. »*
+- *« Une autre entreprise propose Y, je préfère votre projet, mais l'écart de 8 k€ est significatif. »*
+- *« Si la base ne bouge pas, peut-on discuter du sign-on ou du télétravail ? »*
+
+### Erreurs
+
+- Donner un chiffre **avant** d'avoir une offre.
+- Mentir sur ta rémunération actuelle (vérifiable, et illégal côté employeur dans certains pays).
+- Accepter le **premier chiffre** sans rien demander (laisse 5-15 % sur la table).
+- Bluff sans backup — *« j'ai 3 offres » sans en avoir aucune* est risqué.
+
+> *« Ne pas négocier coûte typiquement 3-7 k€ / an, donc 90-200 k€ sur une carrière. »* — c'est ce que la négo, **bien faite**, achète sur 30 ans.
+
+---
+
+## Process candidat-side — gérer plusieurs offres
+
+| Étape | Discipline |
+|-------|------------|
+| **Tracker** dans un Notion / sheet | Date contact, statut, tags |
+| **Synchroniser** les timelines | Demander à l'entreprise X de ne pas presser pendant que Y conclut |
+| **Honnête** avec les recruteurs | « J'ai un autre process, j'aurai une réponse mardi » |
+| **Notifier** ceux qu'on rejette | Le monde est petit, sois pro |
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Le RH te demande dès le filtre : « Quelles sont vos prétentions salariales ? ». Que réponds-tu ?"
+  options={[
+    'Donner un chiffre précis tout de suite',
+    'Mentir une grosse fourchette',
+    'Reporter : « Je préfère évaluer le total comp une fois le périmètre clair, on en reparlera quand vous aurez une offre. Vous avez une fourchette pour ce poste ? »',
+    'Refuser de répondre brutalement'
+  ]}
+  answerIndex={2}
+  explanation="Donner un chiffre tôt te piège (anchoring négatif). Tu retournes la question : « quelle est VOTRE fourchette ? ». Si pressé, donne une fourchette large basée sur levels.fyi. Tu négocies sérieusement à l'offre, pas au filtre."
+/>
+
+<Quiz
+  question="Tu as une offre à 60k base + 5% bonus + 25 jours PTO + 2j télétravail/sem. Comment l'évaluer vs une offre à 65k base + 0 bonus + 25j PTO + 100% remote ?"
+  options={[
+    'Prendre 65k, c\'est plus',
+    'Calculer le total comp, intégrer les avantages (télétravail = ~3-5k€/an d\'économie de transport, possible meilleur work/life balance), et choisir selon TES priorités. 65k full-remote bat probablement 60k+5%+2j sauf si tu valorises beaucoup le présentiel',
+    '60k, le bonus rattrape',
+    'Tirer au sort'
+  ]}
+  answerIndex={1}
+  explanation="Une décision rationnelle = TC + qualité de vie. 5% bonus de 60k = 3k cible (souvent atteint partiellement). 100% remote économise 2-3h/jour de transport et 3-5k€/an. Le choix dépend de tes priorités, mais raisonner « 65k > 60k » ignore 80 % de la décision."
+/>
+
+<Quiz
+  question="Tu prépares une question STAR : « décris un conflit avec un collègue ». Tu commences par : « il était toxique, il bloquait toutes mes PRs sans raison ». Quel risque ?"
+  options={[
+    'Aucun, c\'est honnête',
+    'Très mauvais signal : tu blâmes l\'autre, pas de prise de responsabilité, l\'examinateur entend « cette personne aura des conflits chez nous aussi ». Reformuler en : « ses reviews étaient lentes pour moi, j\'ai compris en lui parlant qu\'il avait 3 autres priorités, j\'ai changé ma façon de découper les PR pour faciliter sa charge »',
+    'Bonne approche',
+    'Trop court'
+  ]}
+  answerIndex={1}
+  explanation="STAR évalue ta maturité. Blâmer = signal de futur conflit. La même situation racontée avec recul (compréhension, action de TON côté, résultat positif) montre quelqu'un qu'on veut dans son équipe. Personne n'aime travailler avec quelqu'un qui voit des « toxiques » partout."
+/>
+
+<Quiz
+  question="Tu reçois un take-home test annoncé pour 4h. Au bout de 12h tu n'as pas fini. Que faire ?"
+  options={[
+    'Continuer 8h de plus',
+    'Livrer ce que tu as à 4-6h max, avec un README qui dit explicitement : « j\'ai time-boxé à X heures. Voici ce qui marche, voici ce qui manque, voici ce que je ferais avec plus de temps ». Mieux vaut un MVP livré et discuté qu\'un parfait livré en 20h',
+    'Abandonner',
+    'Demander 1 semaine de plus'
+  ]}
+  answerIndex={1}
+  explanation="Le take-home évalue aussi le **pragmatisme** et la capacité à **time-boxer**. Dépasser 3-5× le temps annoncé envoie un signal négatif (tu travailles 8h gratuits) ou suspicieux (tu as triché). Time-box, livre proprement avec README qui assume les compromis. Beaucoup de seniors préfèrent un MVP honnête à un sur-poli irréaliste."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Cracking the Coding Interview* — Gayle McDowell (algo classique)
+- *System Design Interview* vol. 1+2 — Alex Xu
+- *The Tech Resume Inside Out* — Gergely Orosz
+- *Never Split the Difference* — Chris Voss (négo)
+- *Patrick McKenzie — Salary Negotiation* — [kalzumeus.com](https://www.kalzumeus.com/2012/01/23/salary-negotiation/) (article culte)
+- *NeetCode Roadmap* — [neetcode.io](https://neetcode.io/)
+- *Levels.fyi* — [levels.fyi](https://www.levels.fyi/) (niveaux et salaires)
+
+---
+
+**Suite** : [17.4 — Cadrage stratégique](/17-carriere/04-cadrage-strategique/) (déjà rédigé) puis [17.5 — Modes d'exercice](/17-carriere/05-modes-exercice/).

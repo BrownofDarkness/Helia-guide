@@ -1,0 +1,366 @@
+---
+title: 15.1 — Méthodes agiles
+description: Scrum, Kanban, ShapeUp, XP — cérémonies, rôles, métriques, et comment choisir la méthode adaptée à ton contexte (taille d'équipe, type de produit, maturité).
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : choisir et adapter une méthode plutôt que la subir. L'agile n'est ni une religion ni un cargo cult — c'est un ensemble de pratiques qu'on combine selon le contexte.
+
+<ObjectiveList items={[
+  "Comprendre le Manifeste agile et ce qui distingue une équipe agile d'une équipe qui « fait Scrum »",
+  "Maîtriser les bases de Scrum, Kanban, ShapeUp et XP",
+  "Mesurer le travail avec lead time, throughput, WIP et cycle time",
+  "Adapter les cérémonies au lieu de les subir",
+  "Choisir la méthode adaptée à ton contexte"
+]} />
+
+<Level value="confirmé" reading="12 min" prereq="aucun prérequis technique" />
+
+
+## Le Manifeste agile en 4 lignes
+
+> *Nous valorisons :*
+> - *Les **individus et leurs interactions** plus que les processus et les outils*
+> - *Des **logiciels qui marchent** plus qu'une documentation exhaustive*
+> - *La **collaboration avec les clients** plus que la négociation contractuelle*
+> - *L'**adaptation au changement** plus que le suivi d'un plan*
+
+Un point essentiel souvent oublié : *« plus que »* ne veut pas dire *« à la place de »*. Une équipe agile **a aussi** des outils, de la doc, des contrats et des plans. Elle privilégie juste l'autre côté quand il y a tension.
+
+> **Agile vs « faire du Scrum »**. Une équipe est agile quand elle livre régulièrement de la valeur, écoute le terrain, et ajuste. Une équipe peut « faire Scrum » et ne pas être agile (rituels vides). Et inversement.
+
+---
+
+## Scrum — le framework le plus déployé
+
+### Rôles
+
+| Rôle | Responsabilité |
+|------|----------------|
+| **Product Owner (PO)** | Priorisation du backlog, voix du client, valide la valeur livrée |
+| **Scrum Master (SM)** | Garant du processus, leve les blocages, protège l'équipe |
+| **Équipe de développement** | Conception + dev + test + livraison. 3-9 personnes idéalement. |
+
+### Cérémonies
+
+| Cérémonie | Fréquence | Durée typique | But |
+|-----------|-----------|---------------|-----|
+| **Sprint planning** | Début de sprint | 1-2 h | Sélectionner les tickets faisables, définir l'objectif de sprint |
+| **Daily** | 1×/jour | 15 min max | Synchro rapide, blocages, pas un compte rendu |
+| **Sprint review** | Fin de sprint | 1 h | Démo aux stakeholders, feedback |
+| **Rétrospective** | Fin de sprint | 1 h | Quoi améliorer dans le **processus** |
+| **Refinement** | En continu | Variable | Préparer les tickets futurs (estimation, découpe) |
+
+### Sprint type — 2 semaines
+
+```
+J1 ────────────── J5 ─────────── J10
+│                                │
+│ Planning (lun matin)           │
+│   ↓                            │
+│ Sprint en cours                │
+│   • daily 15 min/j             │
+│   • refinement régulier        │
+│                                │
+│        Review (ven A.M.) → ────┤
+│        Rétro     (ven P.M.)    │
+└────────────────────────────────┘
+```
+
+### Quand Scrum brille
+
+- Équipe **stable** de 5-9 devs.
+- Produit qui demande coordination régulière.
+- Stakeholders qui veulent voir l'avancement à intervalles réguliers.
+- Découpage en stories claires, valeur livrable en 1-2 sem.
+
+### Quand Scrum souffre
+
+- Beaucoup de **support / interruptions** (incidents, demandes urgentes).
+- Travail très **R&D** sans cadence prévisible.
+- Équipe < 4 personnes (les rituels sont disproportionnés).
+- Très petite startup au pivot fréquent.
+
+---
+
+## Kanban — le flux continu
+
+Kanban remplace la **time-box** (sprint) par une **limite de WIP** (Work In Progress). Pas de planning fixe, le ticket entre dans le flux quand on a la capacité.
+
+### Tableau Kanban minimal
+
+```
+┌──────────┬──────────┬──────────┬──────────┐
+│ Backlog  │ À faire  │ En cours │ Fait     │
+│          │ (WIP 5)  │ (WIP 3)  │          │
+├──────────┼──────────┼──────────┼──────────┤
+│ #421     │ #418     │ #415     │ #410     │
+│ #422     │ #419     │ #416     │ #411     │
+│ #423     │          │ #417     │ #412     │
+└──────────┴──────────┴──────────┴──────────┘
+```
+
+Si une colonne atteint sa limite **WIP**, on ne tire pas un nouveau ticket : on **finit** ou on **dépanne** ce qui bloque.
+
+### Métriques clés
+
+| Métrique | Définition |
+|----------|------------|
+| **Lead time** | Délai entre création du ticket et livraison |
+| **Cycle time** | Délai entre début du travail et fin |
+| **Throughput** | Nombre de tickets livrés par semaine |
+| **WIP** | Nombre de tickets en cours |
+| **Aging WIP** | Tickets en cours depuis trop longtemps (signal d'alerte) |
+
+> **Loi de Little** : `lead time = WIP / throughput`. Réduire WIP réduit le lead time. Pas magique, mathématique.
+
+### Cérémonies Kanban
+
+Beaucoup plus légères :
+
+- **Stand-up** quotidien optionnel.
+- **Replenishment** (remplissage du backlog) hebdo.
+- **Service delivery review** mensuel : métriques, ajustements.
+- **Rétrospective** mensuelle.
+
+### Quand Kanban brille
+
+- **Équipes ops / SRE** avec interruptions.
+- Support / maintenance.
+- Petites équipes (2-4 personnes).
+- Projets où la priorité change souvent.
+- Produits matures qui livrent en continu.
+
+---
+
+## ShapeUp — Basecamp / 37signals
+
+ShapeUp est radicalement différent. Les principes :
+
+| Principe | Ce que ça change |
+|----------|------------------|
+| **Cycles de 6 semaines** | Pas de planning hebdo / bi-hebdo, on s'engage sur 6 sem |
+| **Cooldown de 2 semaines** | Entre cycles, pour bug fix, exploration, dette |
+| **Shaping en amont** | Le travail est *« shaped »* (cadré) par senior **avant** d'arriver en cycle |
+| **Appetite, pas estimation** | Combien de temps **on est prêt à investir** vs combien **ça prend** |
+| **Petits batch** | 1 personne ou 1 paire = 1 « pitch » |
+| **Hill chart** | Visualisation problèmes ouverts → solutions identifiées → exécution |
+| **Circuit breaker** | Si pas fini en 6 sem, **on arrête**, on ne prolonge pas |
+
+### Hill chart
+
+```
+       Solution
+       claire
+            ┌─────┐
+           ╱       ╲
+          ╱         ╲ Exécution
+         ╱           ╲
+   ─────╱             ╲─────
+   Problème        Livré
+   exploré
+```
+
+Chaque ticket avance sur cette colline. Le statut (« je monte la pente, je suis au sommet, je descends ») dit beaucoup plus que « 60 % fait ».
+
+### Quand ShapeUp brille
+
+- Équipe **mûre, autonome**, senior.
+- Produit avec **vision claire** (Basecamp, indie SaaS).
+- Pas de pression « vélocité ».
+- Stakeholders qui acceptent les cycles longs.
+
+### Quand ShapeUp souffre
+
+- Stakeholders qui veulent voir avancer chaque semaine.
+- Équipe junior qui a besoin de cadence.
+- Produits avec beaucoup de support / incidents.
+
+---
+
+## XP — Extreme Programming
+
+Plus ancien (1999), souvent intégré comme **pratiques d'ingénierie** dans Scrum/Kanban/ShapeUp :
+
+| Pratique | Sens |
+|----------|------|
+| **Pair programming** | Deux devs sur un clavier — qualité + diffusion connaissances |
+| **TDD** (Test-Driven Development) | Test rouge → code passe → refactor |
+| **Refactoring continu** | Pas de « grosse refonte » lointaine |
+| **Continuous integration** | Merge plusieurs fois par jour |
+| **Simple design** | YAGNI, le plus simple qui marche |
+| **Collective code ownership** | Tout le monde peut toucher tout le code |
+| **Sustainable pace** | 40 h/sem soutenables, pas 60 |
+| **Customer on-site** | Le PO est dispo, pas mensuel |
+
+XP n'est pas une « méthode » au sens organisationnel mais un ensemble de **disciplines** que toute équipe peut adopter, partiellement ou en totalité.
+
+---
+
+## Choisir — ou plutôt combiner
+
+| Contexte | Recommandation 2026 |
+|----------|---------------------|
+| Startup early-stage 2-4 devs, beaucoup de pivots | **Kanban + WIP discipline** + rétro mensuelle |
+| Scale-up SaaS B2B, 6-15 devs, plusieurs équipes | **Scrum** par équipe + dailies courts + rétro tous les 2 sprints |
+| Équipe SRE / ops / support | **Kanban**, pas de sprints |
+| Équipe produit autonome avec PO senior | **ShapeUp** ou Scrum allégé (pas de daily quotidien) |
+| Agence / projets clients à durée fixe | **Scrum** ou Scrumban (Scrum + WIP limits) |
+| Open source / community | **Kanban** lâche + RFCs |
+
+> Aucune équipe ne fait du Scrum « pur » très longtemps. Toutes adaptent : daily 3×/sem, sprint de 1 semaine, pas de SM, etc. **Inspecter, adapter** est l'esprit même de l'agile.
+
+---
+
+## Anti-patterns à reconnaître
+
+| Symptôme | Diagnostic |
+|----------|------------|
+| Daily de 45 min, statuts à tour de rôle | Faux daily — c'est devenu un comité de management |
+| Velocity utilisée comme **métrique de performance** | Détourne les estimations vers du gonflement |
+| Sprint de 1 semaine **plus** sprint review **plus** rétro **plus** planning | 50 % du temps en cérémonies → augmenter à 2 sem |
+| « **Sprint zéro** » de 4 semaines de setup | Ce n'est plus de l'agile, c'est un waterfall déguisé |
+| Pas de definition of done | Tout est « presque fini » |
+| Zero limite WIP en Kanban | Pas vraiment Kanban, juste un tableau |
+| Rétro qui produit jamais d'action | Rétro = théâtre |
+| Estimation **précise** demandée 6 mois en avance | Ce n'est pas de l'estimation, c'est de la divination |
+| Burndown qui descend pile à 0 chaque sprint | Padding caché, équipe qui se protège |
+
+---
+
+## Métriques saines (et toxiques)
+
+### À mesurer
+
+- **Lead time** moyen — combien de temps une demande met avant d'être livrée.
+- **Throughput** hebdo — nombre de tickets livrés.
+- **% incidents post-déploiement** — qualité du flux.
+- **Temps en review** — un PR ouverte 5 jours = problème de process.
+- **Satisfaction de l'équipe** (NPS interne anonyme).
+- **Outcomes business** — ce que la feature change pour le client.
+
+### À éviter
+
+- **Velocity** comparée entre équipes (compare des points incomparables).
+- **Lignes de code** écrites (incite à la prolixité).
+- **Heures travaillées** (incite au présentéisme).
+- **% sprint terminé** (incite à sous-engager).
+
+> Mesure les **outcomes**, pas les **outputs**.
+
+---
+
+## Definition of Ready / Done
+
+Deux contrats explicites :
+
+### Definition of Ready (DoR)
+
+Un ticket peut entrer en sprint si :
+
+- [ ] Critères d'acceptation testables sont écrits
+- [ ] Maquettes UI / contrat API existent
+- [ ] Pas de dépendance bloquante non-résolue
+- [ ] Estimation rough faite (T-shirt size ou points)
+- [ ] Compris et challengé par au moins un dev
+
+### Definition of Done (DoD)
+
+Un ticket est terminé quand :
+
+- [ ] Code committé sur main (PR mergée)
+- [ ] Tests automatisés passent
+- [ ] Revue de code validée
+- [ ] Documentation utilisateur / technique mise à jour
+- [ ] Déployé en staging et validé
+- [ ] Métriques (perf, erreurs) inchangées ou améliorées
+- [ ] Critères d'acceptation cochés par PO
+
+> Mettre la **DoD au mur** de l'équipe. Sinon « fini » veut dire 12 choses différentes.
+
+---
+
+## Sustainable pace — la vraie victoire
+
+> *« Crunch is a leadership failure. »*
+
+Toute équipe qui fait des heures sup à répétition :
+
+- accumule de la **dette** (technique, sociale).
+- perd des gens (turnover doublé statistiquement).
+- produit du **code plus buggué** (la fatigue tue la qualité).
+
+L'agile est durable ou n'est pas agile. Le **sustainable pace** (40 h sem) est l'une des disciplines les plus oubliées et les plus importantes.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu rejoins une équipe SRE qui gère beaucoup d'incidents et d'astreintes. Le manager veut « passer en Scrum avec des sprints de 2 semaines ». Que dis-tu ?"
+  options={[
+    'Excellent, c\'est la norme moderne',
+    'Scrum colle mal aux interruptions imprévisibles ; Kanban (avec WIP limits + métriques lead time / throughput) sera plus adapté à ce contexte',
+    'Il faut faire du Waterfall',
+    'On ne peut pas être agile en SRE'
+  ]}
+  answerIndex={1}
+  explanation="Scrum suppose un sprint qui peut être planifié et tenu. Une équipe SRE est par nature interrompue — l'engagement de sprint sera systématiquement cassé, ce qui démoralise et abîme la planification d'autres équipes. Kanban est la norme SRE : flow continu, WIP limits, mesure lead time. Métriques d'équipe ops (MTTR, MTBF) > velocity."
+/>
+
+<Quiz
+  question="Lors d'une rétrospective, l'équipe identifie 12 problèmes et 0 action concrète après 1h30. Que ferais-tu différemment ?"
+  options={[
+    'Allonger la rétro à 2h',
+    'Choisir 1 ou 2 actions concrètes avec owner et deadline ; le reste est juste de la ventilation. Sans action, la rétro produit zéro changement',
+    'Supprimer les rétros',
+    'Engager un coach agile'
+  ]}
+  answerIndex={1}
+  explanation="Une rétrospective qui identifie 12 problèmes et n'en attaque aucun est inutile. La règle : 1-2 actions max par rétro, **owner** clair, **deadline** courte (sprint suivant), **review** systématique au début de la rétro suivante. Sinon les rétros deviennent un théâtre où on liste les mêmes problèmes pendant des mois."
+/>
+
+<Quiz
+  question="Ta direction te demande la velocity de chaque équipe pour comparer. Quel risque ?"
+  options={[
+    'Aucun, c\'est une métrique standard',
+    'Comparer les velocities entre équipes pousse à gonfler les estimations (chaque équipe veut le meilleur chiffre) — la métrique se corrompt et perd toute valeur de planification',
+    'C\'est une bonne pratique',
+    'Il faut multiplier par 1,5'
+  ]}
+  answerIndex={1}
+  explanation="La velocity est une métrique de planification interne à une équipe. Comparer entre équipes la transforme en métrique de performance, ce qui pousse à du gonflement (« story de 8 points alors qu'on aurait dit 5 »). La métrique perd alors sa valeur de prédiction. À utiliser uniquement par l'équipe pour elle-même, jamais en comparatif."
+/>
+
+<Quiz
+  question="Sur un produit indie / SaaS solo avec un fondateur tech senior et PO en même temps, quelle méthode privilégier ?"
+  options={[
+    'Scrum strict avec daily 15 min',
+    'ShapeUp ou un Kanban très allégé : peu de cérémonies, autonomie élevée, focus sur les outcomes',
+    'Aucune méthode, c\'est inutile',
+    'XP avec pair programming obligatoire'
+  ]}
+  answerIndex={1}
+  explanation="Un fondateur seul ou en très petite équipe n'a pas besoin de la coordination Scrum — il a besoin de focus. ShapeUp (cycles de 6 sem + cooldown 2 sem) ou un Kanban avec WIP serré + rétro mensuelle sont des choix solides. XP en solo (pair programming) n'a pas de sens. Mais avoir UNE méthode (même légère) reste préférable au chaos pur."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Manifesto for Agile Software Development* — [agilemanifesto.org](https://agilemanifesto.org/)
+- *ShapeUp* — Ryan Singer (gratuit) — [basecamp.com/shapeup](https://basecamp.com/shapeup)
+- *Kanban: Successful Evolutionary Change* — David J. Anderson
+- *Scrum Guide* — [scrumguides.org](https://scrumguides.org/)
+- *Extreme Programming Explained* — Kent Beck
+- *Accelerate* — Forsgren / Humble / Kim (DORA)
+
+---
+
+**Suite** : [15.2 — Outils](/15-methodes-soft-skills/02-outils/) — Linear, Jira, GitHub Projects, Notion et conventions de tickets.

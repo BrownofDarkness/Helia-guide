@@ -1,0 +1,392 @@
+---
+title: 12.4 — Pratiques continues
+description: Dependabot, Snyk, SAST/DAST, audit log, pentest, RGPD — la sécurité dans le quotidien.
+sidebar:
+  order: 4
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : intégrer la sécurité dans tes pratiques quotidiennes plutôt qu'en audit ponctuel. **DevSecOps** = sécurité cuite dans le pipeline.
+
+<ObjectiveList items={[
+  "Activer Dependabot ou Renovate pour les CVE de dépendances",
+  "Mettre en place SAST (statique) et DAST (dynamique) en CI",
+  "Comprendre les obligations RGPD pour un dev",
+  "Préparer un pentest ou bug bounty",
+  "Définir un Security Disclosure Policy"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 8 et 11 lus" />
+
+
+## Shift-left — la sécu cuite dans la CI
+
+Avant : audit annuel par un consultant, rapport, fix urgences.
+Aujourd'hui : sécurité **continue**, intégrée à chaque commit / PR / déploiement.
+
+| Stage | Outils 2026 |
+|-------|-------------|
+| Pre-commit | gitleaks, ESLint security plugins |
+| Pull request | Snyk, Dependabot, Semgrep, npm audit |
+| Build / CI | Trivy (containers), checkov (IaC) |
+| Déploiement | DAST contre staging |
+| Production | Sentry, WAF, monitoring |
+
+## Mises à jour de dépendances
+
+### Dependabot (GitHub)
+
+```yaml
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10
+    groups:
+      dev-dependencies:
+        dependency-type: 'development'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+```
+
+Bénéfices :
+- **PR automatique** quand une CVE apparaît sur une de tes deps.
+- Tu reviews et tu mergez (la CI valide le breaking).
+- Couvre npm, pip, composer, gem, gomod, github-actions, docker.
+
+### Renovate (alternative)
+
+[Renovate](https://docs.renovatebot.com/) — open source, plus configurable que Dependabot. Permet :
+- Grouper les bumps mineurs en 1 seule PR par semaine.
+- Auto-merge les patchs sans risque.
+- Schedules custom.
+
+### `npm audit` (et équivalents)
+
+```bash
+npm audit                # liste les vulnérabilités
+npm audit fix             # auto-fix non-breaking
+npm audit fix --force     # auto-fix avec breaking (à reviewer)
+```
+
+À lancer en CI bloquant pour les **highs** :
+
+```yaml
+- name: Audit
+  run: npm audit --audit-level=high
+```
+
+### Snyk / socket.dev
+
+Plus poussés que `npm audit` :
+- Détection de **deps transitives** vulnérables.
+- Suggestions de **fix** précises.
+- Détection de **malware** dans les paquets (socket.dev).
+- Snyk Container : scan d'images Docker.
+- Snyk IaC : scan Terraform/CloudFormation.
+
+## SAST — Static Application Security Testing
+
+Analyse le **code source** pour détecter des patterns dangereux **sans l'exécuter**.
+
+### Semgrep
+
+[Semgrep](https://semgrep.dev/) — règles pattern-matching multi-langages.
+
+```bash
+npx semgrep --config=auto .
+```
+
+Règles intégrées détectent :
+- SQL injection
+- Hardcoded secrets
+- Crypto faible
+- Dangerous functions (eval, etc.)
+
+### CodeQL (GitHub Advanced Security)
+
+Inclus dans GitHub Enterprise. Analyse profonde du flow de données.
+
+### Sonar / SonarQube
+
+Plateforme commerciale qui combine SAST + qualité + couverture. Utilisée en gros corporate.
+
+## DAST — Dynamic Application Security Testing
+
+Teste l'app **en cours d'exécution** : envoie des payloads malicieux et observe les réponses.
+
+### OWASP ZAP
+
+[OWASP ZAP](https://www.zaproxy.org/) — open source, scan automatique d'une app.
+
+```yaml
+# GitHub Action ZAP
+- name: ZAP Baseline Scan
+  uses: zaproxy/[email protected]
+  with:
+    target: 'https://staging.example.com'
+```
+
+### Burp Suite
+
+Outil pro de pentest manuel. Référence en cybersécurité offensive.
+
+### Note — DAST est complémentaire de SAST
+
+| | SAST | DAST |
+|---|------|------|
+| Quoi | Code source | App en runtime |
+| Faux positifs | Plus | Moins |
+| Couvre quoi | Bugs de code | Bugs runtime, config, intégration |
+| Quand | Pre-commit / CI | Staging avant déploiement |
+
+## Detection de secrets
+
+### gitleaks
+
+```yaml
+# Pre-commit hook
+- repo: https://github.com/gitleaks/gitleaks
+  rev: v8.21.0
+  hooks:
+    - id: gitleaks
+```
+
+Bloque le commit si détection d'AWS keys, GitHub tokens, etc.
+
+### GitHub Secret Scanning
+
+Activé automatiquement sur les repos publics. Si un partenaire (Stripe, Slack…) détecte une de leurs clés dans un commit, ils **t'alertent ET la révoquent automatiquement**.
+
+## Audit log
+
+### Quoi logger
+
+| Événement | Importance |
+|-----------|-----------|
+| Login OK / KO | Critique (détection brute-force) |
+| Reset password | Critique |
+| Changement de rôle | Critique |
+| Export massif (RGPD, dump) | Critique |
+| Modification config sécu | Critique |
+| Accès admin | Important |
+| Création/suppression de ressource | Selon contexte |
+
+### Quoi NE PAS logger
+
+- Mots de passe (même hashés).
+- Tokens, JWT.
+- Numéros de CB, CVV.
+- Données médicales en clair.
+- Données RGPD sensibles non nécessaires.
+
+### Format
+
+```ts
+logger.info({
+  event: 'user_login',
+  userId: 42,
+  ip: req.ip,
+  userAgent: req.headers['user-agent'],
+  success: true,
+  timestamp: new Date(),
+});
+```
+
+JSON structuré → grep-able, alertable.
+
+## Pentest et bug bounty
+
+### Pentest classique
+
+Tu engages un consultant qui simule un attaquant pendant 5-10 jours. Rapport avec criticité (Critical/High/Medium/Low).
+
+**Quand** : avant un launch grand public, conformité (PCI-DSS, ISO27001), banque/assurance.
+
+**Coût typique** : 5-30k€ pour une web app moyenne.
+
+### Bug bounty
+
+Plateformes : [HackerOne](https://www.hackerone.com/), [YesWeHack](https://www.yeswehack.com/), [Intigriti](https://www.intigriti.com/).
+
+Tu paies les chercheurs **uniquement** pour les bugs trouvés. Plus économique pour les startups.
+
+### Security.txt
+
+```
+# /.well-known/security.txt
+Contact: security@example.com
+Expires: 2027-01-01T00:00:00.000Z
+Acknowledgments: https://example.com/security/hall-of-fame
+Preferred-Languages: fr, en
+```
+
+Standard ([securitytxt.org](https://securitytxt.org/)) — un chercheur qui trouve une faille sait à qui écrire.
+
+## RGPD — l'essentiel pour un dev
+
+Le **RGPD** (UE, 2018) impose des obligations dès qu'on traite des données personnelles.
+
+### Principes
+
+| Principe | Action concrète |
+|----------|------------------|
+| **Minimisation** | Ne collecte QUE les données nécessaires |
+| **Limitation de finalité** | Tu n'utilises pas les données pour autre chose que prévu |
+| **Conservation limitée** | Suppression auto après X mois/années |
+| **Sécurité** | Chiffrement, contrôle d'accès, audit log |
+| **Droits des personnes** | Accès, rectification, suppression, portabilité |
+| **Privacy by design** | Sécu / RGPD conçus dès le départ |
+
+### Implications dev concrètes
+
+#### 1. Endpoint de suppression
+
+L'utilisateur doit pouvoir **supprimer son compte** + ses données.
+
+```ts
+app.delete('/me', requireAuth, async (req, res) => {
+  await db.transaction(async (tx) => {
+    // Anonymiser ce qui doit rester (commandes pour audit)
+    await tx.order.updateMany({
+      where: { userId: req.user.id },
+      data: { userEmail: 'deleted@example.com' },
+    });
+    // Supprimer le user
+    await tx.user.delete({ where: { id: req.user.id } });
+  });
+  res.json({ message: 'Account deleted' });
+});
+```
+
+#### 2. Endpoint d'export
+
+L'utilisateur doit pouvoir **récupérer ses données** (portabilité).
+
+```ts
+app.get('/me/export', requireAuth, async (req, res) => {
+  const data = {
+    profile: await db.user.findById(req.user.id),
+    orders: await db.order.findMany({ where: { userId: req.user.id } }),
+    // ...
+  };
+  res.json(data);
+});
+```
+
+#### 3. Consentement explicite
+
+Tracking, newsletters, cookies non-essentiels → **opt-in**, pas opt-out.
+
+```html
+<!-- ❌ Cookies de tracking par défaut -->
+<script src="https://www.googletagmanager.com/gtag/js?id=G-XXX"></script>
+
+<!-- ✅ Bannière, chargement uniquement après accept -->
+<button onclick="loadTracking()">J'accepte</button>
+```
+
+Outils : [Plausible](https://plausible.io/), [Fathom](https://usefathom.com/) — analytics no-cookie, **pas de bannière nécessaire**.
+
+#### 4. DPO et registre
+
+Si > 250 employés ou traitement de données sensibles : **DPO** obligatoire et **registre des traitements**.
+
+#### 5. Sous-traitants
+
+Quand tu utilises un service tiers (Stripe, Mailchimp, Sentry…) qui traite des données utilisateur, ils sont **sous-traitants**. Tu dois :
+- Vérifier qu'ils sont conformes.
+- Avoir un **DPA** (Data Processing Agreement) avec eux.
+- Les lister dans ta politique de confidentialité.
+
+#### 6. Hébergement EU
+
+**Conseillé pour les utilisateurs EU**. Vercel, Supabase, AWS proposent des régions EU. Pour des données vraiment sensibles, considérer des hébergeurs souverains (OVH, Scaleway, Outscale).
+
+### Sanctions
+
+Jusqu'à **4 % du CA mondial** ou **20 millions €**. Les amendes commencent à pleuvoir (Meta 1.2 Md€ en 2023).
+
+## Disclosure policy — comment recevoir un report
+
+```markdown
+# SECURITY.md
+
+## Reporting a Vulnerability
+
+Please report security vulnerabilities to security@example.com.
+
+We take security seriously and will respond within 48 hours.
+
+We commit to:
+- Acknowledge your report within 48 hours
+- Keep you informed of our progress
+- Credit you in our hall of fame if you wish
+
+Please:
+- Don't disclose publicly before we fix
+- Don't access user data
+- Don't disrupt our services
+```
+
+Place ce fichier à la racine. GitHub le détecte et l'affiche dans l'onglet Security.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu reçois une PR Dependabot pour bumper lodash 4.17.10 → 4.17.21 (CVE-2019-10744). Action ?"
+  options={[
+    "Ignorer, ce n'est pas notre code",
+    "Reviewer la PR, vérifier que la CI passe (tests verts), merger. C'est exactement le rôle de Dependabot — t'alerter rapidement et automatiser le fix",
+    "Bloquer Dependabot",
+    "Attendre 6 mois pour voir si c'est stable"
+  ]}
+  answerIndex={1}
+  explanation="Dependabot fait le travail à ta place : ouvrir la PR, lancer la CI, te notifier. Si CI verte, merge dans la journée. Pour les patches de sécurité, le risque est inverse : laisser une vulnérabilité connue pendant 6 mois > risque d'un bump mineur. Pour les bumps majeurs, on review plus en détail."
+/>
+
+<Quiz
+  question="Tu construis une app B2C en France. Un user demande la suppression de son compte. Délai légal ?"
+  options={[
+    "Quand on veut",
+    'RGPD : action rapide, généralement sous 30 jours. La pratique : implémenter un endpoint de suppression accessible côté UI. Anonymiser ce qui doit rester (commandes pour comptabilité, logs)',
+    'Jamais (tu dois conserver pour 10 ans)',
+    'Ça ne te concerne pas en tant que dev'
+  ]}
+  answerIndex={1}
+  explanation="RGPD article 17 : droit à l'effacement. Délai de 30 jours pour répondre. Tu DOIS implémenter ce parcours côté code (endpoint + UI). Subtilité : certaines données doivent être conservées (factures = 10 ans en France) mais peuvent être anonymisées (remplacer email par 'deleted@example.com'). Ne JAMAIS hard-deleter sans avoir prévu le cas anonymisation."
+/>
+
+<Quiz
+  question="Un chercheur trouve une faille dans ton app. Comment doit-il te contacter ?"
+  options={[
+    "Sur Twitter publiquement",
+    'Via security.txt (.well-known/security.txt) ou un fichier SECURITY.md à la racine du repo — tu fournis email dédié, délai de réponse, engagement de bonne foi',
+    "Aucune procédure nécessaire",
+    "Il doit déposer un ticket support"
+  ]}
+  answerIndex={1}
+  explanation="Avoir une procédure publiée évite que les chercheurs publient les détails sur Twitter par frustration de ne pas trouver à qui écrire. security.txt est le standard (sécuritytxt.org). SECURITY.md sur GitHub est aussi détecté automatiquement. Tu devrais répondre sous 48h, fixer rapidement, et idéalement créditer le chercheur."
+/>
+
+## Pour aller plus loin
+
+- *Dependabot Docs* — [docs.github.com/en/code-security/dependabot](https://docs.github.com/en/code-security/dependabot)
+- *OWASP DevSecOps Guideline* — [owasp.org/www-project-devsecops-guideline](https://owasp.org/www-project-devsecops-guideline/)
+- *RGPD CNIL — Guide développeur* — [cnil.fr/fr/la-cnil-publie-un-nouveau-guide-rgpd-pour-les-developpeurs](https://www.cnil.fr/fr/la-cnil-publie-un-nouveau-guide-rgpd-pour-les-developpeurs)
+- *security.txt* — [securitytxt.org](https://securitytxt.org/)
+- *HackerOne* — [hackerone.com](https://www.hackerone.com/)
+
+---
+
+**Fin de l'axe 12.** Direction l'[axe 13 — Performance & accessibilité](/13-performance-a11y/), ou attaque le projet **Audit OWASP**.

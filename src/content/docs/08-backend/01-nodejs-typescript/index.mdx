@@ -1,0 +1,379 @@
+---
+title: Parcours Node.js / TypeScript
+description: Hono comme défaut moderne, Express 5 / Fastify / NestJS comparés, ORM (Drizzle, Prisma 7), tests d'intégration.
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../../components/ObjectiveList.astro';
+import Quiz from '../../../../components/Quiz.astro';
+import Scenario from '../../../../components/Scenario.astro';
+import ScenarioTabs from '../../../../components/ScenarioTabs.astro';
+import Level from '../../../../components/Level.astro';
+import ExerciseDownload from '../../../../components/ExerciseDownload.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+<Level value="confirmé" reading="40 min" prereq="axes 5-7 + 8.0 lus" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="13">
+Marie écrit son premier `app.post('/orders', handler)` en Hono. Choix de stack : Node 24 (TypeScript natif) + Hono + Drizzle + Postgres + Better Auth. Premier endpoint : créer une commande pour Lina, valider avec Zod, persister en DB, retourner l'ID. Elle trip un peu sur les types Drizzle, mais le compilateur la guide.
+</Scenario>
+
+<Scenario parcours="B" episode="12">
+Studio Pulse en Hono : l'endpoint `POST /bookings` doit être **transactionnel** (vérifier la place + insérer + décrémenter). Hugo découvre `db.transaction()` de Drizzle. Plus de bug overbooking. Plus tard : webhook Stripe avec signature vérifiée.
+</Scenario>
+
+<Scenario parcours="C" episode="13">
+Sami code l'API GreenBox sur Cloudflare Workers (edge mondial) avec Hono. Drizzle + Neon serverless driver pour la DB. Il découvre que Workers ne supporte pas TCP direct vers Postgres — il route via le HTTP driver Neon. Latence mondiale < 50 ms.
+</Scenario>
+
+<Scenario parcours="D" episode="13">
+Léa monte le backend CoupDeMain en Hono + Yjs server. Pour les messages privés : RLS Postgres pour l'isolation au niveau DB. Pour la modération : queue BullMQ qui pousse vers Claude Haiku puis vers une file de modération humaine.
+</Scenario>
+
+<Scenario parcours="E" episode="13">
+Yanis fork **directement le code de l'exercice `taskly-api`** du guide. Hono + Drizzle + Postgres + Better Auth. Il l'adapte à son asso : ajoute des rôles, du RBAC, un endpoint admin, des notifications Resend.
+</Scenario>
+
+> 🎯 **Objectif** : construire des APIs Node.js modernes en TypeScript strict — choisir le bon framework selon le contexte, structurer un projet, valider, authentifier, tester.
+
+<ObjectiveList items={[
+  "Choisir entre Hono, Fastify, Express 5, NestJS selon le projet",
+  "Construire une API REST typée avec validation Zod et middleware",
+  "Authentifier avec JWT en cookie HttpOnly",
+  "Connecter une base de données via Drizzle ou Prisma 7",
+  "Tester avec Vitest + Supertest sur une DB éphémère"
+]} />
+
+## Pourquoi Node.js en backend ?
+
+| Pour | Contre |
+|------|--------|
+| Même langage que le frontend → partage de code (types, validation Zod, libs) | Mono-thread (workers ou multi-process pour le CPU-bound) |
+| **Excellent pour I/O-bound** (APIs, streaming, temps réel) | Moins adapté aux calculs lourds (préférer Go/Rust/Python si besoin) |
+| Écosystème npm gigantesque, Bun et Deno dispo en alternative | Complexité de l'écosystème (ESM/CJS, plein d'outils similaires) |
+| TypeScript strict ≈ Java/C# en sécurité de typage, sans la cérémonie | Un projet bâclé se transforme vite en spaghetti |
+
+**Verdict 2026** : c'est le choix par défaut si ton frontend est en JS/TS, ou si tu fais du temps réel (WebSocket, SSE, edge).
+
+## Choisir son framework
+
+### Hono — le défaut moderne (recommandé)
+
+| | |
+|---|---|
+| **Style** | Minimaliste, web standards (Request/Response du Fetch API) |
+| **TypeScript** | Type-safe end-to-end, inférence excellente |
+| **Performance** | Très rapide (~55 000 req/s sur Node, davantage sur Bun) |
+| **Cibles** | Node, Bun, Deno, **Cloudflare Workers**, Vercel Edge, AWS Lambda |
+| **Écosystème** | Middlewares pour CORS, JWT, logger, validateur Zod, etc. |
+
+```ts
+import { Hono } from 'hono';
+import { logger } from 'hono/logger';
+import { cors } from 'hono/cors';
+
+const app = new Hono();
+app.use(logger(), cors());
+
+app.get('/health', (c) => c.json({ status: 'ok' }));
+
+app.get('/users/:id', (c) => {
+  const id = c.req.param('id');
+  return c.json({ id, name: 'Alice' });
+});
+
+export default app;
+```
+
+**Pourquoi Hono est devenu le défaut en 2026** : tu écris une fois, tu déploies sur n'importe quoi (Node serveur classique **ou** edge worker). Plus besoin de choisir au début entre Express et Cloudflare Workers.
+
+### Express 5 — la mature (legacy mais maintenue)
+
+```ts
+import express from 'express';
+
+const app = express();
+app.use(express.json());
+
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+app.get('/users/:id', async (req, res) => {
+  const user = await getUser(req.params.id);
+  res.json(user);
+});
+
+app.listen(3000);
+```
+
+**Express 5** (sortie stable fin 2024) apporte :
+
+- **Gestion async automatique** (les exceptions dans les handlers async remontent au error middleware sans wrap manuel).
+- Suppression d'APIs deprecated.
+- Compatibilité avec Node 20+.
+
+**Quand le choisir** : tu hérites d'un projet existant, ou tu veux la **maturité maximum** d'écosystème (énorme catalogue de middlewares).
+
+### Fastify — la performante classique
+
+```ts
+import Fastify from 'fastify';
+
+const app = Fastify({ logger: true });
+
+app.get('/users/:id', {
+  schema: {
+    params: { type: 'object', properties: { id: { type: 'string' } } },
+    response: { 200: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' } } } },
+  },
+}, async (req) => {
+  return { id: req.params.id, name: 'Alice' };
+});
+
+await app.listen({ port: 3000 });
+```
+
+**Forces** : ~3× plus rapide qu'Express, **JSON Schema natif** (validation + sérialisation rapides), plugins encapsulés (système d'extension propre).
+
+**Quand le choisir** : APIs Node serveur classique avec exigence de perf, équipe qui n'a pas besoin de l'edge.
+
+### NestJS — pour les gros projets entreprise
+
+```ts
+import { Controller, Get, Param } from '@nestjs/common';
+
+@Controller('users')
+export class UsersController {
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return { id, name: 'Alice' };
+  }
+}
+```
+
+**Forces** : architecture imposée (modules, services, DI), décorateurs, intégrations avec presque tout (TypeORM, Prisma, GraphQL, microservices).
+
+**Faiblesses** : verbeux, courbe d'apprentissage, sur-dimensionné pour les petits projets.
+
+**Quand le choisir** : équipe 10+ devs, projet long-terme, équipes Java/Angular qui veulent retrouver leurs marques.
+
+### Tableau de décision
+
+| Si... | Choisis |
+|-------|---------|
+| Tu démarres un nouveau projet en 2026 | **Hono** |
+| Tu vises l'edge (Cloudflare, Vercel) | **Hono** |
+| Tu maintiens un Express existant | **Express 5** (ne migre que si bénéfice clair) |
+| Performance Node serveur, schema-driven | **Fastify** |
+| Grosse équipe, structure imposée, architecture par modules | **NestJS** |
+
+## Structure de projet typique
+
+Pour une API moyenne, voici une structure qui passe à l'échelle sans framework imposant :
+
+```
+taskly-api/
+├── src/
+│   ├── app.ts                    ← composition (middlewares + routes)
+│   ├── main.ts                   ← entry point (lance le serveur)
+│   ├── config.ts                 ← parsing des env via Zod
+│   ├── db/
+│   │   ├── schema.ts             ← schémas Drizzle / Prisma
+│   │   └── index.ts              ← client DB
+│   ├── modules/
+│   │   ├── auth/
+│   │   │   ├── auth.routes.ts
+│   │   │   ├── auth.service.ts
+│   │   │   └── auth.schemas.ts
+│   │   └── tasks/
+│   │       ├── tasks.routes.ts
+│   │       ├── tasks.service.ts
+│   │       └── tasks.schemas.ts
+│   ├── middleware/
+│   │   ├── auth.ts
+│   │   └── error.ts
+│   └── lib/
+│       ├── jwt.ts
+│       └── logger.ts
+├── tests/
+│   └── ...
+├── package.json
+├── tsconfig.json
+└── .env.example
+```
+
+**Découpage par module métier** (auth, tasks) plutôt que par couche technique (controllers/, services/). Plus facile à naviguer quand le projet grossit.
+
+## ORMs et accès DB
+
+| Outil | Style | Quand préférer |
+|-------|-------|---------------|
+| **Drizzle** | SQL-like, ESM, edge-compatible | Performance, edge deployment, contrôle SQL |
+| **Prisma 7** | Schema-first, migrations puissantes | Productivité, équipe pas SQL-experte |
+| TypeORM | Decorators (NestJS-friendly) | Si déjà NestJS |
+| **Kysely** | Query builder TypeScript pur | Type-safety extrême, pas d'ORM |
+
+### Prisma 7 — la nouveauté 2026
+
+Prisma 7 a **abandonné le moteur Rust** pour un moteur **TypeScript/WebAssembly**. Conséquences :
+
+- Bundle ~85 % plus léger (1.6 MB vs 11 MB).
+- Performances ~3× meilleures sur grands résultats.
+- Compatible **edge** (Cloudflare Workers).
+
+```ts
+// schema.prisma
+model Task {
+  id          Int      @id @default(autoincrement())
+  title       String
+  done        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  ownerId     Int
+  owner       User     @relation(fields: [ownerId], references: [id])
+}
+
+// Code TS
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+
+const tasks = await prisma.task.findMany({
+  where: { done: false, ownerId: userId },
+  orderBy: { createdAt: 'desc' },
+  take: 20,
+});
+```
+
+### Drizzle — le challenger édge-first
+
+```ts
+// schema.ts
+import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core';
+
+export const tasks = sqliteTable('tasks', {
+  id: integer('id').primaryKey(),
+  title: text('title').notNull(),
+  done: integer('done', { mode: 'boolean' }).default(false),
+  ownerId: integer('owner_id').notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Code
+import { db } from './db';
+import { eq } from 'drizzle-orm';
+
+const tasks = await db
+  .select()
+  .from(tasks)
+  .where(eq(tasks.ownerId, userId))
+  .orderBy(desc(tasks.createdAt))
+  .limit(20);
+```
+
+✅ Plus proche du SQL → contrôle total.
+✅ Bundle minuscule, edge-ready.
+❌ Moins de magie : à toi d'écrire les jointures complexes.
+
+**Choix par défaut 2026** : **Drizzle** pour edge ou perfs ; **Prisma 7** pour productivité maximale et migrations DSL.
+
+## Tests d'intégration
+
+```bash
+npm install -D vitest supertest
+```
+
+```ts
+// tests/tasks.test.ts
+import { describe, it, expect, beforeEach } from 'vitest';
+import { app } from '../src/app';
+import { db } from '../src/db';
+
+beforeEach(async () => {
+  await db.delete(tasks);
+  await db.insert(tasks).values([{ title: 'test', ownerId: 1 }]);
+});
+
+describe('GET /tasks', () => {
+  it('renvoie la liste', async () => {
+    const res = await app.request('/tasks', {
+      headers: { Authorization: 'Bearer test-token' },
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.length).toBe(1);
+  });
+});
+```
+
+Avec **Hono**, `app.request()` te permet de tester sans démarrer un vrai serveur. Avec Express/Fastify, **Supertest** ou un simple `fetch` après `listen()`.
+
+Pour les tests bout-en-bout sur **vraie DB** : **Testcontainers** (lance un Postgres temporaire en Docker pour les tests). Robuste, mais lent.
+
+## Bun et Deno — alternatives à Node
+
+| Runtime | État 2026 | Quand l'envisager |
+|---------|-----------|-------------------|
+| **Bun** | Stable, plus rapide que Node, support npm, runtime+test+package manager unifiés | Projets greenfield qui veulent la perf |
+| **Deno** | Stable, sécurité par défaut, TS natif, npm compat | Projets qui privilégient sécurité et standards |
+| **Node 24** | LTS, **TS natif via type stripping** depuis Node 24 | Le défaut universel, valeur sûre |
+
+Hono (et beaucoup de libs modernes) tournent sur les **trois** runtimes sans modification.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu démarres une API en 2026 qui pourrait éventuellement être déployée sur Cloudflare Workers. Framework idéal ?"
+  options={[
+    'Express 5 — c\'est le standard',
+    'Hono — il tourne sur Node, Bun, Deno, Workers, Vercel Edge sans changement de code',
+    'NestJS — pour la structure',
+    'Fastify avec adapter Cloudflare'
+  ]}
+  answerIndex={1}
+  explanation="Hono est conçu sur les Web Standards (Request/Response). Tu écris une fois et tu déploies partout. Express ne tourne PAS sur Workers (dépend de Node APIs), Fastify nécessite des adapters lourds, NestJS encore plus."
+/>
+
+<Quiz
+  question="Pour valider le body d'une requête POST, quelle approche en 2026 ?"
+  options={[
+    'Vérifier manuellement chaque champ avec if',
+    'Utiliser un schéma Zod (ou Valibot) — la même définition sert à valider ET à typer le résultat',
+    'Faire confiance au client',
+    'Utiliser typeof'
+  ]}
+  answerIndex={1}
+  explanation="Zod te donne validation + typage avec UNE seule source de vérité. Le code est lisible, les erreurs sont structurées (ZodError avec issues), et le type inféré est utilisable partout (z.infer<typeof Schema>). C'est le pattern qui supplante les options manuelles."
+/>
+
+<Quiz
+  question="Dans une API Node, tu as besoin d'envoyer un email de bienvenue à l'inscription. L'envoi prend 800 ms. Que faire ?"
+  options={[
+    'await sendEmail() dans le handler — l\'utilisateur attend la confirmation',
+    'Pousser un job dans une queue (BullMQ + Redis), répondre 201 immédiatement, le worker envoie',
+    'fire-and-forget : sendEmail() sans await',
+    'setTimeout(sendEmail, 0)'
+  ]}
+  answerIndex={1}
+  explanation="L'option 1 fait attendre l'utilisateur ~1 seconde inutilement. L'option 3 (fire-and-forget) est dangereuse : si le service email échoue, AUCUN retry ne se déclenche. La queue (BullMQ) gère retry exponentiel, persistance, dead-letter queue, et te permet de scaler les workers indépendamment."
+/>
+
+## Pour aller plus loin
+
+- *Hono Docs* — [hono.dev](https://hono.dev/)
+- *Express 5 Migration Guide* — [expressjs.com/en/guide/migrating-5.html](https://expressjs.com/en/guide/migrating-5.html)
+- *Fastify Docs* — [fastify.dev](https://fastify.dev/)
+- *NestJS Docs* — [docs.nestjs.com](https://docs.nestjs.com/)
+- *Prisma Docs* — [prisma.io/docs](https://www.prisma.io/docs)
+- *Drizzle ORM* — [orm.drizzle.team](https://orm.drizzle.team/)
+
+---
+
+## 🛠 Exercice — Taskly API
+
+<ExerciseDownload
+  axe="08-backend"
+  slug="01-nodejs-typescript/taskly-api"
+  title="Taskly — API REST sécurisée"
+  description="Construire une API Hono (Node 24) avec auth JWT en cookie HttpOnly, hash argon2id, isolation par utilisateur, et tests d'intégration en SQLite mémoire. La référence du parcours backend Node/TS du guide."
+/>

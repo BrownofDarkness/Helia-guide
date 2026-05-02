@@ -1,0 +1,37 @@
+app = "taskly-api"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  release_command = "node dist/scripts/migrate.js"
+  strategy = "rolling"
+  max_unavailable = 0.33
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+  OTEL_SERVICE_NAME = "taskly-api"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 2
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    method = "get"
+    timeout = "3s"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory_mb = 512
+
+[metrics]
+  port = 3000
+  path = "/metrics"

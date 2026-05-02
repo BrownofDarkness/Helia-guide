@@ -1,0 +1,351 @@
+---
+title: Flask 3
+description: Le micro-framework Python — minimaliste, flexible, idéal pour comprendre les bases.
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../../../components/ObjectiveList.astro';
+import Quiz from '../../../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif** : utiliser Flask 3 pour des projets ciblés (microservices, scripts web, prototypes) en assemblant les briques dont tu as besoin.
+
+<ObjectiveList items={[
+  "Construire une app Flask avec routes, request, response",
+  "Organiser le code avec Blueprints et l'application factory pattern",
+  "Persister avec SQLAlchemy 2 et Flask-SQLAlchemy 3",
+  "Sérialiser avec Marshmallow",
+  "Authentifier avec Flask-JWT-Extended",
+  "Tester avec le client de test natif Flask"
+]} />
+
+## Pourquoi Flask ?
+
+| Pour | Contre |
+|------|--------|
+| **Minimaliste** : tu choisis tout (ORM, validation, auth) | Pas de magie — tout à assembler |
+| Excellent pour **comprendre ce qu'un framework fait vraiment** | Pas de doc API auto comme FastAPI |
+| **Stable** depuis 15+ ans | Async limité (utiliser Quart pour vraiment async) |
+| Idéal pour **microservices ciblés** ou prototypes | À grande échelle, on assemble beaucoup d'extensions |
+
+**Verdict 2026** : Flask reste pertinent pour des **projets bien définis** (un endpoint webhook, un CLI HTTP, un mini-service). Pour un nouveau projet ambitieux, FastAPI est plus adapté.
+
+## Hello world Flask 3
+
+```bash
+uv init taskly-flask
+cd taskly-flask
+uv add flask flask-sqlalchemy flask-jwt-extended marshmallow
+
+# app.py
+```
+
+```python
+# app.py
+from flask import Flask, jsonify
+
+app = Flask(__name__)
+
+@app.get("/health")
+def health():
+    return jsonify({"status": "ok"})
+
+if __name__ == "__main__":
+    app.run(debug=True)
+```
+
+```bash
+uv run python app.py
+# http://127.0.0.1:5000/health
+```
+
+## Application Factory pattern
+
+Pour les projets > 100 lignes, structure en **factory** plutôt qu'un seul fichier :
+
+```python
+# app/__init__.py
+from flask import Flask
+from .extensions import db, jwt
+from .config import Config
+
+def create_app(config_class: type[Config] = Config) -> Flask:
+    app = Flask(__name__)
+    app.config.from_object(config_class)
+
+    db.init_app(app)
+    jwt.init_app(app)
+
+    # Enregistrer les blueprints
+    from .modules.auth import bp as auth_bp
+    from .modules.tasks import bp as tasks_bp
+    app.register_blueprint(auth_bp, url_prefix='/auth')
+    app.register_blueprint(tasks_bp, url_prefix='/tasks')
+
+    return app
+```
+
+```python
+# app/extensions.py
+from flask_sqlalchemy import SQLAlchemy
+from flask_jwt_extended import JWTManager
+
+db = SQLAlchemy()
+jwt = JWTManager()
+```
+
+```python
+# app/config.py
+import os
+
+class Config:
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:///./data.db")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET")
+    JWT_TOKEN_LOCATION = ["cookies"]
+    JWT_COOKIE_SECURE = os.getenv("FLASK_ENV") == "production"
+    JWT_COOKIE_SAMESITE = "Lax"
+```
+
+```python
+# wsgi.py
+from app import create_app
+app = create_app()
+
+# Lancement
+# uv run flask --app wsgi run --debug
+# Prod : uv run gunicorn wsgi:app
+```
+
+## Blueprints — découper l'app
+
+Un **blueprint** = un sous-ensemble de routes regroupées. Permet d'organiser et d'éviter les fichiers monstrueux.
+
+```python
+# app/modules/tasks/__init__.py
+from flask import Blueprint
+bp = Blueprint('tasks', __name__)
+from . import routes  # noqa  (charge les routes)
+```
+
+```python
+# app/modules/tasks/routes.py
+from flask import jsonify, request
+from flask_jwt_extended import jwt_required, current_user
+from . import bp
+from .schemas import task_schema, tasks_schema, create_task_schema
+from app.extensions import db
+from app.models import Task
+
+@bp.get('/')
+@jwt_required()
+def list_tasks():
+    tasks = Task.query.filter_by(owner_id=current_user.id).all()
+    return jsonify(tasks_schema.dump(tasks))
+
+@bp.post('/')
+@jwt_required()
+def create_task():
+    payload = create_task_schema.load(request.json or {})
+    task = Task(owner_id=current_user.id, **payload)
+    db.session.add(task)
+    db.session.commit()
+    return jsonify(task_schema.dump(task)), 201
+```
+
+## Models avec SQLAlchemy 2
+
+```python
+# app/models.py
+from datetime import datetime
+from app.extensions import db
+
+class User(db.Model):
+    id: int = db.Column(db.Integer, primary_key=True)
+    email: str = db.Column(db.String(255), unique=True, nullable=False)
+    name: str = db.Column(db.String(100), nullable=False)
+    password_hash: str = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Task(db.Model):
+    id: int = db.Column(db.Integer, primary_key=True)
+    owner_id: int = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title: str = db.Column(db.String(200), nullable=False)
+    description: str | None = db.Column(db.Text)
+    done: bool = db.Column(db.Boolean, default=False, nullable=False)
+    due_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    owner = db.relationship('User', backref='tasks')
+```
+
+## Marshmallow — validation et sérialisation
+
+Marshmallow est le pendant Flask de **Pydantic** (FastAPI) ou **Serializers** (DRF).
+
+```python
+# app/modules/tasks/schemas.py
+from marshmallow import Schema, fields, validate
+
+class CreateTaskSchema(Schema):
+    title = fields.Str(required=True, validate=validate.Length(min=1, max=200))
+    description = fields.Str(validate=validate.Length(max=2000))
+    due_at = fields.DateTime()
+
+class TaskSchema(Schema):
+    id = fields.Int()
+    title = fields.Str()
+    description = fields.Str()
+    done = fields.Bool()
+    due_at = fields.DateTime()
+    created_at = fields.DateTime()
+
+create_task_schema = CreateTaskSchema()
+task_schema = TaskSchema()
+tasks_schema = TaskSchema(many=True)
+```
+
+## Auth avec Flask-JWT-Extended
+
+```python
+# app/modules/auth/routes.py
+from flask import jsonify, request
+from flask_jwt_extended import (
+    create_access_token, set_access_cookies, unset_jwt_cookies, jwt_required
+)
+from werkzeug.security import check_password_hash, generate_password_hash
+from . import bp
+from app.extensions import db
+from app.models import User
+
+@bp.post('/register')
+def register():
+    data = request.json or {}
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': 'Email already used'}), 409
+    user = User(
+        email=data['email'],
+        name=data['name'],
+        password_hash=generate_password_hash(data['password']),
+    )
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({'id': user.id, 'email': user.email, 'name': user.name}), 201
+
+@bp.post('/login')
+def login():
+    data = request.json or {}
+    user = User.query.filter_by(email=data['email']).first()
+    if not user or not check_password_hash(user.password_hash, data['password']):
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    token = create_access_token(identity=str(user.id))
+    response = jsonify({'id': user.id, 'email': user.email, 'name': user.name})
+    set_access_cookies(response, token)
+    return response
+
+@bp.post('/logout')
+@jwt_required()
+def logout():
+    response = jsonify(success=True)
+    unset_jwt_cookies(response)
+    return response
+```
+
+<Aside type="caution" title="werkzeug pour le hash mais argon2 mieux">
+`generate_password_hash` utilise PBKDF2 par défaut, acceptable mais argon2id est meilleur. Pour un projet sérieux : utilise [`passlib`](https://passlib.readthedocs.io/) avec `argon2id`.
+</Aside>
+
+## Tests — client natif Flask
+
+```python
+# tests/conftest.py
+import pytest
+from app import create_app
+from app.extensions import db
+
+@pytest.fixture
+def app():
+    app = create_app()
+    app.config.update(TESTING=True, SQLALCHEMY_DATABASE_URI="sqlite:///:memory:")
+    with app.app_context():
+        db.create_all()
+    yield app
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
+
+# tests/test_auth.py
+def test_register(client):
+    response = client.post('/auth/register', json={
+        'email': 'alice@example.com',
+        'name': 'Alice',
+        'password': 'password123',
+    })
+    assert response.status_code == 201
+    assert response.json['email'] == 'alice@example.com'
+```
+
+## Quart — Flask en async
+
+Si tu as besoin de vraies perfs async tout en gardant l'API Flask, **Quart** est un drop-in replacement async. Mais en 2026, **FastAPI** est généralement le meilleur choix pour ça.
+
+## Déploiement
+
+```dockerfile
+FROM python:3.13-slim
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN pip install uv && uv sync --frozen
+COPY . .
+CMD ["uv", "run", "gunicorn", "wsgi:app", "--workers", "4", "--bind", "0.0.0.0:8000"]
+```
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu démarres un microservice qui reçoit des webhooks GitHub et les forward vers Slack. Choix idéal en Python ?"
+  options={[
+    'Django avec admin pour configurer',
+    'Flask 3 — quelques routes, simple, déployable en quelques Mo',
+    'FastAPI — pour les perfs',
+    'Python brut sans framework'
+  ]}
+  answerIndex={1}
+  explanation="Pour un microservice de quelques endpoints, Flask est imbattable en simplicité. Django est sur-dimensionné (admin, ORM, migrations pour rien). FastAPI fonctionne mais sans bénéfice tangible si pas d'I/O concurrent intense. Flask est exactement le bon outil ici."
+/>
+
+<Quiz
+  question="Tu organises ton app Flask en plusieurs modules. Quel pattern utilises-tu ?"
+  options={[
+    'Tout dans app.py, c\'est plus simple',
+    'Application factory + Blueprints — `create_app()` retourne l\'app, chaque module est un Blueprint',
+    'Variables globales pour partager l\'état',
+    'Un fichier par route'
+  ]}
+  answerIndex={1}
+  explanation="L'application factory est LE pattern Flask pour les projets > 100 lignes. Tu obtiens : tests faciles (différentes config par fixture), séparation logique en blueprints, pas de problème de circular imports. C'est dans la doc officielle dès la section Tutorial."
+/>
+
+<Quiz
+  question="Tu fais `result = User.query.filter_by(email=user_input).first()`. Est-ce sûr ?"
+  options={[
+    'Non, SQL injection possible',
+    'Oui — SQLAlchemy paramétrise automatiquement les requêtes, peu importe ce que contient user_input',
+    'Cela dépend de la DB',
+    'Il faut échapper user_input à la main'
+  ]}
+  answerIndex={1}
+  explanation='L&apos;ORM SQLAlchemy paramétrise toutes les valeurs. Tu n&apos;as PAS à échapper toi-même. Le seul risque réel d&apos;injection est si tu construis du SQL brut avec f-strings (ex. db.session.execute(f"SELECT ... WHERE email = ...")) — JAMAIS faire ça. Le paramétrage natif te protège tant que tu utilises l&apos;API normale.'
+/>
+
+## Pour aller plus loin
+
+- *Flask Documentation* — [flask.palletsprojects.com](https://flask.palletsprojects.com/)
+- *Flask Mega-Tutorial* — Miguel Grinberg (gratuit en ligne, la référence)
+- *Awesome Flask* — [github.com/humiaozuzu/awesome-flask](https://github.com/humiaozuzu/awesome-flask)
+- *Quart* (Flask async) — [quart.palletsprojects.com](https://quart.palletsprojects.com/)
+
+---
+
+Suite : [FastAPI](/08-backend/02-python/fastapi/) — pour le projet `taskly-api`.

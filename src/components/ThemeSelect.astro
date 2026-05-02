@@ -1,0 +1,192 @@
+---
+/**
+ * Override Starlight ThemeSelect — segmented control 3 segments (☀ Light / ⚙ Auto / 🌙 Dark).
+ * Style Vercel/Linear avec thumb qui glisse au switch.
+ * Reste compatible avec StarlightThemeProvider via le custom element.
+ */
+const themes = [
+  { value: 'light', icon: '☀', label: 'Thème clair' },
+  { value: 'auto', icon: '⚙', label: 'Thème automatique (système)' },
+  { value: 'dark', icon: '🌙', label: 'Thème sombre' },
+];
+
+// Le composant peut être rendu plusieurs fois sur la même page
+// (header desktop + MobileMenuFooter). Un name de radio unique évite que
+// les deux instances forment un seul radio group.
+const groupName = `theme-toggle-${Math.random().toString(36).slice(2, 9)}`;
+---
+
+<starlight-theme-select>
+  <fieldset class="theme-segmented" role="radiogroup" aria-label="Sélection du thème">
+    <span class="theme-thumb" aria-hidden="true"></span>
+    {themes.map((t) => (
+      <label class="theme-segment" data-theme-value={t.value} title={t.label}>
+        <input type="radio" name={groupName} value={t.value} aria-label={t.label} />
+        <span class="theme-icon" aria-hidden="true">{t.icon}</span>
+      </label>
+    ))}
+  </fieldset>
+</starlight-theme-select>
+
+<style>
+  .theme-segmented {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 999px;
+    background: var(--sl-color-gray-7, var(--sl-color-bg));
+    margin: 0;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .theme-segment {
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.85rem;
+    height: 1.5rem;
+    cursor: pointer;
+    border-radius: 999px;
+    color: var(--sl-color-gray-2);
+    transition: color 180ms ease;
+  }
+  .theme-segment input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    margin: 0;
+  }
+  .theme-segment:has(input:checked) { color: var(--sl-color-accent); }
+  .theme-segment:hover { color: var(--sl-color-accent-high, var(--sl-color-accent)); }
+
+  .theme-icon {
+    font-size: 0.9rem;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .theme-thumb {
+    position: absolute;
+    top: 0.2rem;
+    left: 0.2rem;
+    width: 1.85rem;
+    height: 1.5rem;
+    background: var(--sl-color-bg);
+    border: 1px solid var(--sl-color-accent);
+    border-radius: 999px;
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .theme-segmented:has([data-theme-value='light'] input:checked) .theme-thumb {
+    transform: translateX(0);
+  }
+  .theme-segmented:has([data-theme-value='auto'] input:checked) .theme-thumb {
+    transform: translateX(1.85rem);
+  }
+  .theme-segmented:has([data-theme-value='dark'] input:checked) .theme-thumb {
+    transform: translateX(3.7rem);
+  }
+
+  .theme-segmented:focus-within {
+    border-color: var(--sl-color-accent);
+    box-shadow: 0 0 0 3px var(--sl-color-accent-low);
+  }
+  .theme-segment input:focus-visible { outline: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .theme-thumb { transition: none; }
+  }
+</style>
+
+<script>
+  type ThemeChoice = 'auto' | 'light' | 'dark';
+
+  function effectiveTheme(choice: ThemeChoice): 'light' | 'dark' {
+    if (choice === 'light' || choice === 'dark') return choice;
+    return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+
+  function syncRadios(choice: ThemeChoice) {
+    document
+      .querySelectorAll<HTMLInputElement>('starlight-theme-select input[type=radio]')
+      .forEach((r) => { r.checked = r.value === choice; });
+  }
+
+  function applyTheme(choice: ThemeChoice) {
+    // Nettoyage : 'auto' n'est jamais stocké (Starlight ThemeProvider y est sensible).
+    if (choice === 'auto') {
+      localStorage.removeItem('starlight-theme');
+    } else {
+      localStorage.setItem('starlight-theme', choice);
+    }
+    document.documentElement.dataset.theme = effectiveTheme(choice);
+    syncRadios(choice);
+    const provider = (window as unknown as {
+      StarlightThemeProvider?: { updatePickers?: (v: string) => void };
+    }).StarlightThemeProvider;
+    provider?.updatePickers?.(choice);
+  }
+
+  function readStoredChoice(): ThemeChoice {
+    const stored = localStorage.getItem('starlight-theme');
+    if (stored === 'light' || stored === 'dark') return stored;
+    // Si la valeur est 'auto' explicit (legacy) ou autre, on nettoie
+    if (stored !== null) localStorage.removeItem('starlight-theme');
+    return 'auto';
+  }
+
+  // Délégation globale : un seul listener à la racine, indépendant du cycle de vie
+  // des custom elements et des View Transitions.
+  if (!(document.body as HTMLElement & { dataset: DOMStringMap }).dataset.themeDelegated) {
+    (document.body as HTMLElement).dataset.themeDelegated = '1';
+    document.addEventListener('change', (e) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement &&
+        target.type === 'radio' &&
+        target.closest('starlight-theme-select') &&
+        target.checked
+      ) {
+        applyTheme(target.value as ThemeChoice);
+      }
+    });
+  }
+
+  // Resync immédiat au chargement du script.
+  applyTheme(readStoredChoice());
+
+  // Re-resync après chaque navigation View Transitions :
+  // ClientRouter restaure les attributes du <html> rendu côté serveur,
+  // ce qui écrase notre data-theme + remet les radios à leur state HTML.
+  document.addEventListener('astro:after-swap', () => {
+    applyTheme(readStoredChoice());
+  });
+  document.addEventListener('astro:page-load', () => {
+    applyTheme(readStoredChoice());
+  });
+
+  // Suit le système quand on est en mode 'auto'
+  matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+    if (readStoredChoice() === 'auto') applyTheme('auto');
+  });
+
+  // Custom element minimal pour rester compatible avec StarlightThemeProvider.updatePickers().
+  class StarlightThemeSelect extends HTMLElement {
+    connectedCallback() {
+      // Initialise les radios à la valeur stockée — la suite est gérée par la délégation.
+      const initial = readStoredChoice();
+      this.querySelectorAll<HTMLInputElement>('input[type=radio]').forEach((r) => {
+        r.checked = r.value === initial;
+      });
+    }
+  }
+  if (!customElements.get('starlight-theme-select')) {
+    customElements.define('starlight-theme-select', StarlightThemeSelect);
+  }
+</script>

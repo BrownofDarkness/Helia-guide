@@ -1,0 +1,262 @@
+---
+title: Parcours Python
+description: Django 6.0, Flask 3, FastAPI 0.136+ — trois philosophies, un même langage, choisir lucidement.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../../components/ObjectiveList.astro';
+import Quiz from '../../../../components/Quiz.astro';
+import Scenario from '../../../../components/Scenario.astro';
+import ScenarioTabs from '../../../../components/ScenarioTabs.astro';
+import Level from '../../../../components/Level.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+<Level value="confirmé" reading="25 min" prereq="axes 5-7 + 8.0 lus" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="13b">
+Marie hésite : et si elle utilisait Python plutôt que Node ? Lina a un voisin développeur Django qui lui a parlé de l'admin auto-généré. Pour son cas (boulangerie locale, faible volume), Django serait excellent : panel admin gratuit, ORM solide, communauté FR forte.
+</Scenario>
+
+<Scenario parcours="B" episode="12b">
+Hugo a une cousine data scientist qui lui parle de FastAPI. Il regarde — c'est tentant : OpenAPI auto-généré, validation Pydantic, async natif. Mais il reste sur Hono pour cohérence avec son frontend TypeScript.
+</Scenario>
+
+<Scenario parcours="C" episode="13b">
+Sami vient du monde Python (carrière précédente). Pour GreenBox, Django avec son admin auto-généré pour Sami serait un bon choix. Mais il a déjà investi dans Cloudflare Workers + Hono → il garde son écosystème JS unique.
+</Scenario>
+
+<Scenario parcours="D" episode="13b">
+Léa étudie Python à la fac. Elle pourrait tout faire en FastAPI + Pydantic. Mais l'écosystème Yjs + WebSocket reste meilleur en Node, donc elle reste cohérente avec Hono. Bon à savoir si elle change de stack un jour.
+</Scenario>
+
+<Scenario parcours="E" episode="13b">
+Yanis voit que beaucoup d'apps internes en boîte sont en Django (admin gratuit, opinionated). Il sait que c'est une compétence côté CV — mais Tasky reste sur Hono pour réutiliser l'exo `taskly-api`. Le parcours Python l'intéresse pour sa culture générale.
+</Scenario>
+
+> 🎯 **Objectif** : choisir entre Django, Flask et FastAPI selon le contexte, et savoir lire du code dans chacun. Tu auras besoin du parcours détaillé d'**un seul** des trois en pratique.
+
+<ObjectiveList items={[
+  "Connaître les versions Python actuelles et l'écosystème d'outils 2026",
+  "Distinguer Django, Flask et FastAPI sur 5 critères clés",
+  "Maîtriser asyncio pour les frameworks async (FastAPI principalement)",
+  "Configurer un environnement virtuel avec uv ou venv + pip",
+  "Choisir entre SQLAlchemy 2, Tortoise ORM, Django ORM"
+]} />
+
+## Pourquoi Python en backend ?
+
+| Pour | Contre |
+|------|--------|
+| **Lisibilité** : on lit du Python comme du pseudo-code | Plus lent que Node ou Go pour les très haut débits |
+| **Écosystème data/ML** : pas d'équivalent dans les autres langages | Async ajouté tardivement (asyncio) — coexistence sync/async parfois confuse |
+| Frameworks **ultra-mûrs** : Django existe depuis 2005, Flask depuis 2010 | Le packaging Python a longtemps été cauchemardesque (résolu par uv en 2024+) |
+| **FastAPI** est devenu **gold standard** des APIs Python en 2026 | Beaucoup d'écosystèmes anciens (Django ≤ 4) à maintenir |
+| Talent pool énorme (data, ops, web) | TypeScript a rattrapé Python en sécurité de typage |
+
+**Verdict 2026** : Python est un excellent choix si ton équipe a un fort fond data/ML, ou si tu veux la productivité d'un Django pour un CRUD complet.
+
+## Versions courantes 2026
+
+| Outil | Version courante | Note |
+|-------|------------------|------|
+| **Python** | 3.13 (3.14 en 2025-Q4) | Cible 3.12+ pour les nouveaux projets |
+| **Django** | **6.0** (LTS) | Sortie fin 2025, async views matures |
+| **Flask** | **3.0+** | Stable, peu de changements |
+| **FastAPI** | **0.136+** (avril 2026) | Releases fréquentes, suit Pydantic v2 |
+| **Pydantic** | **v2** (réécriture en Rust) | 5 à 50× plus rapide que v1 |
+| **SQLAlchemy** | **2.x** | API async stable |
+
+## Choisir son framework — 5 critères
+
+| Critère | **Django** | **Flask** | **FastAPI** |
+|---------|-----------|-----------|-------------|
+| **Style** | Batteries-included | Micro-framework | Moderne, async, typé |
+| **Auto-doc API** | Via DRF | Via extensions | **Native (OpenAPI auto)** |
+| **Async support** | Oui (3.0+, mature en 6.0) | Limité (Quart pour async) | **Async-first** |
+| **Courbe d'apprentissage** | Moyenne (concepts spécifiques) | **Faible** | Faible si tu connais Pydantic |
+| **Productivité CRUD complet** | **Excellente** (admin auto) | À assembler toi-même | Excellente (sans admin) |
+| **Cas typique** | App métier, intranet, plateforme contenu | Microservice, prototype, script web | API REST publique, performante |
+
+### Tableau de décision rapide
+
+| Si tu veux... | Choisis |
+|---------------|---------|
+| Un CRUD complet avec admin auto en 1 jour | **Django** |
+| Une API REST moderne, async, avec doc auto | **FastAPI** |
+| Un microservice minimaliste ou un prototype | **Flask** |
+| Faire de la data viz / dashboard interne | **Streamlit** ou **Dash** (hors web standard) |
+
+## Outils Python modernes (2026)
+
+### uv — le gestionnaire de paquets qui change tout
+
+[uv](https://docs.astral.sh/uv/) (par Astral, mêmes créateurs que Ruff) remplace **pip + virtualenv + pyenv** en un seul outil **écrit en Rust**. 10 à 100× plus rapide.
+
+```bash
+# Installer uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Créer un projet
+uv init mon-projet
+cd mon-projet
+
+# Ajouter une dépendance
+uv add fastapi uvicorn
+
+# Créer un environnement virtuel et installer les deps
+uv sync
+
+# Lancer Python avec les deps installées
+uv run python script.py
+
+# Lancer un script avec inline dependencies
+uv run --with httpx hello.py
+```
+
+**Pourquoi changer pour uv** :
+- 1 outil au lieu de 4 (pip, virtualenv, pyenv, pip-tools).
+- `uv.lock` pour des installs **reproductibles** (équivalent du `package-lock.json`).
+- Détecte et installe la version Python automatiquement.
+
+### Ruff — le linter qui remplace tout
+
+[Ruff](https://docs.astral.sh/ruff/) remplace **Black + isort + Flake8 + plein d'autres** en un seul outil Rust ultra-rapide.
+
+```bash
+uv add --dev ruff
+uv run ruff check .            # lint
+uv run ruff format .           # format (équivalent black)
+```
+
+### Stack moderne 2026
+
+```
+Python 3.13 + uv + Ruff + mypy + FastAPI + SQLAlchemy 2 + Pydantic v2 + pytest
+```
+
+C'est le combo gagnant pour démarrer une API Python en 2026.
+
+## Asyncio en 2 minutes
+
+Si tu choisis **FastAPI**, tu utiliseras `async/await` partout. Si Django (≥ 4) ou Flask, c'est mixte.
+
+```python
+import asyncio
+
+async def fetch_user(user_id: int) -> dict:
+    # ici on attendrait un I/O (DB, HTTP)
+    await asyncio.sleep(0.1)
+    return {"id": user_id, "name": "Alice"}
+
+async def main():
+    # Parallèle
+    users = await asyncio.gather(
+        fetch_user(1),
+        fetch_user(2),
+        fetch_user(3),
+    )
+    print(users)
+
+asyncio.run(main())
+```
+
+**Règles** :
+- `async def` pour déclarer une fonction async.
+- `await` pour attendre un autre async.
+- `asyncio.gather(...)` pour paralléliser.
+- **Ne jamais bloquer** dans un async : pas de `time.sleep`, pas de `requests.get`. Utilise `asyncio.sleep`, `httpx`, `aiofiles`.
+
+## Choisir un ORM
+
+| ORM | Style | Fournit |
+|-----|-------|---------|
+| **Django ORM** | Schema-first via models.py | Migrations, admin, queryset chainable |
+| **SQLAlchemy 2** | Verbose mais puissant, sync ou async | Le plus flexible pour des modèles complexes |
+| **SQLModel** | SQLAlchemy + Pydantic en une lib | Bon défaut FastAPI |
+| **Tortoise ORM** | Async-first, inspiré Django ORM | Si tu veux du Django-like en async |
+
+**Recommandation** :
+- **Django** : utilise son ORM natif (pas le choix, c'est intégré).
+- **FastAPI** : **SQLModel** (SQLAlchemy 2 + Pydantic) ou SQLAlchemy 2 async.
+- **Flask** : SQLAlchemy 2 (via Flask-SQLAlchemy 3+).
+
+## Déploiement Python en 2026
+
+| Cible | Outil |
+|-------|-------|
+| **Conteneur Docker** | Python slim image, Gunicorn (sync) ou Uvicorn (async) |
+| **Plateforme PaaS** | Render, Fly.io, Railway — tous supportent Python directement |
+| **Serverless** | AWS Lambda + Mangum (FastAPI), Vercel Python runtime |
+| **Edge** | Limité côté Python — préfère Node/Hono pour l'edge |
+
+```dockerfile
+# Dockerfile FastAPI typique
+FROM python:3.13-slim
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN pip install uv && uv sync --frozen
+COPY . .
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+## Le projet `taskly-api` en Python
+
+L'exercice de référence sera implémenté en **FastAPI** (le plus moderne et le plus pertinent pour une API en 2026). Si tu choisis Django, tu devras adapter — le sous-parcours Django propose un projet équivalent.
+
+> 📁 **Code** : `exercises/08-backend/02-python/fastapi/taskly-api/`
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu démarres une API Python en 2026 qui doit gérer 1000 req/s avec doc OpenAPI automatique. Framework idéal ?"
+  options={[
+    'Django avec DRF',
+    'Flask avec extensions',
+    'FastAPI — async natif, OpenAPI auto, perf 4× supérieure à Flask',
+    'Python brut sans framework'
+  ]}
+  answerIndex={2}
+  explanation="FastAPI est conçu pour exactement ce cas. Async natif (pas de blocage I/O), Pydantic pour validation/sérialisation, OpenAPI généré gratuitement, perfs comparables à Node/Go pour le I/O-bound. Django+DRF est meilleur pour un site complet avec admin ; Flask est OK mais lent en sync."
+/>
+
+<Quiz
+  question="Tu installes les deps d'un projet Python clone de GitHub. Quel outil moderne 2026 ?"
+  options={[
+    'pip install -r requirements.txt',
+    'uv sync — utilise le lockfile, installe la bonne version Python, en quelques secondes',
+    'conda env create',
+    'easy_install'
+  ]}
+  answerIndex={1}
+  explanation="uv est devenu le standard 2026. Il remplace pip + virtualenv + pyenv en un seul outil 10-100× plus rapide. uv sync installe exactement ce qui est dans uv.lock, comme npm ci. C'est un saut générationnel équivalent à passer de npm à pnpm."
+/>
+
+<Quiz
+  question="Dans une fonction `async def` FastAPI, tu fais `time.sleep(2)`. Que se passe-t-il ?"
+  options={[
+    'Rien de problématique, ça attend 2 s comme prévu',
+    'Le serveur entier est bloqué pendant 2 s — aucune autre requête ne peut être traitée. Utilise `await asyncio.sleep(2)` à la place',
+    'FastAPI lève une exception',
+    'Le sleep est ignoré'
+  ]}
+  answerIndex={1}
+  explanation="C'est LA grande règle de l'async : ne jamais appeler une fonction bloquante dans un async def. time.sleep, requests.get, open() sync bloquent l'event loop. Solutions : asyncio.sleep, httpx async, aiofiles. Si tu DOIS appeler du sync : `await asyncio.to_thread(blocking_fn)` qui le délègue à un thread pool."
+/>
+
+## Pour aller plus loin
+
+- *Real Python* — [realpython.com](https://realpython.com/) — articles de référence
+- *FastAPI Documentation* — [fastapi.tiangolo.com](https://fastapi.tiangolo.com/)
+- *uv Docs* — [docs.astral.sh/uv](https://docs.astral.sh/uv/)
+- *Awesome Python* — [github.com/vinta/awesome-python](https://github.com/vinta/awesome-python)
+
+---
+
+Choisis ton sous-parcours :
+
+- [Django](/08-backend/02-python/django/) — productivité maximale pour un CRUD complet
+- [Flask](/08-backend/02-python/flask/) — minimalisme et liberté
+- [FastAPI](/08-backend/02-python/fastapi/) — modernité, async, typé, OpenAPI auto

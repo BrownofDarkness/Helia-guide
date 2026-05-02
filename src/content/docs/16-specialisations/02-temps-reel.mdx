@@ -1,0 +1,489 @@
+---
+title: 16.2 — Temps réel & collaboratif
+description: WebSockets, Server-Sent Events, WebRTC, mediasoup / LiveKit, CRDT (Yjs, Automerge), Liveblocks — patterns pour la synchronisation, la résolution de conflits, le scale.
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Aside type="tip">
+**Sujet central pour le parcours D (Léa / CoupDeMain)** — chat temps réel et présence sont cœur du produit. Pour Marie, Hugo, Sami, Yanis : le temps réel est plus marginal, ils peuvent s'inspirer de Léa quand le besoin se présente.
+</Aside>
+
+<Scenario parcours="A" episode="24">
+Pour Lina, le temps réel n'est pas central. Mais Marie ajoute un petit indicateur « 3 personnes regardent ce produit » via SSE — sympathique et léger. Pour le reste (chat avec Lina), elle pioche les patterns de Léa si besoin.
+</Scenario>
+
+<Scenario parcours="B" episode="23">
+Studio Pulse pourrait offrir des cours en visio. Hugo regarde LiveKit pour ça (SFU vidéo OSS). Plus simple : un lien Zoom. Le real-time WebSocket lui sert plutôt pour le **planning live** (« 1 place restante » qui se met à jour).
+</Scenario>
+
+<Scenario parcours="C" episode="24">
+GreenBox affiche une **livraison en cours** avec position du livreur en temps réel via SSE. Pas de chat, donc pas de WebSocket bidirectionnel — SSE suffit largement et coûte moins cher.
+</Scenario>
+
+<Scenario parcours="D" episode="24">
+**Le cœur de CoupDeMain** : chat privé entre voisins avec Yjs (<Term>CRDT</Term>) pour la collaboration sans conflits, présence en ligne via WebSocket, fan-out via Redis pub/sub multi-node Fly.io. Léa devient la spécialiste real-time du guide.
+</Scenario>
+
+<Scenario parcours="E" episode="24">
+Yanis ajoute du **collab kanban** à Tasky : 2 coachs déplacent des tâches simultanément, sans conflit. Yjs sur le board (state.tasks). Énorme bénéfice UX, peu de code.
+</Scenario>
+
+> 🎯 **Objectif** : choisir la bonne brique pour chaque besoin temps réel — chat, collaboration, vidéo. Comprendre quand un WebSocket suffit, quand SSE bat WebSocket, quand il faut un CRDT, et combien ça coûte de scaler.
+
+<ObjectiveList items={[
+  "Différencier polling, long-polling, SSE, WebSocket et WebRTC",
+  "Choisir entre WebSocket maison, Pusher / Ably / Liveblocks",
+  "Implémenter un éditeur collaboratif avec Yjs et résoudre les conflits",
+  "Comprendre les CRDT et quand ils sont préférables au server-of-truth",
+  "Anticiper les coûts et la scalabilité (sticky sessions, fan-out)"
+]} />
+
+<Level value="avancé" reading="12 min" prereq="axes 1-14 maîtrisés" />
+
+
+## Le paysage des protocoles
+
+```
+HTTP polling          → demande périodique simple (gaspille)
+HTTP long-polling     → connexion ouverte jusqu'à event
+SSE (Server-Sent)     → flux unidirectionnel server → client
+WebSocket             → bidirectionnel, full-duplex
+WebRTC                → P2P, vidéo / audio / data, NAT traversal
+WebTransport (HTTP/3) → bidirectionnel, multi-stream, encore jeune en 2026
+```
+
+| Protocole | Direction | Quand l'utiliser |
+|-----------|-----------|------------------|
+| **HTTP polling** | request/response | Très peu d'updates (1×/min) |
+| **Long-polling** | client → server tient la connexion | Fallback si WS bloqué |
+| **SSE** | server → client (uni) | Notifications, dashboards lecture seule, IA streaming |
+| **WebSocket** | bidirectionnel | Chat, présence, collab |
+| **WebRTC** | P2P bidirectionnel | Vidéo / audio / data peer-to-peer |
+| **WebTransport** | multi-stream HTTP/3 | Cas de niche, latence ultra-basse |
+
+> **Règle** : choisis **le plus simple qui fait le job**. SSE bat souvent WebSocket pour les flux serveur→client (LLM streaming par exemple).
+
+---
+
+## Server-Sent Events — sous-coté
+
+### En 5 lignes
+
+- Un endpoint HTTP avec `Content-Type: text/event-stream`.
+- Le serveur écrit `data: ...\n\n` à chaque event.
+- Le client se connecte avec `EventSource`.
+- **Reconnect automatique** géré par le navigateur.
+- HTTP/2 multiplexe → pas de limite « 6 connexions par origine » des temps anciens.
+
+### Côté serveur (Hono)
+
+```ts
+import { streamSSE } from 'hono/streaming';
+
+app.get('/events', (c) =>
+  streamSSE(c, async (stream) => {
+    for await (const evt of subscribeToBus()) {
+      await stream.writeSSE({ event: evt.type, data: JSON.stringify(evt.payload) });
+    }
+  })
+);
+```
+
+### Côté client
+
+```ts
+const es = new EventSource('/events');
+es.addEventListener('message', (e) => console.log(JSON.parse(e.data)));
+es.addEventListener('order.created', (e) => /* ... */);
+es.onerror = () => console.warn('reco auto en cours');
+```
+
+### Quand SSE ?
+
+- Notifications, dashboards live (read-only).
+- LLM streaming (ChatGPT, Claude API renvoient en SSE).
+- Logs en direct.
+- Position d'une commande / livraison.
+
+### Quand pas SSE ?
+
+- Bidirectionnel (chat, collab) → WebSocket.
+- Binaire pur (jeu, vidéo) → WebSocket binaire ou WebRTC.
+
+---
+
+## WebSocket — le standard temps réel
+
+### En 5 lignes
+
+- Handshake HTTP `Upgrade: websocket`.
+- Connexion **persistante**, **full-duplex**, **binaire ou texte**.
+- Pas de structure : tu décides du protocole applicatif (JSON, MessagePack, Protobuf).
+- **Sticky sessions** souvent nécessaires côté infra (WebSocket = stateful).
+- **Reconnect** à coder côté client (la lib s'en charge typiquement).
+
+### Côté serveur (Hono + ws)
+
+```ts
+import { WebSocketServer } from 'ws';
+
+const wss = new WebSocketServer({ noServer: true });
+
+wss.on('connection', (ws) => {
+  ws.on('message', (msg) => {
+    const data = JSON.parse(msg.toString());
+    if (data.type === 'chat') broadcast(data);
+  });
+});
+
+server.on('upgrade', (req, socket, head) => {
+  wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+});
+```
+
+### Côté client
+
+```ts
+const ws = new WebSocket('wss://api.example.com/ws');
+ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', token }));
+ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
+ws.onclose = () => setTimeout(reconnect, backoff());
+```
+
+### Authentification
+
+WebSockets n'ont **pas** de header `Authorization` (sauf hack en sub-protocol). Patterns 2026 :
+
+| Pattern | Explication |
+|---------|-------------|
+| **Cookie session** | Si même origine — WS hérite des cookies |
+| **Token dans l'URL** | `wss://api/ws?token=xxx` — attention aux logs |
+| **Sec-WebSocket-Protocol** | `new WebSocket(url, ['Bearer.eyJxxx'])` — astuce courante |
+| **Auth après handshake** | Premier message = auth, kick si raté en 5s |
+
+### Coûts cachés
+
+- **Mémoire** : ~10-50 KB / connexion. 100k WS = 5 GB RAM minimum.
+- **Sticky sessions** : load-balancer doit router vers le même node — `Cookie` ou IP hash.
+- **Fan-out** : message à diffuser à 1000 clients = 1000 envois. Redis pub/sub ou NATS souvent nécessaire entre nodes.
+
+> Si tu n'as pas envie de gérer ça : **Pusher**, **Ably**, **PartyKit** (Cloudflare Durable Objects), **Supabase Realtime**.
+
+---
+
+## Realtime managés
+
+| Service | Force | Modèle |
+|---------|-------|--------|
+| **Pusher Channels** | Mature, simple | $/messages |
+| **Ably** | Très solide, multi-région | $/messages, generous free |
+| **Supabase Realtime** | Postgres CDC + presence | Inclus avec Supabase |
+| **PartyKit** | Cloudflare Durable Objects | Edge global, par room |
+| **Liveblocks** | Specialised collab + presence | $/MAU |
+| **Pusher Beams** | Push mobile cross-platform | $ |
+| **Centrifugo** | OSS self-host | gratuit |
+
+**Quand un service managé** :
+
+- Équipe < 5 backend qui ne veut pas opérer ça.
+- Tu n'as pas le scale (sub-100k clients concurrents).
+- Tu veux multi-région sans souffrance.
+
+**Quand l'auto-héberger** :
+
+- Volume énorme (le coût $/message dépasse l'OPEX).
+- Compliance (données ne doivent pas sortir).
+- Cas très spécialisé.
+
+---
+
+## WebRTC — P2P pour la vidéo / audio
+
+WebRTC est complexe. À ne mettre en œuvre **qu'en sachant ce qu'on fait** ou via une lib qui abstrait.
+
+### Le triangle
+
+```
+┌────────┐                ┌────────┐
+│ Peer A │ ── DataChan ── │ Peer B │
+└────┬───┘                └───┬────┘
+     │                        │
+     └────── STUN / TURN ─────┘
+              │
+         ┌────────┐
+         │ Signal │ (WebSocket, your server)
+         └────────┘
+```
+
+| Brique | Rôle |
+|--------|------|
+| **STUN** | Découvre l'IP publique derrière NAT |
+| **TURN** | Relai si NAT traversal échoue (~20 % des cas en pratique) |
+| **Signaling** | Échange initial (SDP, ICE) — pas standardisé, ton choix |
+| **DataChannel** | Tunnel binaire / texte P2P |
+| **MediaStream** | Audio / vidéo capturé via `getUserMedia` |
+
+### Quand le faire seul
+
+Très rarement. Sauf :
+
+- Tu construis un produit niche (jeu temps réel P2P).
+- Tu veux contrôler à 100 %.
+
+### Quand utiliser une SFU / lib
+
+| Outil | Quoi |
+|-------|------|
+| **LiveKit** | OSS self-host ou cloud, SFU mûre |
+| **mediasoup** | OSS Node-friendly, plus bas niveau |
+| **Janus** | OSS C, pour les fous |
+| **Agora.io / Daily.co / Twilio Video** | SaaS clé-en-main |
+
+> Pour 99 % des cas : **LiveKit** (OSS + cloud) ou **Daily.co** / **Agora** (SaaS) — pas de SFU maison.
+
+---
+
+## CRDT — collaboration multi-utilisateur sans conflits
+
+### Le problème
+
+Deux utilisateurs éditent la même phrase **hors-ligne**, puis se reconnectent. Comment merger ?
+
+| Approche | Souci |
+|----------|-------|
+| **Last-write-wins** | On perd les éditions de l'un |
+| **Lock** | Pas de collab vraie |
+| **OT** (Operational Transform) | Compliqué (Google Docs au début) |
+| **CRDT** | Mathématiquement convergent — pas de central authority |
+
+### CRDT en 5 lignes
+
+Un **CRDT** (Conflict-free Replicated Data Type) est une structure de données qui :
+
+- Peut être modifiée **simultanément** par plusieurs réplicas.
+- Convergence **automatique** : peu importe l'ordre des opérations, tous arrivent au même état.
+- Fonctionne en **P2P** ou avec un **server relay**.
+- Supporte **offline-first** trivialement.
+
+### Yjs — le standard 2026
+
+[Yjs](https://yjs.dev/) est la lib CRDT JavaScript dominante.
+
+```ts
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+
+const ydoc = new Y.Doc();
+const provider = new WebsocketProvider('wss://yserver.example', 'room-1', ydoc);
+const ytext = ydoc.getText('content');
+
+ytext.observe((event) => {
+  console.log('Changement détecté', ytext.toString());
+});
+
+// Modification — synchronisée chez tous les peers connectés
+ytext.insert(0, 'Hello ');
+```
+
+Types CRDT supportés par Yjs :
+
+| Type Yjs | Équivalent JS |
+|----------|---------------|
+| `Y.Text` | string |
+| `Y.Array` | Array |
+| `Y.Map` | Map |
+| `Y.XmlFragment` | DOM XML |
+
+### Bindings frameworks
+
+- **`y-prosemirror`** / **`y-tiptap`** — éditeurs riches collaboratifs (style Notion).
+- **`y-codemirror`** / **`y-monaco`** — éditeurs de code collab (VSCode-like).
+- **`yjs-tldraw`** — canvas collaboratif.
+
+### Awareness (présence)
+
+Affiche les curseurs des autres participants :
+
+```ts
+provider.awareness.setLocalStateField('cursor', { x, y });
+provider.awareness.on('change', (changes) => {
+  for (const [clientId, state] of provider.awareness.getStates()) {
+    if (state.cursor) renderCursor(clientId, state.cursor);
+  }
+});
+```
+
+### Backend Yjs
+
+- **`y-websocket-server`** — démarre en 5 lignes, parfait pour MVP.
+- **`y-redis`** — fan-out via Redis pour multi-node.
+- **Liveblocks** — managed avec presence + persistence.
+- **TipTap Hocuspocus** — Yjs server avec auth, persistence, hooks.
+
+### Persistance
+
+CRDT en mémoire ne survit pas au redémarrage. Stratégies :
+
+- **`y-leveldb`** ou **`y-mongodb`** côté serveur.
+- **Snapshot** régulier (toutes les N modifs) en DB classique.
+- **Liveblocks / Hocuspocus** persistent automatiquement.
+
+### Automerge — l'alternative
+
+[Automerge](https://automerge.org/) — autre CRDT JS, géré par Ink & Switch. Plus axé sur le local-first et les apps offline. Focus différent.
+
+> **2026** : Yjs domine pour les éditeurs collab live. Automerge brille pour les apps **fortement offline-first** type Linear.
+
+---
+
+## Patterns d'architecture realtime
+
+### Pattern 1 — Pub/Sub centralisé
+
+```
+Client A ──┐
+Client B ──┼── WebSocket ── App ──┐
+Client C ──┘                       │
+                                   ▼
+                            Redis Pub/Sub  ◄── Worker batch
+```
+
+Simple, scalable jusqu'à ~50k clients par node.
+
+### Pattern 2 — Sticky session + Redis fan-out
+
+Pour multi-node :
+
+```
+LB sticky ──┐
+            ├── App1 ────┐
+            ├── App2 ────┼── Redis ──── stocke état partagé
+            └── App3 ────┘
+```
+
+Chaque app reçoit ses clients (sticky), Redis fan-out les broadcasts entre apps.
+
+### Pattern 3 — Edge realtime (Cloudflare Durable Objects)
+
+Une room = un **Durable Object** qui vit à l'edge le plus proche. Coordination, persistance, single-source-of-truth — sans gérer Redis ni sticky sessions. Latence ~50 ms mondialement.
+
+PartyKit / Liveblocks sous le capot.
+
+### Pattern 4 — P2P pur (WebRTC DataChannel)
+
+Pas de serveur applicatif. Idéal pour jeux, doc local. Mais STUN/TURN restent indispensables.
+
+---
+
+## Présence (online / typing / cursor)
+
+Au-delà des messages, tu veux savoir **qui est là**, qui tape, où sont les curseurs.
+
+| Solution | Quand |
+|----------|-------|
+| **Y.awareness** | Si tu utilises Yjs (gratuit) |
+| **Liveblocks Presence** | Si tu utilises Liveblocks |
+| **Custom heartbeat** WS | DIY simple |
+| **Phoenix Channels** | Si stack Elixir |
+
+Heartbeat custom :
+
+```ts
+// Client : ping toutes les 10 s
+setInterval(() => ws.send(JSON.stringify({ type: 'ping' })), 10_000);
+
+// Serveur : si aucun ping pendant 30 s → marquer offline
+```
+
+---
+
+## Anti-patterns
+
+| Symptôme | Mieux |
+|----------|-------|
+| WebSocket pour des notifications uniformes | SSE — moins coûteux, gestion native |
+| 1 WS par sous-feature (chat, présence, notif) | 1 seul WS multiplexé avec types de messages |
+| Pas de heartbeat | Connexion morte non détectée → présence faussée |
+| Sticky sessions oubliées | LB round-robin casse les WS au reload |
+| Pas de reconnect côté client | UX cassée à la moindre coupure |
+| Stocker les messages dans le WS uniquement | Persiste en DB sinon perte au redémarrage |
+| CRDT pour des entités relationnelles complexes | CRDT bril sur du texte / structures arborescentes ; pour de la donnée transactionnelle, Postgres + WebSocket sont mieux |
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu construis un dashboard live avec ~50 widgets qui se mettent à jour automatiquement (lecture seule). Choix idéal en 2026 ?"
+  options={[
+    'WebSocket bidirectionnel — c\'est le défaut moderne',
+    'Server-Sent Events (SSE) — flux server→client uni, reconnect natif, multiplexé sur HTTP/2, pas besoin de gérer le bidirectionnel',
+    'Polling toutes les 5 s',
+    'WebRTC DataChannel'
+  ]}
+  answerIndex={1}
+  explanation="SSE est sous-coté. Pour un flux purement server→client, c'est plus simple, pas besoin de sticky sessions, reconnect géré par le navigateur, multiplexable sur HTTP/2. WebSocket est inutilement compliqué ici. ChatGPT, Claude API, beaucoup de dashboards modernes utilisent SSE."
+/>
+
+<Quiz
+  question="Tu codes un éditeur collaboratif type Notion. Deux utilisateurs offline éditent puis se reconnectent. Quelle approche ?"
+  options={[
+    'Last-write-wins côté serveur',
+    'CRDT (Yjs) avec WebSocket provider — mathématiquement convergent, supporte offline-first par construction, présence native via awareness',
+    'Verrous pessimistes',
+    'Operational Transform implémenté maison'
+  ]}
+  answerIndex={1}
+  explanation="LWW perd des éditions. Verrous tuent la collab. OT est très complexe (Google Docs y a passé des années). Yjs résout le problème par construction : tous les réplicas convergent, peu importe l'ordre. y-prosemirror / y-tiptap rendent l'éditeur riche collaboratif quasi clé-en-main."
+/>
+
+<Quiz
+  question="Ton app a 200k utilisateurs concurrents en pic, équipe de 3 backend. Tu hésites entre WebSocket maison et Pusher/Ably. Quel critère décide ?"
+  options={[
+    'Toujours faire maison',
+    'Calculer le coût $/message de Pusher × volume vs le coût humain et infra de l\'auto-héberger (sticky LB, Redis fan-out, monitoring) — souvent service managé gagne en early stage',
+    'Toujours utiliser Pusher',
+    'Migrer en Elixir/Phoenix'
+  ]}
+  answerIndex={1}
+  explanation="C'est un calcul concret. Auto-héberger 200k WS coûte ~6-12 GB RAM minimum, sticky LB, Redis pub/sub multi-node, monitoring, oncall. À ce volume, Pusher / Ably reste compétitif (~500-2000 €/mois pour le tier adapté), avec zéro gestion. Tu re-évalues quand le coût SaaS dépasse 10-20 k€/mois OU que tu as l'équipe ops dédiée."
+/>
+
+<Quiz
+  question="Tu déploies une app WebSocket sur 3 nodes derrière un load balancer round-robin. Les utilisateurs voient leurs messages en double, ou pas du tout. Pourquoi ?"
+  options={[
+    'Bug applicatif',
+    'WebSocket = stateful : sticky sessions obligatoires (cookie ou IP hash) + un fan-out cross-node (Redis pub/sub ou NATS) sinon les nodes ne se voient pas',
+    'Augmenter la RAM',
+    'Migrer en SSE'
+  ]}
+  answerIndex={1}
+  explanation="WebSocket est stateful par essence. Round-robin route un même client tantôt sur node A, tantôt sur node B → connexion cassée à chaque retry. Et chaque node ne diffuse qu'à ses propres clients sans Redis pub/sub entre nodes. C'est l'erreur la plus fréquente sur le scaling WS. Sticky + fan-out sont les deux ingrédients indispensables."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Yjs docs* — [docs.yjs.dev](https://docs.yjs.dev/)
+- *Automerge* — [automerge.org](https://automerge.org/)
+- *Liveblocks docs* — [liveblocks.io/docs](https://liveblocks.io/docs)
+- *PartyKit* — [partykit.io](https://www.partykit.io/)
+- *LiveKit* — [livekit.io](https://livekit.io/)
+- *MDN — Server-Sent Events* — [developer.mozilla.org/.../Server-sent_events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events)
+- *Designing Data-Intensive Applications* — Martin Kleppmann (chapitres replication / consensus)
+
+---
+
+**Suite** : [16.3 — 3D, jeu, créatif](/16-specialisations/03-3d/) — Canvas, WebGL, Three.js, WebGPU.

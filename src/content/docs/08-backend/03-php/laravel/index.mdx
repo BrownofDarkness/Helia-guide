@@ -1,0 +1,453 @@
+---
+title: Laravel 12 (LTS)
+description: Le framework PHP le plus productif — Eloquent, Blade, Sanctum, queues, broadcasting.
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../../../components/ExerciseDownload.astro';
+import Quiz from '../../../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif** : maîtriser Laravel 12 LTS au point de livrer un SaaS complet (auth, CRUD, queues, mail, broadcasting) en quelques jours.
+
+<ObjectiveList items={[
+  "Construire une app Laravel avec routing, contrôleurs, Eloquent, validation, Blade",
+  "Authentifier une SPA via Laravel Sanctum (cookies session)",
+  "Mettre en file des jobs avec Redis et Horizon",
+  "Tester avec Pest (DSL plus expressif que PHPUnit)",
+  "Déployer via Forge ou Vapor"
+]} />
+
+## Pourquoi Laravel ?
+
+| Pour | Contre |
+|------|--------|
+| **Productivité** : artisan génère contrôleurs, modèles, migrations en 1 commande | Beaucoup de magie (façades, conteneur global) |
+| **Eloquent ORM** : actif-record élégant | Difficile à utiliser sans framework |
+| **Tout intégré** : auth, queues, mail, broadcasting, scheduling, cache | Convention Laravel à digérer |
+| **Écosystème mature** : Forge, Vapor, Nova (admin), Horizon, Telescope | Verrouillage écosystème (à part Composer pur) |
+| **Pest** ou PHPUnit, factories, model testing | Performances brutes inférieures à Symfony optimisé |
+
+**Verdict 2026** : Laravel reste **le couteau suisse PHP** pour livrer vite. Sauf cas spécifiques (gros enterprise, perf critique), c'est le bon défaut.
+
+## Installation rapide
+
+```bash
+# Avec composer global
+composer global require laravel/installer
+laravel new taskly-laravel --git
+cd taskly-laravel
+
+# Ou directement
+composer create-project laravel/laravel taskly-laravel
+
+# Démarrer
+php artisan serve
+# http://localhost:8000
+```
+
+`artisan` est le **CLI Laravel**. Tu vas l'utiliser tous les jours.
+
+## Structure d'un projet Laravel 12
+
+```
+taskly-laravel/
+├── app/
+│   ├── Http/
+│   │   ├── Controllers/         ← contrôleurs HTTP
+│   │   ├── Middleware/
+│   │   └── Requests/             ← Form Requests (validation)
+│   ├── Models/                   ← modèles Eloquent
+│   ├── Jobs/                     ← jobs en file
+│   ├── Mail/                     ← classes de mail
+│   └── Providers/
+├── routes/
+│   ├── web.php                   ← routes "session web" (avec CSRF)
+│   ├── api.php                   ← routes API (stateless)
+│   └── console.php
+├── database/
+│   ├── migrations/
+│   ├── factories/
+│   └── seeders/
+├── resources/
+│   ├── views/                    ← templates Blade
+│   └── ...
+├── tests/
+│   ├── Feature/
+│   └── Unit/
+├── config/
+└── .env
+```
+
+## Routes
+
+```php
+// routes/api.php
+use App\Http\Controllers\TaskController;
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/me', fn(Request $r) => $r->user());
+
+    Route::apiResource('tasks', TaskController::class);
+    // → 5 routes : index, store, show, update, destroy
+});
+```
+
+`Route::apiResource` génère automatiquement les 5 routes REST classiques.
+
+## Models avec Eloquent
+
+```bash
+php artisan make:model Task -mfsr
+# -m : migration, -f : factory, -s : seeder, -r : controller resource
+```
+
+```php
+// app/Models/Task.php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class Task extends Model
+{
+    protected $fillable = ['title', 'description', 'done', 'due_at'];
+
+    protected $casts = [
+        'done'   => 'boolean',
+        'due_at' => 'datetime',
+    ];
+
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_id');
+    }
+}
+```
+
+```php
+// database/migrations/xxxx_create_tasks_table.php
+Schema::create('tasks', function (Blueprint $table) {
+    $table->id();
+    $table->foreignId('owner_id')->constrained('users')->cascadeOnDelete();
+    $table->string('title');
+    $table->text('description')->nullable();
+    $table->boolean('done')->default(false);
+    $table->timestamp('due_at')->nullable();
+    $table->timestamps();
+});
+```
+
+```bash
+php artisan migrate
+```
+
+### Querysets
+
+```php
+// Filtrer
+$tasks = Task::where('owner_id', $userId)->where('done', false)->get();
+
+// Joindre (évite N+1)
+$tasks = Task::with('owner')->where('done', false)->get();
+
+// Pagination
+$tasks = Task::where('owner_id', $userId)->latest()->paginate(20);
+// retourne LengthAwarePaginator avec data, total, current_page, last_page
+
+// Update / delete par batch
+Task::where('owner_id', $userId)->update(['done' => true]);
+```
+
+## Controllers et Form Requests
+
+```bash
+php artisan make:controller TaskController --api --model=Task
+php artisan make:request StoreTaskRequest
+```
+
+```php
+// app/Http/Requests/StoreTaskRequest.php
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class StoreTaskRequest extends FormRequest
+{
+    public function rules(): array
+    {
+        return [
+            'title'       => 'required|string|max:200',
+            'description' => 'nullable|string|max:2000',
+            'due_at'      => 'nullable|date',
+        ];
+    }
+}
+```
+
+```php
+// app/Http/Controllers/TaskController.php
+namespace App\Http\Controllers;
+
+use App\Http\Requests\StoreTaskRequest;
+use App\Models\Task;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+
+class TaskController extends Controller
+{
+    public function index(Request $request)
+    {
+        return $request->user()->tasks()->latest()->paginate(20);
+    }
+
+    public function store(StoreTaskRequest $request)
+    {
+        $task = $request->user()->tasks()->create($request->validated());
+        return response()->json($task, Response::HTTP_CREATED);
+    }
+
+    public function show(Request $request, Task $task)
+    {
+        $this->authorize('view', $task);
+        return $task;
+    }
+
+    public function update(StoreTaskRequest $request, Task $task)
+    {
+        $this->authorize('update', $task);
+        $task->update($request->validated());
+        return $task;
+    }
+
+    public function destroy(Request $request, Task $task)
+    {
+        $this->authorize('delete', $task);
+        $task->delete();
+        return response()->noContent();
+    }
+}
+```
+
+**Magie Laravel** : `Task $task` dans la signature → Laravel récupère automatiquement la tâche par son `id` dans l'URL. Si introuvable, 404 automatique. C'est le **route model binding**.
+
+## Authentification — Sanctum
+
+[Laravel Sanctum](https://laravel.com/docs/sanctum) gère deux modes :
+
+1. **API tokens** (Bearer) pour des apps mobile / clients tiers.
+2. **SPA cookies** : sessions classiques avec CSRF — recommandé pour ton frontend Next.js / Vue.
+
+```bash
+php artisan install:api
+```
+
+```php
+// config/sanctum.php
+'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', 'localhost:3000,localhost:5173')),
+```
+
+```php
+// routes/api.php
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/me', fn(Request $r) => $r->user());
+    Route::post('/logout', fn(Request $r) => tap($r, fn($r) => Auth::logout())->session()->invalidate());
+});
+
+// Login simple (cookie session)
+Route::post('/login', function (Request $request) {
+    $credentials = $request->validate([
+        'email'    => 'required|email',
+        'password' => 'required',
+    ]);
+
+    if (!Auth::attempt($credentials)) {
+        return response()->json(['error' => 'Invalid credentials'], 401);
+    }
+
+    $request->session()->regenerate();
+    return $request->user();
+});
+```
+
+Avec Sanctum SPA, le frontend appelle d'abord `/sanctum/csrf-cookie` (récupère le CSRF token), puis `/login` avec ce token. Les requêtes suivantes sont **automatiquement authentifiées** par cookie.
+
+## Queues et jobs
+
+```bash
+php artisan make:job SendWelcomeEmail
+```
+
+```php
+// app/Jobs/SendWelcomeEmail.php
+namespace App\Jobs;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+
+class SendWelcomeEmail implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public function __construct(public int $userId) {}
+
+    public function handle(): void
+    {
+        // envoyer l'email
+    }
+}
+
+// Dispatch dans un controller
+SendWelcomeEmail::dispatch($user->id);
+```
+
+Configuration `.env` :
+
+```
+QUEUE_CONNECTION=redis
+```
+
+Démarrer un worker :
+
+```bash
+php artisan queue:work
+# Ou en prod : Horizon (UI + monitoring)
+php artisan horizon
+```
+
+**Avantages** : retries automatiques, exponential backoff, dead-letter queue, monitoring via [Horizon](https://laravel.com/docs/horizon).
+
+## Tests avec Pest
+
+[Pest](https://pestphp.com/) est un DSL de test plus expressif que PHPUnit.
+
+```bash
+composer require pestphp/pest --dev
+php artisan pest:install
+```
+
+```php
+// tests/Feature/TaskTest.php
+use App\Models\User;
+use App\Models\Task;
+
+it('lists tasks of authenticated user', function () {
+    $user = User::factory()->create();
+    Task::factory()->count(3)->for($user, 'owner')->create();
+
+    $response = $this->actingAs($user)->getJson('/api/tasks');
+
+    $response
+        ->assertOk()
+        ->assertJsonCount(3, 'data');
+});
+
+it('returns 401 without auth', function () {
+    $this->getJson('/api/tasks')->assertUnauthorized();
+});
+```
+
+```bash
+./vendor/bin/pest
+```
+
+## Eloquent factories pour les tests
+
+```php
+// database/factories/TaskFactory.php
+namespace Database\Factories;
+
+use App\Models\Task;
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+class TaskFactory extends Factory
+{
+    protected $model = Task::class;
+
+    public function definition(): array
+    {
+        return [
+            'title'       => $this->faker->sentence(),
+            'description' => $this->faker->paragraph(),
+            'done'        => false,
+        ];
+    }
+}
+
+// Usage
+Task::factory()->count(10)->create();
+Task::factory()->done()->for($user, 'owner')->create();
+```
+
+## Déploiement
+
+| Plateforme | Note |
+|-----------|------|
+| **Forge** (laravel.com/forge) | Provisionne ton VPS DigitalOcean/Hetzner, déploiement Git push, certificat Let's Encrypt — sweet spot Laravel |
+| **Vapor** | Serverless (AWS Lambda) — scale-to-zero, mais coûts à grande échelle |
+| **Render** / **Railway** | PaaS génériques, OK pour Laravel |
+| **VPS + Frankenphp** | Setup manuel, perfs maximales avec worker mode |
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu fais `Task::all()` dans une vue qui affiche 1000 tâches. Pour chacune, tu accèdes à $task->owner->name. Combien de requêtes SQL ?"
+  options={[
+    '1 requête (Eloquent optimise tout)',
+    '1001 requêtes — N+1 problem. Fix avec Task::with(\'owner\')->all() pour faire une jointure eager loading',
+    '2 requêtes',
+    'Cela dépend de la DB'
+  ]}
+  answerIndex={1}
+  explanation="C'est THE bug Eloquent classique. Sans `with`, chaque accès à une relation déclenche une requête séparée. Solution : `Task::with('owner')->get()` charge tout en 2 requêtes (1 pour tasks, 1 pour owners). Outil : Laravel Debugbar ou Telescope te montre les requêtes générées."
+/>
+
+<Quiz
+  question="Pour authentifier une SPA Next.js qui consomme ton API Laravel, choix recommandé en 2026 ?"
+  options={[
+    'JWT Bearer token stocké en localStorage',
+    'Sanctum SPA avec cookies session — automatic CSRF protection, HttpOnly secure, idéal pour le couple SPA + API même domaine',
+    'OAuth 2 sans aucun framework',
+    'Session classique sans Sanctum'
+  ]}
+  answerIndex={1}
+  explanation="Sanctum SPA est conçu exactement pour ce cas. Cookies HttpOnly (pas volables par XSS), CSRF géré par Laravel, et tu travailles comme avec une session classique côté serveur. Pour des APIs publiques avec consommateurs tiers, les API tokens Sanctum (mode 2) sont là."
+/>
+
+<Quiz
+  question="Tu envoies un email de bienvenue à l'inscription. L'API met 800ms à répondre. Que faire ?"
+  options={[
+    'Mail::send() en synchrone — c\'est rapide',
+    'SendWelcomeEmail::dispatch($user->id) qui pousse en queue Redis. Le worker envoie en arrière-plan, l\'API répond en < 100ms',
+    'Désactiver le mail',
+    'Mettre un setTimeout'
+  ]}
+  answerIndex={1}
+  explanation="Pousser en queue est le bon réflexe : l'API répond vite, le worker gère le mail avec retry exponential, dead-letter queue, monitoring Horizon. Synchrone bloque l'utilisateur 800ms si le service mail est lent, et fait planter la requête si le service est down."
+/>
+
+## Pour aller plus loin
+
+- *Laravel Documentation* — [laravel.com/docs](https://laravel.com/docs/12.x)
+- *Laracasts* — [laracasts.com](https://laracasts.com/) (vidéos premium)
+- *Laravel News* — [laravel-news.com](https://laravel-news.com/) (newsletter de référence)
+- *Pest PHP* — [pestphp.com](https://pestphp.com/)
+- *Awesome Laravel* — [github.com/chiraggude/awesome-laravel](https://github.com/chiraggude/awesome-laravel)
+
+---
+
+## Projet de l'axe — `taskly-api` en Laravel 12
+
+Mêmes 10 endpoints que les versions Hono et FastAPI. Auth Sanctum (Bearer tokens), Form Requests (validation 422 auto), `apiResource` (5 routes en 1 ligne), Pest pour les tests, ~13 fichiers métier.
+
+<ExerciseDownload
+  axe="08-backend"
+  slug="03-php/laravel/taskly-api"
+  title="taskly-api en Laravel 12"
+  description="Pré-requis : PHP 8.3+ et Composer (Laragon sous Windows, brew sur Mac, apt sur Ubuntu). Tu scaffolds Laravel toi-même puis tu copies les 13 fichiers de la correction. Compare avec les versions Hono et FastAPI : la productivité Laravel se voit dans la quantité de code à écrire."
+/>

@@ -1,0 +1,355 @@
+---
+title: 13.1 — Mesurer avant d'optimiser
+description: Core Web Vitals (LCP, INP, CLS), Lighthouse, WebPageTest, Chrome DevTools, Real User Monitoring vs synthétique.
+sidebar:
+  order: 1
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="19">
+Lina ajoute 50 photos de pains. Le site rame sur le smartphone d'une cliente. Marie ne sait pas si c'est l'image, le JS, ou le réseau. Elle lance Lighthouse mobile bridé. Verdict : LCP 5,4 s, score perf 31. Maintenant elle sait OÙ chercher.
+</Scenario>
+
+<Scenario parcours="B" episode="18">
+Hugo voit son score Lighthouse passer de 92 à 67 après ajout du planning interactif. Il identifie le coupable : un module date-picker à 80 KB chargé même quand l'utilisateur ne réserve pas. Solution : lazy load.
+</Scenario>
+
+<Scenario parcours="C" episode="19">
+Sami déploie un Lighthouse CI qui bloque la PR si LCP > 2,5 s ou perf < 90. **Cible commerciale tenue** automatiquement. RUM avec web-vitals.js pousse les vraies données utilisateurs vers son dashboard.
+</Scenario>
+
+<Scenario parcours="D" episode="19">
+CoupDeMain doit être fluide sur mobile bas-de-gamme (Android 6, RAM 2 GB). Léa teste avec Chrome DevTools — CPU 6× slowdown, Slow 4G. Elle découvre que son scroll feed est saccadé, virtualise la liste avec react-virtual.
+</Scenario>
+
+<Scenario parcours="E" episode="19">
+Yanis push une PR qui dégrade le score Lighthouse de 5 points. Sa CI Lighthouse l'engueule avant le merge. Il identifie : un import statique dans le board. Lazy load → score remonté.
+</Scenario>
+
+> 🎯 **Objectif** : ne jamais optimiser sans mesure préalable. Apprendre les 3 indicateurs qui comptent (LCP, INP, CLS), les outils pour les obtenir, et la différence entre **labo** (synthétique) et **terrain** (RUM).
+
+<ObjectiveList items={[
+  "Comprendre LCP, INP et CLS — les Core Web Vitals 2026",
+  "Lire un rapport Lighthouse sans s'arrêter au score global",
+  "Utiliser Chrome DevTools Performance pour profiler une page",
+  "Mettre en place du Real User Monitoring (RUM) avec web-vitals.js",
+  "Choisir entre mesures labo et terrain selon le contexte"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 5-9 lus" />
+
+
+## La règle d'or : mesurer avant d'optimiser
+
+> *« Premature optimization is the root of all evil. »* — Donald Knuth
+
+Optimiser sans mesurer, c'est :
+
+- **Perdre du temps** sur ce qui n'est pas le bottleneck.
+- **Casser des choses** qui marchent (un cache mal placé crée des bugs subtils).
+- **Ne pas savoir si ça a marché** — pas de mesure « avant », pas de comparaison.
+
+La séquence saine est toujours la même :
+
+1. **Mesurer** → identifier la métrique qui pose problème.
+2. **Hypothèse** → quelle cause probable ?
+3. **Modifier une seule chose** à la fois.
+4. **Re-mesurer** → comparer avant/après.
+5. **Conserver ou annuler.**
+
+---
+
+## Les 3 Core Web Vitals 2026
+
+Google Core Web Vitals : 3 métriques user-centric standardisées qui pèsent dans le SEO et reflètent **la perception réelle** de la performance.
+
+| Vital | Mesure | Bon | À améliorer | Mauvais |
+|-------|--------|-----|-------------|---------|
+| **LCP** (Largest Contentful Paint) | Temps avant le plus gros élément visible | ≤ 2,5 s | ≤ 4,0 s | > 4,0 s |
+| **INP** (Interaction to Next Paint) | Latence ressentie sur les interactions | ≤ 200 ms | ≤ 500 ms | > 500 ms |
+| **CLS** (Cumulative Layout Shift) | Décalages de mise en page imprévus | ≤ 0,1 | ≤ 0,25 | > 0,25 |
+
+> **INP a remplacé FID** en mars 2024. INP regarde **toutes** les interactions (clic, tap, clavier), pas seulement la première. Beaucoup plus exigeant en pratique.
+
+<Diagram
+  caption="Les 3 Core Web Vitals — chargement, interactivité, stabilité"
+  code={`
+    timeline
+      title Cycle de vie d'une page
+      Chargement   : LCP — Largest Contentful Paint
+      Interactivité : INP — Interaction to Next Paint
+      Stabilité    : CLS — Cumulative Layout Shift
+  `}
+/>
+
+### LCP — la perception du chargement
+
+Le LCP mesure **quand l'élément le plus gros visible** (image hero, gros bloc de texte, vidéo) finit de s'afficher. C'est ce qui te fait dire « la page a chargé ».
+
+Bottlenecks classiques :
+
+| Cause | Symptôme | Piste |
+|-------|----------|-------|
+| Image hero trop lourde | LCP > 4 s | `srcset`, AVIF/WebP, `fetchpriority="high"` |
+| Police bloquante | Texte invisible 2-3 s | `font-display: swap`, `preload` |
+| JS qui retarde le rendu | LCP retardé | défer le JS non critique |
+| Serveur lent (TTFB > 600 ms) | LCP plafonne | cache, edge, DB |
+| Render-blocking CSS | First Paint tard | inliner le CSS critique |
+
+### INP — la perception de la fluidité
+
+INP mesure la **latence d'interaction**. Quand tu cliques sur un bouton, combien de temps avant que le prochain frame visible reflète l'action ?
+
+Bottlenecks classiques :
+
+- **Long tasks** sur le main thread (> 50 ms) qui bloquent le clic.
+- **Re-rendus React/Vue trop coûteux** sur chaque keystroke.
+- **Hydratation lourde** d'une page SSR au premier clic.
+- **Listeners non passifs** sur scroll/touch.
+
+<Aside type="tip" title="Détecter les long tasks">
+Dans Chrome DevTools → Performance → enregistre une interaction. Toute barre **rouge** > 50 ms est une *long task* qui dégrade INP. La PerformanceObserver API permet aussi de les remonter en RUM :
+
+```js
+new PerformanceObserver((list) => {
+  for (const entry of list.getEntries()) {
+    console.warn('Long task', entry.duration, 'ms');
+  }
+}).observe({ type: 'longtask', buffered: true });
+```
+</Aside>
+
+### CLS — la stabilité visuelle
+
+CLS additionne tous les décalages **inattendus** au cours de la session. Une bannière qui pousse le contenu vers le bas après chargement = utilisateur qui clique sur la mauvaise chose.
+
+Bottlenecks classiques :
+
+| Cause | Correctif |
+|-------|-----------|
+| Image sans `width` / `height` | Toujours définir les dimensions ou un `aspect-ratio` |
+| Police qui change la métrique au swap | `size-adjust`, `ascent-override` (font fallback métriquement compatible) |
+| Bannière cookies qui pousse | `position: fixed` ou réserver l'espace |
+| Pub injectée dynamiquement | Conteneur avec hauteur fixe |
+| Animation `top/left` au lieu de `transform` | `transform` ne déclenche pas de layout |
+
+---
+
+## Les autres métriques utiles (mais pas Core)
+
+Selon le contexte, regarde aussi :
+
+| Métrique | Sens | Bon à savoir |
+|----------|------|---------------|
+| **TTFB** (Time To First Byte) | Latence serveur | LCP plafonne au TTFB. < 600 ms idéal. |
+| **FCP** (First Contentful Paint) | Premier pixel rendu | Bon proxy pour « ça commence à s'afficher ». |
+| **TBT** (Total Blocking Time) | Somme des long tasks pendant le chargement | Proxy labo de l'INP futur. |
+| **Speed Index** | Vitesse perçue d'apparition | Bon pour comparer 2 versions. |
+| **Hydration Time** | Combien de temps avant interactif | Pertinent SSR/Next.js/Astro. |
+
+---
+
+## Outils — labo (synthétique) vs terrain (RUM)
+
+### Labo — Lighthouse, WebPageTest, DevTools
+
+Tests **synthétiques** : exécutés depuis un environnement contrôlé (CPU bridé, réseau simulé). Reproductibles, rapides, idéaux **en CI**.
+
+| Outil | Usage |
+|-------|-------|
+| **Lighthouse** (DevTools / CLI / CI) | Audit complet rapide, score perf + a11y + best practices + SEO |
+| **PageSpeed Insights** | Lighthouse + données CrUX terrain agrégées par Google |
+| **WebPageTest** | Multi-locations, multi-réseaux, waterfall détaillé |
+| **Chrome DevTools Performance** | Profil détaillé : main thread, layers, paints |
+| **Bundle Analyzer** (`webpack-bundle-analyzer`, `vite-bundle-visualizer`, `@next/bundle-analyzer`) | Identifier les gros poids JS |
+
+<Aside type="caution" title="Ne pas se fier au score global Lighthouse">
+Le score Lighthouse global (le rond coloré) est une moyenne pondérée. Une page peut faire 92/100 et avoir un INP catastrophique. **Lis les métriques individuelles**, pas le score.
+
+De plus, Lighthouse mesure **une session simulée** dans des conditions parfaites. Les utilisateurs réels (CPU plus lent, 3G congestionné, extensions navigateur) sont **2 à 5× moins bons**.
+</Aside>
+
+### Terrain — Real User Monitoring (RUM)
+
+Ce que vivent **tes vrais utilisateurs**, sur leurs vrais devices. Les meilleurs outils :
+
+| Outil | Force |
+|-------|-------|
+| **web-vitals.js** | 3 KB, gratuit, capture LCP/INP/CLS et envoie à ton backend |
+| **Google CrUX** | Données terrain agrégées par Chrome (gratuit, dispo via PSI / Search Console) |
+| **Vercel Analytics / Cloudflare Web Analytics** | RUM clé en main, sans impact perf |
+| **Sentry Performance / Datadog RUM** | Plus riches (sessions complètes, replays) |
+| **PostHog** | OSS, RUM + product analytics |
+
+Exemple minimal avec `web-vitals` :
+
+```ts
+import { onLCP, onINP, onCLS } from 'web-vitals';
+
+function send(metric: { name: string; value: number; rating: string }) {
+  navigator.sendBeacon('/rum', JSON.stringify(metric));
+}
+
+onLCP(send);
+onINP(send);
+onCLS(send);
+```
+
+`navigator.sendBeacon` est non-bloquant et survit au `pagehide` — parfait pour ne pas perdre les mesures à la fermeture de l'onglet.
+
+### Choisir : labo ou terrain ?
+
+| Question | Labo | Terrain |
+|----------|------|---------|
+| « Cette PR a-t-elle régressé ? » | ✅ rapide, reproductible | ❌ trop lent à observer |
+| « Quels users souffrent le plus ? » | ❌ univers fictif | ✅ segmentation device/réseau |
+| « Quel est notre LCP p75 vrai ? » | ❌ approximation | ✅ valeur réelle |
+| « Trouver une régression rare (1 % users) » | ❌ jamais reproduite | ✅ visible en agrégé |
+
+**Combinaison saine** : Lighthouse en CI (régressions PR) + RUM en prod (réalité terrain).
+
+---
+
+## Lire un rapport Lighthouse — ce qui compte vraiment
+
+Hiérarchie des sections, par ordre d'importance pour la perf :
+
+1. **Métriques** — LCP, INP (proxy TBT), CLS, FCP, TTFB.
+2. **Diagnostics** — opportunités (combien gagnerait-on à faire X ?).
+3. **Treemap** des bundles JS et CSS (où est le poids ?).
+4. **Trace** (l'onglet *Performance* dans DevTools) pour creuser.
+
+Les **opportunités** Lighthouse les plus actionnables :
+
+- *Eliminate render-blocking resources* → CSS/JS chargés trop tôt.
+- *Properly size images* → tu sers du 4000×3000 pour un slot de 800 px.
+- *Defer offscreen images* → `loading="lazy"`.
+- *Avoid enormous network payloads* → bundle JS > 500 KB compressé.
+- *Reduce unused JavaScript* → tree-shaking insuffisant, dépendances trop grosses.
+- *Avoid long main-thread tasks* → script qui bloque > 50 ms.
+
+---
+
+## Profiler avec Chrome DevTools Performance
+
+Workflow standard pour traquer un problème :
+
+1. Onglet **Performance** → bouton record (Ctrl+E).
+2. Reproduis le scénario lent (clic, scroll, navigation).
+3. Stop → DevTools t'affiche un *flame chart*.
+4. Cherche les **barres rouges** (long tasks) en haut.
+5. Clique dessus → tu vois la stack JavaScript responsable.
+6. Compare *Total Blocking Time* avant/après ton fix.
+
+<Aside type="tip" title="Throttle CPU + réseau">
+Les Mac M-series et les machines de dev sont beaucoup plus rapides que la médiane mondiale. **Toujours** profiler avec :
+- *CPU* : 4× ou 6× slowdown.
+- *Network* : Slow 4G ou 3G simulé.
+
+Sinon tu vois 8 ms partout et ton site est inutilisable sur un Android d'entrée de gamme.
+</Aside>
+
+---
+
+## Mettre la perf en CI
+
+Bloque les régressions à la PR avec Lighthouse CI :
+
+```yaml
+# .github/workflows/lighthouse.yml
+on: [pull_request]
+jobs:
+  lhci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci && npm run build
+      - run: npx --yes @lhci/cli@0.14.x autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+```
+
+Et un `lighthouserc.json` avec des budgets durs :
+
+```json
+{
+  "ci": {
+    "collect": { "url": ["http://localhost:3000/"], "numberOfRuns": 3 },
+    "assert": {
+      "assertions": {
+        "largest-contentful-paint": ["error", { "maxNumericValue": 2500 }],
+        "cumulative-layout-shift":  ["error", { "maxNumericValue": 0.1 }],
+        "total-blocking-time":      ["error", { "maxNumericValue": 200 }],
+        "categories:performance":   ["warn",  { "minScore": 0.9 }]
+      }
+    }
+  }
+}
+```
+
+Une PR qui dépasse ces budgets **ne mergera pas**. C'est l'équivalent perf de tes tests unitaires.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu changes une image hero pour un format AVIF, son poids passe de 1,2 MB à 180 KB. Quel Core Web Vital va le plus probablement s'améliorer ?"
+  options={[
+    'CLS — Cumulative Layout Shift',
+    'INP — Interaction to Next Paint',
+    'LCP — Largest Contentful Paint',
+    'TTFB — Time To First Byte'
+  ]}
+  answerIndex={2}
+  explanation="L'image hero est typiquement le LCP element. Réduire son poids accélère son téléchargement et donc le moment où elle finit de s'afficher. CLS porte sur la stabilité, INP sur l'interactivité, TTFB sur la latence serveur."
+/>
+
+<Quiz
+  question="Ton score Lighthouse est de 95/100 mais Sentry RUM remonte un INP p75 de 480 ms en production. Comment réconcilier ?"
+  options={[
+    'Lighthouse a raison, le RUM est buggé',
+    'Lighthouse simule un environnement parfait : les utilisateurs réels (CPU médian, extensions, hydratation lourde) montrent un comportement bien pire',
+    'Désactiver le RUM, il fausse les mesures',
+    'Optimiser le score Lighthouse à 100'
+  ]}
+  answerIndex={1}
+  explanation="C'est un classique : les outils synthétiques sont trop optimistes. La réalité terrain (CPU plus lent, JS bloqué par des extensions, pages déjà chaudes) dégrade significativement l'INP. Toujours croiser labo et RUM. Optimiser pour le score 100 ne sert à rien si les vrais users souffrent."
+/>
+
+<Quiz
+  question="Tu observes un CLS de 0,42 sur la page d'accueil. Lequel est la cause LA PLUS probable ?"
+  options={[
+    'TTFB élevé',
+    'Une bannière de cookies qui apparaît après hydratation et pousse tout le contenu vers le bas',
+    'Trop de JavaScript',
+    'Image hero pas encore chargée'
+  ]}
+  answerIndex={1}
+  explanation="CLS = décalages **inattendus**. Une bannière injectée tardivement qui pousse le contenu est l'archétype du CLS catastrophique. Une image lente ralentit le LCP mais ne crée pas de shift si on a réservé son espace via width/height ou aspect-ratio. TTFB et JS pèsent sur LCP/INP, pas sur CLS."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *web.dev / vitals* — [web.dev/vitals](https://web.dev/vitals/) — référence officielle Google
+- *web-vitals.js* — [github.com/GoogleChrome/web-vitals](https://github.com/GoogleChrome/web-vitals)
+- *WebPageTest* — [webpagetest.org](https://www.webpagetest.org/)
+- *Lighthouse CI* — [github.com/GoogleChrome/lighthouse-ci](https://github.com/GoogleChrome/lighthouse-ci)
+- *Why is my page slow?* — Tim Kadlec (méthodologie de diagnostic)
+
+---
+
+**Suite** : [13.2 — Optimisations frontend](/13-performance-a11y/02-frontend/) pour les leviers concrets côté navigateur.

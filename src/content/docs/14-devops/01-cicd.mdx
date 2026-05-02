@@ -1,0 +1,467 @@
+---
+title: 14.1 — Pipelines CI/CD
+description: GitHub Actions, étapes lint/test/build/scan/deploy, environnements éphémères par PR, secrets sécurisés via OIDC, matrices et caches.
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="21">
+Marie pousse sur main → en 4 minutes, son site Lina est mis à jour sur Vercel. Avant : elle uploadait à la main, elle ratait des fichiers, elle déployait du code sans tests. Avec Vercel + GitHub Actions, plus jamais.
+</Scenario>
+
+<Scenario parcours="B" episode="20">
+Hugo configure une CI 4 jobs : lint, typecheck, tests, deploy. La PR de la nouvelle feature « offerings de cours d'essai » casse 2 tests — la CI bloque le merge. Sans la CI, ces 2 tests cassés seraient passés en prod.
+</Scenario>
+
+<Scenario parcours="C" episode="21">
+Sami pose GitHub Actions avec **<Term>OIDC</Term>** vers Cloudflare (zéro secret long-lived). Pipeline : lint, test, build, scan Trivy, deploy. Si Lighthouse perf < 90, la PR échoue. Cible commerciale tenue automatiquement.
+</Scenario>
+
+<Scenario parcours="D" episode="21">
+Léa a un environnement de **preview par PR** : chaque PR ouvre une URL `pr-42.coupdemain.fr` que les bêta-testeurs voisins peuvent tester. À la fermeture de la PR, l'env est détruit.
+</Scenario>
+
+<Scenario parcours="E" episode="21">
+Yanis suit l'exo `14.1 Déploiement complet` du guide à la lettre : OIDC vers Fly.io, Trivy, SBOM, Sentry release, preview app par PR. Sa CI est aussi sérieuse que celle de sa boîte.
+</Scenario>
+
+> 🎯 **Objectif** : qu'un push sur `main` déclenche tout — typecheck, lint, tests, build, scan sécu, déploiement — sans intervention humaine. Et qu'une PR génère un environnement de preview pour relire visuellement.
+
+<ObjectiveList items={[
+  "Distinguer Continuous Integration, Delivery et Deployment",
+  "Construire un workflow GitHub Actions multi-jobs (lint/test/build/deploy)",
+  "Mettre en place un environnement éphémère par PR (preview)",
+  "Sécuriser les secrets via OIDC plutôt que des tokens longs vivent",
+  "Optimiser le temps d'exécution avec cache, matrice et reusable workflows"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 4 et 8 lus" />
+
+
+## CI ≠ CD ≠ CD
+
+Les acronymes se mélangent. Définitions claires :
+
+| Sigle | Phrase qui résume |
+|-------|--------------------|
+| **CI** — Continuous Integration | Chaque push est testé automatiquement |
+| **CD** — Continuous Delivery | Chaque commit prêt à partir en prod, déclenchement manuel |
+| **CD** — Continuous Deployment | Chaque commit qui passe la CI **part automatiquement** en prod |
+
+> Tu peux faire CI sans CD. Tu ne peux **pas** faire CD sans CI.
+
+La majorité des équipes B2B font **Continuous Delivery** : pipeline auto, dernier clic manuel pour la prod. Les équipes mûres (Deezer, Etsy, GitLab) font **Continuous Deployment** : 50+ déploiements/jour.
+
+---
+
+## Étapes d'un pipeline standard
+
+```
+push ┐
+     │
+     ▼
+  ┌──────────┐ → ┌──────┐ → ┌─────┐ → ┌───────┐ → ┌─────┐ → ┌────────┐
+  │ checkout │   │ lint │   │test │   │ build │   │scan │   │ deploy │
+  └──────────┘   └──────┘   └─────┘   └───────┘   └─────┘   └────────┘
+                                          │           │
+                                          └─ artifact ┘
+```
+
+| Étape | Quoi | Outils typiques |
+|-------|------|-----------------|
+| **Checkout** | Cloner le code | `actions/checkout` |
+| **Setup** | Runtime + cache | `actions/setup-node`, `setup-python`, `setup-go` |
+| **Lint** | Style, conventions | ESLint v9, Biome, Ruff, golangci-lint |
+| **Typecheck** | Cohérence types | `tsc --noEmit`, mypy, phpstan |
+| **Test** | Unitaires + intégration | Vitest, pytest, Pest, Playwright |
+| **Build** | Bundle / image | Vite, Next, Docker, esbuild |
+| **Scan sécu** | Vulnérabilités, secrets | npm audit, Snyk, Trivy, gitleaks |
+| **Deploy** | Pousser l'artefact | Vercel CLI, Fly CLI, kubectl, AWS CLI, Cloudflare Wrangler |
+
+**Règle d'or** : chaque étape doit être **reproductible localement**. Si seule la CI sait builder, tu as un problème.
+
+---
+
+## GitHub Actions — l'essentiel
+
+### Hello world — `.github/workflows/ci.yml`
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test -- --reporter=verbose
+```
+
+Trois mécaniques importantes :
+
+1. **`concurrency` + `cancel-in-progress`** : si tu pushes 2× de suite, le 1ᵉʳ run est annulé.
+2. **`cache: npm`** intégré à `setup-node` : restore + save le `node_modules` cache.
+3. **`timeout-minutes`** : tu paies à la minute, plafonne tes runs.
+
+### Multi-jobs avec dépendances
+
+```yaml
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps: [...]
+
+  test:
+    runs-on: ubuntu-latest
+    steps: [...]
+
+  build:
+    needs: [lint, test]   # ne tourne que si lint ET test ont réussi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist/ }
+      - run: ./deploy.sh
+```
+
+**Architecture typique** :
+- **Parallèle** ce qui peut l'être (lint, typecheck, test).
+- **Séquentiel** sur la chaîne de dépendances (build après tests).
+- **Conditionnel** sur `main` pour le deploy.
+
+### Matrice de versions
+
+Tester sur plusieurs Node, Postgres, OS :
+
+```yaml
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: ${{ matrix.node }}, cache: npm }
+      - run: npm ci && npm test
+```
+
+**`fail-fast: false`** = on continue les autres combos même si un échoue (utile pour debug).
+
+### Services intégrés (Postgres, Redis, etc.)
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: testpw
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:testpw@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci && npm run db:migrate && npm test
+```
+
+---
+
+## Cache — le plus gros levier
+
+Sans cache, chaque run réinstalle tout = 1-3 min perdues. Avec cache :
+
+| Type | Action | Gain |
+|------|--------|------|
+| `node_modules` | `setup-node` avec `cache: npm` | -60 à -90 % |
+| `.next/cache` (Next.js build) | `actions/cache@v4` | -30 à -70 % du build |
+| Docker layers | `docker/build-push-action` avec `cache-from`/`cache-to` | -50 à -80 % |
+| pip / pnpm / bun | `setup-python` / `setup-pnpm` / `setup-bun` | idem |
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: |
+      .next/cache
+      ~/.cache/pip
+    key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}
+    restore-keys: |
+      ${{ runner.os }}-build-
+```
+
+---
+
+## Secrets — OIDC > tokens longs vivent
+
+### L'ancienne école : Personal Access Token
+
+```yaml
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+```
+
+Problème : le token vit indéfiniment dans GitHub Secrets, et un commit malveillant dans une PR peut tenter de l'exfiltrer.
+
+### La bonne école : OIDC (OpenID Connect)
+
+GitHub Actions signe un JWT court vivant prouvant **« ce job vient bien du repo `org/repo` sur la branche `main` »**. Ton cloud (AWS, GCP, Azure) le valide et délivre des credentials temporaires (15 min).
+
+```yaml
+permissions:
+  id-token: write    # nécessaire pour OIDC
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789:role/gha-deployer
+          aws-region: eu-west-3
+      - run: aws s3 sync ./dist s3://my-bucket
+```
+
+Avantages :
+
+- **Aucun secret** stocké côté GitHub.
+- **Credentials éphémères** (impossible à exfiltrer durablement).
+- **Restriction par branche** côté IAM (rôle utilisable seulement depuis `main`).
+
+Disponible sur **AWS, GCP, Azure, HashiCorp Vault, Cloudflare**. À privilégier en 2026.
+
+<Aside type="caution" title="Secrets — règles d'or">
+- **Jamais** de secrets dans le code.
+- `gitleaks` en pre-commit + en CI.
+- **Distinguer** `secrets` (sensibles, masqués dans les logs) et `vars` (non sensibles).
+- Les secrets de **PR depuis un fork** ne sont **pas** envoyés par défaut (sécurité).
+- Préférer **environnements protégés** (`environment: production`) avec required reviewers pour les déploiements prod.
+</Aside>
+
+---
+
+## Environnements éphémères par PR
+
+L'idée : chaque PR a sa propre URL de preview. Les reviewers cliquent et voient.
+
+### Avec Vercel / Netlify / Cloudflare Pages
+
+Aucun workflow à écrire — c'est natif. Connecte le repo, à chaque PR tu reçois `https://my-app-pr-42.vercel.app`.
+
+### Avec Render / Fly.io / Railway
+
+Idem en 1 clic via leurs intégrations GitHub.
+
+### Avec Kubernetes / IaaS — ArgoCD ou helmfile
+
+Plus complexe : un job CI déploie un namespace dédié `pr-42`, post-déploiement il commente la PR avec l'URL :
+
+```yaml
+- name: Deploy preview
+  run: helmfile apply --namespace=pr-${{ github.event.number }}
+
+- name: Comment URL on PR
+  uses: thollander/actions-comment-pull-request@v3
+  with:
+    message: '🚀 Preview: https://pr-${{ github.event.number }}.preview.example.com'
+```
+
+À la fermeture de la PR, un workflow `closed` détruit le namespace.
+
+---
+
+## Reusable workflows et composite actions
+
+Quand 5 services partagent les mêmes étapes, factorise :
+
+```yaml
+# .github/workflows/_reusable-test.yml
+on:
+  workflow_call:
+    inputs:
+      node-version: { type: string, default: '24' }
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: ${{ inputs.node-version }}, cache: npm }
+      - run: npm ci && npm test
+```
+
+```yaml
+# Dans un autre workflow
+jobs:
+  test:
+    uses: ./.github/workflows/_reusable-test.yml
+    with: { node-version: '24' }
+```
+
+---
+
+## Build matrix utile en monorepo
+
+Avec `paths` ou un outil comme **Turborepo** / **Nx**, tu n'exécutes que les jobs touchés :
+
+```yaml
+on:
+  push:
+    paths:
+      - 'apps/web/**'
+      - 'packages/ui/**'
+      - '.github/workflows/web.yml'
+```
+
+Pour aller plus loin, **Turborepo Remote Cache** partage les artefacts entre devs et CI : si un build a déjà tourné quelque part, on télécharge le résultat plutôt que de le rejouer.
+
+---
+
+## Sécurité du pipeline
+
+| Risque | Parade |
+|--------|--------|
+| Action tierce malveillante | Pin sur **SHA** : `actions/checkout@8f4b...` plutôt que `@v4` (immutable) |
+| Workflow injecté via PR forkée | `pull_request_target` à éviter sauf cas précis |
+| Secret leakage dans logs | `mask::` automatique, mais ne jamais `echo $SECRET` |
+| Élévation de privilèges | `permissions:` minimum (`contents: read` par défaut) |
+| Compromission du compte GitHub d'un dev | 2FA obligatoire org-wide, branch protection + required reviews |
+| Action publique abandonnée | Audit régulier des SHA pinned, Dependabot Actions |
+
+```yaml
+permissions:
+  contents: read     # default minimal
+  id-token: write    # explicite si OIDC
+```
+
+---
+
+## Anti-patterns courants
+
+- **CI verte = code parfait** : non, juste « pas pire que la barre actuelle ».
+- **Tests qui flake** : tolérer un flake = enseigner aux devs à ignorer la CI. Quarantaine ou fix.
+- **Pipeline > 15 min** : les devs n'attendent plus, ils mergent à l'aveugle.
+- **Tout dans un seul job** : pas de parallélisme, pas de réutilisation.
+- **`if: always()` partout** : masque les vrais problèmes.
+- **Aucun cache** : 2× plus de minutes facturées.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu pushes 3 commits coup sur coup sur la même branche. Sans concurrency, combien de runs vont s'exécuter en parallèle ?"
+  options={[
+    'Un seul, GitHub déduplique automatiquement',
+    'Trois, en parallèle — gaspillage de minutes et risque de race conditions sur deploy',
+    'Trois, en série',
+    'Aucun, GitHub attend 5 minutes'
+  ]}
+  answerIndex={1}
+  explanation="Sans `concurrency` + `cancel-in-progress`, GitHub lance les 3 en parallèle. Tu paies 3×, et pire : 3 jobs deploy qui se marchent dessus peuvent corrompre l'état distant. La règle `concurrency: workflow-{ref}` annule les runs précédents quand un nouveau démarre."
+/>
+
+<Quiz
+  question="Tu déploies vers AWS depuis GitHub Actions. Quelle approche est la plus sûre en 2026 ?"
+  options={[
+    'Stocker AWS_ACCESS_KEY_ID et AWS_SECRET_ACCESS_KEY dans GitHub Secrets',
+    'OIDC : configurer un rôle IAM trust policy qui accepte le JWT GitHub, demander des credentials temporaires de 15 min à chaque run',
+    'Coller les credentials en clair dans le YAML',
+    'Hardcoder le rôle dans le code applicatif'
+  ]}
+  answerIndex={1}
+  explanation="OIDC élimine le secret long-lived. Un compromis du repo ou d'un fork ne donne plus accès à des credentials persistants. AWS, GCP, Azure et Cloudflare supportent tous OIDC GitHub Actions en 2026 — c'est le défaut recommandé."
+/>
+
+<Quiz
+  question="Ton job test prend 8 minutes : 6 minutes de `npm ci`, 2 minutes de tests. Quel est le levier le plus impactant ?"
+  options={[
+    'Migrer en pnpm',
+    'Activer cache: npm dans setup-node — npm ci passe à ~30 s sur cache hit',
+    'Réduire le nombre de tests',
+    'Acheter un runner self-hosted'
+  ]}
+  answerIndex={1}
+  explanation="Le cache de `node_modules` (intégré à `actions/setup-node` avec `cache: npm`) divise par 10-20 le temps d'install sur cache hit. C'est gratuit et change le run de 8 à 3 min. pnpm est plus rapide mais le levier dominant ici est le cache. Self-hosted ne change pas l'install."
+/>
+
+<Quiz
+  question="Sur une PR forkée, GitHub envoie-t-il les secrets ?"
+  options={[
+    'Oui, comme pour une PR interne',
+    'Non par défaut (sécurité) — il faut un workflow trigger spécial (pull_request_target) et c\'est risqué',
+    'Oui mais masqués',
+    'Seulement les secrets en lecture'
+  ]}
+  answerIndex={1}
+  explanation="C'est une protection critique : un fork pourrait modifier le workflow et exfiltrer les secrets. `pull_request_target` permet de contourner mais ouvre un vecteur d'attaque (le workflow vient de la base, mais le code testé vient du fork). À utiliser avec précaution et restriction de permissions."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *GitHub Actions docs* — [docs.github.com/actions](https://docs.github.com/en/actions)
+- *Awesome Actions* — [github.com/sdras/awesome-actions](https://github.com/sdras/awesome-actions)
+- *Configuring OpenID Connect* — [docs.github.com/.../oidc](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect)
+- *act* — [github.com/nektos/act](https://github.com/nektos/act) — exécuter Actions en local
+
+---
+
+**Suite** : [14.2 — Infrastructure as Code](/14-devops/02-iac/) pour provisionner et versionner ton infra.

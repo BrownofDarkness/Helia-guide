@@ -1,0 +1,325 @@
+---
+title: 3.4 — Architecture
+description: Monolithe, microservices, serverless, JAMstack — choisir lucidement, et tracer les décisions avec un ADR.
+sidebar:
+  order: 4
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : choisir le style d'architecture qui correspond à ton projet et à ton équipe — pas celui qui fait le buzz. Et savoir documenter cette décision pour qu'on s'en souvienne dans 6 mois.
+
+<ObjectiveList items={[
+  "Distinguer monolithe, microservices, serverless, event-driven, JAMstack",
+  "Connaître les 5 grands trade-offs : complexité, coût, scalabilité, time-to-market, équipe",
+  "Comprendre quand un monolithe modulaire bat des microservices",
+  "Découper en couches : présentation, application, domaine, infrastructure",
+  "Rédiger un Architecture Decision Record (ADR)"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="aucun (parallélisable avec axe 1)" />
+
+
+## Le piège des microservices
+
+> *« Démarrer en microservices avec une équipe de 3 personnes est la meilleure façon de tuer un projet. »*
+
+Une vérité contre-intuitive : **la majorité des projets web devrait commencer en monolithe**. Les microservices résolvent des problèmes que tu n'as pas encore. Et ils en créent d'autres : déploiement, observabilité, cohérence entre services, latence réseau, debug distribué.
+
+> *« Build a monolith first. Extract services later, only when you have a clear reason. »*
+> — Martin Fowler, *MonolithFirst* (2015), toujours vrai en 2026.
+
+## Les 5 grands styles
+
+### 1. Monolithe (modulaire)
+
+Une seule application déployée d'un bloc, mais **structurée en modules** clairs.
+
+<Diagram
+  caption="Monolithe modulaire — 1 déploiement, modules séparés"
+  code={`
+    flowchart LR
+      User((User)) --> App[App Next.js / Rails / Laravel]
+      subgraph App
+        Auth[Module Auth]
+        Cat[Module Catalogue]
+        Cart[Module Panier]
+        Pay[Module Paiement]
+      end
+      App --> DB[(PostgreSQL)]
+  `}
+/>
+
+**Forces** :
+- Simplicité de déploiement (1 build, 1 process).
+- Refactoring inter-modules trivial (compilateur/types vérifient).
+- Latence interne nulle (pas de réseau).
+- Tests d'intégration faciles.
+
+**Faiblesses** :
+- Si l'équipe dépasse ~30 devs, conflits de merge fréquents.
+- Le scaling impose de tout scaler ensemble.
+
+**Quand ?** Projet < 50 devs, ou avant de connaître ses lignes de fracture métier.
+
+### 2. Microservices
+
+Plusieurs services indépendants, communiquant par HTTP/gRPC/messagerie.
+
+<Diagram
+  caption="Microservices — déploiements indépendants"
+  code={`
+    flowchart TB
+      User((User)) --> GW[API Gateway]
+      GW --> Auth[Auth Service]
+      GW --> Cat[Catalogue Service]
+      GW --> Cart[Cart Service]
+      GW --> Pay[Payment Service]
+
+      Auth --> AuthDB[(Auth DB)]
+      Cat --> CatDB[(Catalogue DB)]
+      Cart --> CartDB[(Cart DB)]
+      Pay --> PayDB[(Payment DB)]
+
+      Cart -.event.-> Bus[Event Bus<br/>Kafka/RabbitMQ]
+      Pay -.event.-> Bus
+  `}
+/>
+
+**Forces** :
+- Équipes autonomes (chacune son service).
+- Scaling indépendant (le catalogue scale, l'auth pas).
+- Stack hétérogène possible (Auth en Go, Catalogue en Node).
+
+**Faiblesses** :
+- **Complexité opérationnelle** : déploiement, monitoring, traces distribuées.
+- **Cohérence** : pas de transaction inter-services, il faut Sagas / outbox patterns.
+- **Latence** : chaque appel ajoute du réseau.
+- **Tests** : E2E très coûteux à maintenir.
+
+**Quand ?** Équipes > 50 devs, lignes de fracture métier claires, contraintes de scaling fortes.
+
+### 3. Serverless / FaaS
+
+Code déployé en fonctions, exécutées à la demande sur l'infra du cloud.
+
+<Diagram
+  caption="Architecture serverless"
+  code={`
+    flowchart LR
+      User((User)) --> CDN[CDN]
+      CDN --> Static[Site statique<br/>Vercel/Netlify]
+      User --> APIGW[API Gateway]
+      APIGW --> Fn1[Function: signup]
+      APIGW --> Fn2[Function: getOrders]
+      APIGW --> Fn3[Function: pay]
+      Fn1 --> DB[(Aurora<br/>serverless)]
+      Fn2 --> DB
+      Fn3 --> DB
+      Fn3 -.event.-> Q[Queue]
+      Q --> Fn4[Function: sendReceipt]
+  `}
+/>
+
+**Forces** :
+- **Scale-to-zero** : tu ne paies rien si personne n'utilise.
+- Pas de gestion de serveurs.
+- Auto-scaling automatique.
+
+**Faiblesses** :
+- **Cold start** : 100 ms à 2 s pour la 1re invocation.
+- **Vendor lock-in** : porter Lambda → Cloud Functions n'est pas trivial.
+- **Coût imprévisible à grande échelle** : à charge soutenue, un VPS classique peut être 5-10× moins cher.
+- Limitations de durée d'exécution (15 min sur Lambda).
+
+**Quand ?** Trafic en pics (campagnes, batch de nuit), MVP indie hacker, fonctions auxiliaires (webhook, ETL, image processing).
+
+### 4. Event-driven
+
+Les services communiquent par **événements asynchrones** plutôt que par requêtes synchrones.
+
+```
+[Order Service] → publishes "OrderPlaced"
+                        ↓
+            ┌───────────┼─────────────┐
+            ↓           ↓             ↓
+     [Email Service] [Stock Service] [Analytics]
+```
+
+**Forces** :
+- Découplage fort.
+- Résilience : un consumer en panne n'arrête pas les autres.
+- Historique des événements (event sourcing).
+
+**Faiblesses** :
+- Cohérence éventuelle (eventual consistency) : perturbant pour les juniors.
+- Debug complexe (pourquoi cet événement n'a pas été consommé ?).
+
+**Quand ?** Fan-out important, audit trail crucial (banque, e-commerce), intégrations multiples.
+
+### 5. JAMstack
+
+**J**avaScript + **A**PIs + **M**arkup. Un front statique pré-généré, des APIs (les tiennes ou des BaaS) appelées au runtime.
+
+<Diagram
+  caption="JAMstack typique"
+  code={`
+    flowchart LR
+      User((User)) --> CDN[CDN]
+      CDN --> Static[Site statique<br/>Astro/Next/Hugo]
+      Static --> APIs{Appels API}
+      APIs --> Stripe[Stripe]
+      APIs --> Sup[Supabase]
+      APIs --> Sanity[Sanity CMS]
+      APIs --> Algolia[Algolia search]
+  `}
+/>
+
+**Forces** :
+- Performance brutale (CDN partout).
+- Sécurité (pas de serveur applicatif côté toi).
+- Coût d'hébergement très bas.
+
+**Faiblesses** :
+- Logique métier répartie sur plusieurs services tiers.
+- Pas idéal pour des apps très dynamiques en temps réel.
+
+**Quand ?** Sites contenu, blogs, marketing, e-commerce léger, MVPs.
+
+## Comparaison rapide
+
+| Critère | Monolithe | Microservices | Serverless | Event-driven | JAMstack |
+|---------|-----------|---------------|------------|--------------|----------|
+| Time-to-market | ⭐⭐⭐ | ⭐ | ⭐⭐⭐ | ⭐ | ⭐⭐⭐ |
+| Complexité opérationnelle | 🟢 | 🔴 | 🟡 | 🔴 | 🟢 |
+| Scaling | 🟡 | 🟢 | 🟢 | 🟢 | 🟢 |
+| Coût (faible trafic) | 🟢 | 🔴 | 🟢 | 🟡 | 🟢 |
+| Coût (gros trafic) | 🟢 | 🟢 | 🔴 | 🟢 | 🟢 |
+| Equipe minimale viable | 1 | 10+ | 1 | 5+ | 1 |
+
+## Découpage en couches
+
+À l'intérieur de **n'importe quelle** archi, structure en couches :
+
+<Diagram
+  caption="Architecture en couches — Clean Architecture / Hexagonal"
+  code={`
+    flowchart TB
+      Pres[Présentation<br/>Controllers, UI]
+      App[Application<br/>Use cases, services]
+      Dom[Domaine<br/>entités, règles métier]
+      Infra[Infrastructure<br/>DB, HTTP clients, files...]
+      Pres --> App --> Dom
+      Infra -.implements.-> App
+      Infra -.implements.-> Dom
+  `}
+/>
+
+- **Présentation** : ce qui parle aux humains (HTML, JSON).
+- **Application** : orchestration des cas d'usage.
+- **Domaine** : règles métier pures (pas de DB, pas d'HTTP).
+- **Infrastructure** : tout ce qui touche au monde extérieur (DB, file system, APIs externes).
+
+**La règle d'or** : les flèches de dépendance vont **vers le domaine**, jamais l'inverse. Le domaine ne doit pas savoir qu'il existe une base SQL.
+
+## ADR — Architecture Decision Record
+
+Un ADR est un document court (1-2 pages) qui trace **une décision architecturale**. Versionné dans le repo, à côté du code.
+
+### Template (Michael Nygard)
+
+```markdown
+# ADR-001 : Utiliser PostgreSQL plutôt que MongoDB
+
+## Statut
+Accepté — 2026-01-15
+
+## Contexte
+Notre application gère des relations complexes (utilisateurs, équipes,
+commandes, factures) avec besoin fort de cohérence transactionnelle.
+Les requêtes analytiques (reporting) sont fréquentes.
+
+## Décision
+Utiliser PostgreSQL 16 comme base principale, avec Prisma comme ORM.
+
+## Conséquences
+✅ Cohérence ACID, jointures performantes, écosystème riche
+✅ Outil mature, beaucoup de talents disponibles
+❌ Schéma rigide à faire évoluer (gérable avec migrations)
+❌ Scaling vertical d'abord, sharding plus complexe que MongoDB
+
+## Alternatives considérées
+- MongoDB : flexibilité du schéma rejetée car notre modèle est très structuré
+- MySQL : équivalent fonctionnel à Postgres mais Postgres plus avancé sur JSON et CTE
+```
+
+### Pourquoi c'est utile
+
+- Dans 6 mois, **tu te demanderas** *« pourquoi on a choisi Postgres au lieu de Mongo ? »*. L'ADR le dit.
+- Quand un nouveau dev arrive, il comprend les **contraintes** sans interroger 5 personnes.
+- Si la décision est **réévaluée**, on rédige un nouvel ADR qui « supersedes » l'ancien — l'historique reste.
+
+### Convention de fichiers
+
+```
+docs/
+└── adr/
+    ├── 0001-postgresql-instead-of-mongodb.md
+    ├── 0002-prisma-as-orm.md
+    ├── 0003-monolithe-modulaire-pour-v1.md
+    └── 0004-pas-de-microservices-avant-50-devs.md
+```
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu démarres un side-project de 1 dev, MVP en 2 mois. Quelle architecture ?"
+  options={[
+    'Microservices, c\'est l\'industrie standard',
+    'Monolithe modulaire (Next.js + Postgres) ou JAMstack avec BaaS',
+    'Kubernetes avec service mesh Istio',
+    'Event-driven avec Kafka pour la scalabilité'
+  ]}
+  answerIndex={1}
+  explanation="Pour un MVP solo, microservices/Kubernetes/Kafka sont des suicides ergonomiques : tu passeras tes 2 mois à configurer des YAML. Un monolithe Next.js ou un JAMstack avec Supabase/Firebase te livre un produit utilisable en quelques semaines."
+/>
+
+<Quiz
+  question="Dans une architecture en couches, le domaine peut-il dépendre de la base de données ?"
+  options={[
+    'Oui, c\'est plus simple',
+    'Non, le domaine doit être indépendant : c\'est l\'infra qui implémente une interface du domaine (Repository pattern)',
+    'Cela dépend du langage',
+    'Oui, mais uniquement pour les schémas'
+  ]}
+  answerIndex={1}
+  explanation="Si le domaine dépend de Prisma ou Mongoose, tu ne peux plus tester sans base, ni changer de DB sans réécrire le métier. La règle d'or : flèches vers le domaine, jamais l'inverse. C'est le cœur de Clean Architecture / Hexagonal."
+/>
+
+<Quiz
+  question="Pourquoi écrire un ADR ?"
+  options={[
+    'Parce que la méthodologie l\'exige',
+    'Pour tracer la décision et son contexte, pour qu\'on s\'en souvienne dans 6 mois',
+    'Pour faire bien dans une revue d\'audit',
+    'Parce que ça remplit le wiki'
+  ]}
+  answerIndex={1}
+  explanation="L'ADR existe pour répondre, dans 6 mois ou 2 ans, à la question 'pourquoi on a fait ce choix ?'. C'est de la mémoire d'équipe versionnée. Sans ADR, on rejoue les mêmes débats."
+/>
+
+## Pour aller plus loin
+
+- *Building Microservices* — Sam Newman (la référence quand tu en as vraiment besoin)
+- *Clean Architecture* — Robert C. Martin (les couches, à filtrer)
+- *Documenting Architecture Decisions* — Michael Nygard (l'article fondateur de l'ADR)
+- *Monolith First* — Martin Fowler (article gratuit)
+- *adr-tools* — CLI pour générer et numéroter des ADR : [github.com/npryce/adr-tools](https://github.com/npryce/adr-tools)
+
+---
+
+**Suite** : [3.5 — Modélisation de données](/03-analyse-conception/05-donnees/) — du métier au schéma SQL.

@@ -1,0 +1,199 @@
+---
+/**
+ * Affiche un mini-tableau de bord de progression sur la home.
+ * Lit localStorage 'guideProgress' et calcule pages lues + axes touchés.
+ */
+---
+
+<section class="progress-overview" hidden id="progress-overview" aria-live="polite">
+  <div class="progress-overview-header">
+    <h2 class="progress-overview-title">📊 Ta progression</h2>
+    <button type="button" class="progress-reset" id="progress-reset" aria-label="Réinitialiser ma progression">
+      Réinitialiser
+    </button>
+  </div>
+  <div class="progress-stats">
+    <div class="progress-stat">
+      <strong class="progress-stat-value" id="progress-pages">0</strong>
+      <span class="progress-stat-label">pages parcourues</span>
+    </div>
+    <div class="progress-stat">
+      <strong class="progress-stat-value" id="progress-axes">0 / 17</strong>
+      <span class="progress-stat-label">axes commencés</span>
+    </div>
+    <div class="progress-stat">
+      <strong class="progress-stat-value" id="progress-percent">0%</strong>
+      <span class="progress-stat-label">du guide vu</span>
+    </div>
+  </div>
+  <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-bar-track">
+    <div class="progress-bar-fill" id="progress-bar-fill"></div>
+  </div>
+  <p class="progress-hint" id="progress-hint">
+    Reprends ta lecture là où tu t'es arrêté.
+  </p>
+</section>
+
+<script is:inline>
+  (function () {
+    const STORAGE_KEY = 'guideProgress';
+    const TOTAL_PAGES_ESTIMATE = 117;
+    const TOTAL_AXES = 17;
+
+    function loadVisited() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return new Set(raw ? JSON.parse(raw) : []);
+      } catch {
+        return new Set();
+      }
+    }
+
+    function axisOf(path) {
+      const m = path.match(/^\/(\d{2})-/);
+      return m ? m[1] : null;
+    }
+
+    function refresh() {
+      const root = document.getElementById('progress-overview');
+      if (!root) return;
+      const visited = loadVisited();
+      if (visited.size === 0) {
+        root.hidden = true;
+        return;
+      }
+      root.hidden = false;
+
+      const pages = visited.size;
+      const axesTouched = new Set();
+      for (const p of visited) {
+        const a = axisOf(p);
+        if (a) axesTouched.add(a);
+      }
+      const percent = Math.min(100, Math.round((pages / TOTAL_PAGES_ESTIMATE) * 100));
+
+      const elPages = document.getElementById('progress-pages');
+      const elAxes = document.getElementById('progress-axes');
+      const elPercent = document.getElementById('progress-percent');
+      const elFill = document.getElementById('progress-bar-fill');
+      const elTrack = document.getElementById('progress-bar-track');
+
+      if (elPages) elPages.textContent = String(pages);
+      if (elAxes) elAxes.textContent = axesTouched.size + ' / ' + TOTAL_AXES;
+      if (elPercent) elPercent.textContent = percent + '%';
+      if (elFill) elFill.style.width = percent + '%';
+      if (elTrack) elTrack.setAttribute('aria-valuenow', String(percent));
+    }
+
+    function reset() {
+      if (!confirm('Réinitialiser ta progression ? Cette action est irréversible.')) return;
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        document.dispatchEvent(new CustomEvent('guide-progress-update'));
+      } catch {}
+    }
+
+    function bind() {
+      const btn = document.getElementById('progress-reset');
+      if (btn && !btn.dataset.bound) {
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', reset);
+      }
+    }
+
+    function init() {
+      bind();
+      refresh();
+    }
+
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('guide-progress-update', refresh);
+  })();
+</script>
+
+<style>
+  .progress-overview {
+    margin: 1.5rem 0 2rem;
+    padding: 1.1rem 1.25rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.6rem;
+    background: var(--sl-color-gray-7, var(--sl-color-bg));
+  }
+  .progress-overview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+  }
+  .progress-overview-title {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+  .progress-reset {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.65rem;
+    border: 1px solid var(--sl-color-gray-5);
+    background: var(--sl-color-bg);
+    border-radius: 0.35rem;
+    color: var(--sl-color-gray-2);
+    cursor: pointer;
+    transition: color 120ms ease, border-color 120ms ease;
+  }
+  .progress-reset:hover {
+    color: var(--sl-color-accent);
+    border-color: var(--sl-color-accent);
+  }
+
+  .progress-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+  }
+  .progress-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 0.5rem;
+    border-radius: 0.4rem;
+    background: var(--sl-color-bg);
+  }
+  .progress-stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--sl-color-accent);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .progress-stat-label {
+    font-size: 0.75rem;
+    color: var(--sl-color-gray-2);
+    margin-top: 0.2rem;
+  }
+
+  .progress-bar {
+    height: 6px;
+    background: var(--sl-color-gray-6);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--sl-color-accent) 0%, var(--sl-color-accent-high) 100%);
+    border-radius: 999px;
+    transition: width 400ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .progress-hint {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--sl-color-gray-2);
+  }
+
+  @media (max-width: 480px) {
+    .progress-stats { grid-template-columns: 1fr; }
+  }
+</style>

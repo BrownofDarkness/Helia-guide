@@ -1,0 +1,26 @@
+[project]
+name = "taskly-api"
+version = "0.0.1"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.136",
+  "uvicorn[standard]>=0.32",
+  "sqlalchemy[asyncio]>=2.0.36",
+  "aiosqlite>=0.20",
+  "pydantic[email]>=2.10",
+  "pydantic-settings>=2.6",
+  "python-jose[cryptography]>=3.3",
+  "passlib[argon2]>=1.7.4",
+  "python-multipart>=0.0.20",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "httpx>=0.28",
+  "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

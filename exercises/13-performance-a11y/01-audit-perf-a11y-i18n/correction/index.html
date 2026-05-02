@@ -1,0 +1,184 @@
+<!doctype html>
+<!-- ✅ A-001 : lang = source de la page (FR par défaut, mis à jour par le sélecteur) -->
+<html lang="fr" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FastBites — la livraison gourmande</title>
+    <meta name="description" data-i18n-meta="description" content="Plats frais, livrés en moins de 30 minutes." />
+
+    <!-- ✅ P-002 : preconnect + preload de la police critique + font-display: swap dans le CSS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload" as="style"
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600&display=swap"
+    />
+
+    <!-- ✅ P-009 : preconnect au CDN images -->
+    <link rel="preconnect" href="https://picsum.photos" />
+
+    <!-- ✅ P-001 : feuille de styles courte, le critique est inliné par Vite -->
+    <link rel="stylesheet" href="/src/styles.css" />
+
+    <!-- ✅ P-003 : module ES, donc deferred par défaut -->
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <!-- ✅ A-002 : landmarks corrects (header / nav / main / footer) -->
+    <a href="#main" class="skip-link" data-i18n="skipToMain">Aller au contenu principal</a>
+
+    <header class="topbar">
+      <a href="/" class="logo">FastBites</a>
+      <nav aria-label="Navigation principale">
+        <a href="#menu" data-i18n="nav.menu">Menu</a>
+        <a href="#offers" data-i18n="nav.offers">Offres</a>
+        <a href="#contact" data-i18n="nav.contact">Contact</a>
+      </nav>
+
+      <!-- Sélecteur de langue accessible -->
+      <label class="lang-switcher">
+        <span class="visually-hidden" data-i18n="lang.label">Langue</span>
+        <select id="lang-select" aria-label="Choisir la langue">
+          <option value="fr">Français</option>
+          <option value="en">English</option>
+          <option value="ar">العربية</option>
+        </select>
+      </label>
+    </header>
+
+    <main id="main">
+      <!-- ✅ A-004 : un seul h1, hiérarchie correcte -->
+      <section class="hero">
+        <h1 data-i18n="hero.title">La livraison gourmande, partout en ville</h1>
+        <p data-i18n="hero.subtitle">Plats frais, livrés en moins de 30 minutes. Aujourd'hui : 0 frais de livraison.</p>
+
+        <!-- ✅ P-004 + A-005 : picture multi-format, srcset, dimensions, alt, fetchpriority -->
+        <picture>
+          <source
+            type="image/avif"
+            srcset="
+              https://picsum.photos/600/360.avif?random=1 600w,
+              https://picsum.photos/1200/720.avif?random=1 1200w,
+              https://picsum.photos/2000/1200.avif?random=1 2000w
+            "
+            sizes="(max-width: 768px) 100vw, 1200px"
+          />
+          <img
+            src="https://picsum.photos/1200/720?random=1"
+            srcset="
+              https://picsum.photos/600/360?random=1 600w,
+              https://picsum.photos/1200/720?random=1 1200w,
+              https://picsum.photos/2000/1200?random=1 2000w
+            "
+            sizes="(max-width: 768px) 100vw, 1200px"
+            width="1200"
+            height="720"
+            alt=""
+            aria-hidden="true"
+            fetchpriority="high"
+            decoding="async"
+          />
+        </picture>
+
+        <!-- ✅ A-003 + A-006 + A-007 : <button> sémantique, contraste corrigé, focus visible -->
+        <button class="cta" id="cta-order" data-i18n="hero.cta">Commander</button>
+      </section>
+
+      <section id="menu" class="menu">
+        <h2 data-i18n="menu.title">Notre menu de la semaine</h2>
+        <ul class="menu-grid" role="list">
+          <!-- 6 cartes générées par JS pour démonstration ; ici versions statiques -->
+          <li class="card">
+            <img src="https://picsum.photos/300/200?random=2" srcset="https://picsum.photos/600/400?random=2 2x"
+                 width="300" height="200" loading="lazy" decoding="async" alt="" />
+            <h3 data-i18n="menu.items.thai">Bowl thaï</h3>
+            <p class="price" data-price="14.90"></p>
+            <button class="add" data-add="thai" aria-label="Ajouter Bowl thaï au panier">+</button>
+          </li>
+          <li class="card">
+            <img src="https://picsum.photos/300/200?random=3" srcset="https://picsum.photos/600/400?random=3 2x"
+                 width="300" height="200" loading="lazy" decoding="async" alt="" />
+            <h3 data-i18n="menu.items.calzone">Pizza calzone</h3>
+            <p class="price" data-price="11.50"></p>
+            <button class="add" data-add="calzone" aria-label="Ajouter Pizza calzone au panier">+</button>
+          </li>
+          <li class="card">
+            <img src="https://picsum.photos/300/200?random=4" srcset="https://picsum.photos/600/400?random=4 2x"
+                 width="300" height="200" loading="lazy" decoding="async" alt="" />
+            <h3 data-i18n="menu.items.truffle">Burger truffe</h3>
+            <p class="price" data-price="16.00"></p>
+            <button class="add" data-add="truffle" aria-label="Ajouter Burger truffe au panier">+</button>
+          </li>
+          <li class="card">
+            <img src="https://picsum.photos/300/200?random=5" srcset="https://picsum.photos/600/400?random=5 2x"
+                 width="300" height="200" loading="lazy" decoding="async" alt="" />
+            <h3 data-i18n="menu.items.caesar">Salade César</h3>
+            <p class="price" data-price="9.90"></p>
+            <button class="add" data-add="caesar" aria-label="Ajouter Salade César au panier">+</button>
+          </li>
+          <li class="card">
+            <img src="https://picsum.photos/300/200?random=6" srcset="https://picsum.photos/600/400?random=6 2x"
+                 width="300" height="200" loading="lazy" decoding="async" alt="" />
+            <h3 data-i18n="menu.items.apple">Tarte aux pommes</h3>
+            <p class="price" data-price="5.50"></p>
+            <button class="add" data-add="apple" aria-label="Ajouter Tarte aux pommes au panier">+</button>
+          </li>
+          <li class="card">
+            <img src="https://picsum.photos/300/200?random=7" srcset="https://picsum.photos/600/400?random=7 2x"
+                 width="300" height="200" loading="lazy" decoding="async" alt="" />
+            <h3 data-i18n="menu.items.smoothie">Smoothie mangue</h3>
+            <p class="price" data-price="4.80"></p>
+            <button class="add" data-add="smoothie" aria-label="Ajouter Smoothie mangue au panier">+</button>
+          </li>
+        </ul>
+      </section>
+
+      <section id="contact" class="contact">
+        <h2 data-i18n="contact.title">Recevez nos offres</h2>
+        <form id="order-form" novalidate>
+          <!-- ✅ A-008 : label visible, lié, autocomplete -->
+          <label for="email" data-i18n="contact.emailLabel">Adresse email</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            autocomplete="email"
+            inputmode="email"
+            required
+            aria-describedby="email-help email-error"
+          />
+          <small id="email-help" data-i18n="contact.emailHelp">On ne le partage avec personne.</small>
+          <!-- ✅ A-009 : erreur dans une live region textuelle, plus la couleur -->
+          <small id="email-error" role="alert" aria-live="polite"></small>
+          <button type="submit" class="cta" data-i18n="contact.submit">S'inscrire</button>
+        </form>
+      </section>
+    </main>
+
+    <!-- ✅ P-005 : la bannière est rendue côté serveur / inlinée → pas de CLS.
+                   Sa hauteur est réservée par CSS quel que soit l'état. -->
+    <aside id="cookie-banner" hidden>
+      <p data-i18n="cookies.message">Ce site utilise des cookies pour améliorer votre expérience.</p>
+      <button id="cookie-accept" data-i18n="cookies.accept">OK</button>
+    </aside>
+
+    <!-- ✅ A-007 (suite) : live region permanente pour le panier -->
+    <div id="cart-status" role="status" aria-live="polite"></div>
+
+    <!-- ✅ A-010 : <dialog> natif → focus trap + Escape gérés par le navigateur -->
+    <dialog id="modal" aria-labelledby="modal-title">
+      <h2 id="modal-title" data-i18n="modal.title">Commande confirmée</h2>
+      <p data-i18n="modal.body">Merci pour votre commande !</p>
+      <button id="modal-close" data-i18n="modal.close">Fermer</button>
+    </dialog>
+
+    <footer>
+      <small>© 2026 FastBites · <span data-i18n="footer.lastUpdate"></span></small>
+    </footer>
+  </body>
+</html>

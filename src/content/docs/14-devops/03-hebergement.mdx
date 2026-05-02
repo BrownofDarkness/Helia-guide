@@ -1,0 +1,417 @@
+---
+title: 14.3 — Hébergement
+description: PaaS (Vercel, Render, Fly.io), IaaS (AWS, GCP, OVH, Hetzner), VPS + Caddy + systemd, edge computing — choisir selon la charge, le budget et la complexité.
+sidebar:
+  order: 3
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="22">
+Marie déploie sur Vercel + Neon (Postgres serverless). Total : 0 €/mois en free tier, ce qui suffit à Lina pour les 2 premières années (faible volume). Si ça décolle, elle paiera ~ 25 €/mois.
+</Scenario>
+
+<Scenario parcours="B" episode="21">
+Studio Pulse passe sur Vercel (Next.js natif), Postgres + Redis sur Neon + Upstash. ~ 30 €/mois pour 200 membres actifs. Hugo n'a pas à gérer de serveur.
+</Scenario>
+
+<Scenario parcours="C" episode="22">
+Sami déploie GreenBox sur Cloudflare Pages + Workers (edge mondial) + Neon. Il vise 50 commandes/jour — l'edge tient ça largement, et le coût reste sous 50 €/mois. Si ça décolle, l'edge scale automatiquement.
+</Scenario>
+
+<Scenario parcours="D" episode="22">
+Léa hésite Fly.io vs VPS Hetzner pour CoupDeMain. Fly multi-région européen pour latence chat, Hetzner moins cher mais mono-région. Elle prend Fly (3 régions) — 40 €/mois, latence < 100 ms partout en Europe.
+</Scenario>
+
+<Scenario parcours="E" episode="22">
+Yanis suit l'exo 14.1 du guide : déploie Tasky sur Fly.io. Total : ~ 15 €/mois pour l'asso. Multi-région inutile vu la cible géo, mais le pipeline IaC + monitoring est en place pour scale facilement.
+</Scenario>
+
+> 🎯 **Objectif** : choisir un hébergement adapté à ton projet — pas le plus cool, ni le moins cher, ni celui qui revient le plus dans les podcasts. Le bon est celui qui correspond à ta charge, ton équipe et ton budget.
+
+<ObjectiveList items={[
+  "Distinguer Serverless / PaaS / IaaS / VPS et leurs trade-offs",
+  "Connaître les acteurs majeurs 2026 et leur niche",
+  "Calculer le coût total (TCO) au-delà du prix de surface",
+  "Configurer un VPS solide (Caddy + systemd + UFW)",
+  "Anticiper le vendor lock-in et les chemins de sortie"
+]} />
+
+<Level value="confirmé" reading="11 min" prereq="axes 4 et 8 lus" />
+
+
+## La pyramide des abstractions
+
+<Diagram
+  caption="Plus on monte, moins on gère, plus on paye au prix unitaire"
+  code={`
+    flowchart TB
+      Edge[Edge / Serverless<br/>Vercel, Cloudflare Workers]
+      PaaS[PaaS<br/>Render, Fly.io, Railway, Heroku]
+      Container[Container Orchestrator<br/>ECS, Cloud Run, K8s managé]
+      IaaS[IaaS — VM<br/>EC2, Hetzner CCX, OVH]
+      Bare[Bare-metal / colo]
+      Edge --> PaaS --> Container --> IaaS --> Bare
+  `}
+/>
+
+| Niveau | Ce que tu gères | Ce qui est géré pour toi |
+|--------|------------------|---------------------------|
+| Edge / Serverless | Code | Tout (runtime, scale, OS, réseau) |
+| PaaS | Code + config minimale | OS, runtime, scale, TLS |
+| Container | Image + manifests | OS, runtime |
+| IaaS | OS + tout au-dessus | Hardware, réseau de base |
+| VPS | Idem IaaS — souvent plus simple à provisionner | — |
+| Bare-metal | Tout, vraiment tout | Le câble |
+
+**Règle pratique** : commence aussi haut que possible. Tu redescends d'un cran quand le coût unitaire ou les contraintes l'imposent.
+
+---
+
+## Serverless / Edge — pour démarrer petit ou scaler partout
+
+| Acteur 2026 | Force |
+|-------------|-------|
+| **Vercel** | Next.js zero-config, ISR, preview PR, edge functions |
+| **Cloudflare Workers + Pages** | Edge mondial, R2 / D1 / Durable Objects, prix imbattable |
+| **Netlify** | Frontend statique + serverless functions |
+| **Deno Deploy** | TS / Deno natif, ergonomie excellente |
+| **AWS Lambda + API Gateway / CloudFront Functions** | Brique de base AWS, intégration native |
+
+**Quand l'utiliser :**
+
+- Site statique / marketing → Cloudflare Pages, Vercel, Netlify.
+- API frontend Next.js / Nuxt → Vercel ou Cloudflare Pages.
+- Job ponctuel (webhook, cron léger) → Lambda, Workers.
+- Charge en pics ultra-variables (5 req/h ou 5000 req/s) → Workers.
+
+**Limites :**
+
+- **Cold start** : 50-300 ms ajoutés sur la 1ʳᵉ requête après inactivité (sauf Cloudflare Workers, isolat V8 < 1 ms).
+- **Limites d'exécution** : Vercel ~60 s par fonction (configurable), Lambda 15 min.
+- **Pas de connexions persistantes** simples (WebSockets, long polling) → Durable Objects ou plate-forme dédiée.
+- **Coût explose** au-delà d'un certain volume — calcule le seuil.
+
+<Aside type="caution" title="Le piège du free tier">
+Vercel et Cloudflare ont des free tiers généreux. Tant que tu y restes, c'est imbattable. Au-delà, **fais le calcul** : un projet à 50 €/mois peut coûter 1500 €/mois en serverless si la charge décolle. Un VPS à 12 €/mois suffit parfois pour la même charge.
+</Aside>
+
+---
+
+## PaaS — équilibre simplicité / contrôle
+
+PaaS = tu déploies une image Docker ou un repo Git, la plateforme s'occupe du reste (TLS, scaling, restart).
+
+| Acteur 2026 | Force | Faiblesse |
+|-------------|-------|-----------|
+| **Render** | UX excellente, Postgres / Redis managé | Régions limitées |
+| **Fly.io** | Multi-région native, anycast IP, machines à la demande | Plus de friction au début |
+| **Railway** | Setup en 30 s, DB managées | Tarification à l'usage parfois imprévisible |
+| **Heroku** | Le pionnier, encore solide | Cher, écosystème vieillissant |
+| **Coolify** | Self-hosted PaaS open source | Tu héberges la PaaS toi-même |
+| **Dokploy** | Alternative OSS récente à Coolify | Communauté plus petite |
+
+**Quand l'utiliser :**
+
+- API + DB pour un SaaS B2B small/mid.
+- Side-project qui décolle, tu veux pas gérer K8s.
+- Migration d'une app monolithique simple depuis Heroku.
+
+**Quand basculer ailleurs :**
+
+- Tu veux du multi-cloud ou multi-région profond.
+- Tu paies plus de 1500 €/mois et tu as une équipe ops → IaaS.
+- Tu as un compliance fort (HDS santé, DGSI) → IaaS souverain.
+
+---
+
+## IaaS — VM dans le cloud
+
+| Acteur | Région | Force |
+|--------|--------|-------|
+| **AWS** | Mondial | Catalogue le plus large, écosystème massif |
+| **GCP** | Mondial | BigQuery, ML, K8s natif (GKE) |
+| **Azure** | Mondial | Intégration Microsoft, AD |
+| **OVH** | Europe | Souverain FR/UE, prix corrects |
+| **Scaleway** | Europe | Souverain FR, simple |
+| **Hetzner** | Europe (DE/FI) | **Imbattable côté prix** : CCX23 (4 vCPU, 16 GB) ~30 €/mois |
+| **Cloudflare** | Mondial edge | R2 (S3 sans egress), Workers, D1 |
+| **DigitalOcean** | Mondial | UX simple, droplets éprouvés |
+
+**Quand l'utiliser :**
+
+- Charge stable et significative (le coût unitaire bat la PaaS).
+- Compliance fort (RGPD strict, données santé).
+- Tu as une équipe DevOps qui veut le contrôle.
+- Tu fais beaucoup d'egress (Cloudflare R2 ou Hetzner battent AWS S3 d'un facteur 5).
+
+---
+
+## VPS classique — la voie sous-estimée
+
+Un VPS Hetzner CCX23 (4 vCPU dédiés, 16 GB) à ~30 €/mois fait tourner :
+
+- 1 backend Node/Hono à 500 req/s.
+- Postgres 17.
+- Redis.
+- Caddy reverse proxy avec TLS auto.
+- 4-5 conteneurs Docker.
+
+Un même setup en serverless coûte 200-500 €/mois pour la même charge.
+
+### Stack VPS sain en 2026
+
+```
+Internet
+    │
+    ▼
+┌──────────────┐
+│   UFW        │  Firewall — seuls 22, 80, 443 ouverts
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│   Caddy      │  Reverse proxy + TLS auto via Let's Encrypt
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│ app (systemd │  │ postgres     │  │ redis        │
+│  ou docker)  │  │              │  │              │
+└──────────────┘  └──────────────┘  └──────────────┘
+```
+
+### Caddy — TLS auto en 8 lignes
+
+```caddy
+# /etc/caddy/Caddyfile
+api.example.com {
+  reverse_proxy localhost:3000
+  encode zstd gzip
+  log {
+    output file /var/log/caddy/access.log
+  }
+}
+```
+
+Caddy provisionne et renouvelle automatiquement le certificat Let's Encrypt. Aucune config TLS à la main, aucun cron à monter.
+
+### systemd unit pour ton service
+
+```ini
+# /etc/systemd/system/myapp.service
+[Unit]
+Description=MyApp
+After=network.target
+
+[Service]
+Type=simple
+User=myapp
+WorkingDirectory=/opt/myapp
+ExecStart=/usr/bin/node --enable-source-maps server.js
+EnvironmentFile=/opt/myapp/.env
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/log/myapp
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now myapp
+sudo systemctl status myapp
+journalctl -u myapp -f
+```
+
+### Mise à jour via SSH + Git
+
+Workflow zero-downtime simple : `pm2`, `systemctl restart` après build, ou un déploiement bleu/vert avec deux services qui alternent. Encore plus simple : **Coolify** ou **Dokploy** sur ton VPS = PaaS-like sans frais récurrents externes.
+
+---
+
+## Edge & multi-région
+
+Cas d'usage : utilisateurs partout dans le monde. La latence Paris ↔ Tokyo est ~250 ms. Inacceptable pour une API critique japonaise.
+
+| Stratégie | Outil 2026 |
+|-----------|------------|
+| **CDN edge** pour assets statiques | Cloudflare, Fastly, CloudFront, Bunny |
+| **Edge functions** pour logique légère | Cloudflare Workers, Vercel Edge, Netlify Edge |
+| **Multi-région app** | Fly.io regions, AWS multi-AZ + multi-region |
+| **Read replica** par région | Postgres + logical replication, Cloudflare D1, PlanetScale |
+
+**Attention au coût d'écriture multi-région** : un write Tokyo qui doit synchroniser Paris ajoute toujours la latence. Souvent on garde un **single-writer** Europe + reads partout.
+
+---
+
+## Calculer le TCO réel
+
+Le prix affiché ne dit pas tout. Liste à cocher avant de signer :
+
+| Poste | À ajouter |
+|-------|-----------|
+| Compute (CPU, RAM) | Affiché |
+| **Egress** (sortie réseau) | Souvent caché, ~0,09 $/GB sur AWS |
+| **Stockage** (volumes, S3) | Affiché |
+| Base de données managée | 2-3× le prix d'une auto-hébergée |
+| Backups | Stockage redondant |
+| Logs / observabilité | Datadog, Sentry, etc. — peut doubler la facture |
+| Support payant | $100-15 000 / mois |
+| **Temps humain** | 1 jour de dev = ~600 €. 1 incident = ~3 000 €. |
+| Risque de lock-in | Migration coûte 1-3 mois de dev |
+
+> **Le coût humain bat presque toujours le coût cloud** sur les projets early-stage. Choisis l'option qui te coûte 0 jour de gestion.
+
+---
+
+## Vendor lock-in — anticipe la sortie
+
+| Plate-forme | Niveau de lock | Échappatoire |
+|-------------|----------------|--------------|
+| Docker image + PaaS | 🟢 Faible | Toute autre PaaS prend la même image |
+| Serverless avec API spécifique (Lambda, Workers) | 🟡 Moyen | Refactorer pour Hono / Hono adapter |
+| BaaS (Firebase, Supabase) | 🟠 Fort | Schéma de DB exportable, mais Auth / Functions à refaire |
+| AWS-only (DynamoDB, SQS, EventBridge…) | 🔴 Très fort | Réécriture quasi complète |
+
+**Stratégie défensive** : encapsuler les services tiers derrière une interface (un module `storage`, `email`, `auth`). Le jour du switch, tu changes l'implémentation.
+
+---
+
+## Sécurité minimale d'un VPS
+
+```bash
+# Firewall — n'autoriser que SSH + HTTP/HTTPS
+sudo ufw default deny incoming
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+
+# SSH par clé uniquement
+sudo nano /etc/ssh/sshd_config
+# PasswordAuthentication no
+# PermitRootLogin no
+sudo systemctl reload ssh
+
+# fail2ban — bloque les IPs qui tentent du brute SSH
+sudo apt install fail2ban
+sudo systemctl enable --now fail2ban
+
+# Mises à jour automatiques de sécurité
+sudo apt install unattended-upgrades
+sudo dpkg-reconfigure -plow unattended-upgrades
+```
+
+**Tâches récurrentes** :
+
+- `apt upgrade` mensuel (ou unattended-upgrades).
+- Backup DB chiffré ailleurs (S3 + cron + restic / borg).
+- Surveillance basique (Uptime Kuma sur un autre VPS, ou Better Stack gratuit).
+- Rotation des clés SSH 1×/an.
+
+---
+
+## Choisir — l'arbre de décision
+
+```
+Projet perso / side-project / MVP
+   → Vercel / Cloudflare Pages / Render free tier (€0–10/mois)
+
+API + DB pour un SaaS débutant (< 10 k utilisateurs)
+   → Render / Fly.io / Railway (€20–80/mois)
+
+API stable, équipe sans ops, ~€100–500/mois
+   → PaaS (Render, Fly) ou Cloud Run / ECS Fargate
+   → Garder Postgres managé (Neon, Supabase, RDS)
+
+Charge significative, équipe avec sens DevOps
+   → VPS Hetzner ou Scaleway (€30–200/mois, 1-3 machines)
+   → Caddy + systemd + Postgres self-hosted
+
+Compliance fort (santé, banque, gov)
+   → IaaS souverain (OVH, Scaleway, Outscale, OVH HDS)
+   → Probablement K8s ou ECS
+
+Géant cible — > 10 M utilisateurs / multi-région
+   → AWS / GCP, K8s ou serverless poussé
+```
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu as un side-project Next.js qui sert ~3000 visites/mois. Quelle option a le meilleur rapport simplicité/coût ?"
+  options={[
+    'Acheter un VPS et installer K8s',
+    'Vercel ou Cloudflare Pages — free tier suffit, déploiement en 1 clic, preview PR gratuit',
+    'AWS ECS avec ALB',
+    'Bare-metal en colocation'
+  ]}
+  answerIndex={1}
+  explanation="3000 visites/mois rentre largement dans les free tiers Vercel ou Cloudflare Pages. Tu paies 0 €, tu n'as rien à administrer, tu as preview PR et TLS auto. Toute option plus complexe te coûte du temps que tu ne valoriseras pas en early stage."
+/>
+
+<Quiz
+  question="Ton API tourne sur Vercel à 1200 €/mois (compute + bandwidth). Charge stable. Comment réduire le coût intelligemment ?"
+  options={[
+    'Optimiser les requêtes pour passer à 800 €/mois',
+    'Migrer vers un VPS Hetzner ~50 €/mois (4 vCPU + RAM dédiés) avec Caddy + Postgres self-hosted, garder Cloudflare en frontale',
+    'Rien faire, c\'est le prix',
+    'Passer à AWS Lambda'
+  ]}
+  answerIndex={1}
+  explanation="À cette échelle, le coût unitaire serverless explose. Un VPS dédié + Cloudflare frontal divise la facture par 20-30, pour une charge stable. La règle : serverless gagne en début et en pics, IaaS gagne en charge stable. Lambda ne change pas le modèle de tarification."
+/>
+
+<Quiz
+  question="Tu héberges les données de santé pour une clinique française. Lequel est non négociable ?"
+  options={[
+    'Le moins cher possible',
+    'Compliance HDS (Hébergement de Données de Santé) — OVH, Outscale, AWS Paris ont la certif. Hetzner ne l\'a pas',
+    'AWS uniquement',
+    'Ce n\'est pas important si on chiffre'
+  ]}
+  answerIndex={1}
+  explanation="HDS est une obligation légale pour héberger des données de santé en France. La certification couvre infra + processus + audits. Sans cette certif, ton client ne peut pas légalement utiliser ton service. Le chiffrement, c'est nécessaire mais pas suffisant."
+/>
+
+<Quiz
+  question="Tu déploies sur Fly.io et utilises tellement leurs APIs custom (anycast, machines à la demande, edge regions) que migrer prendrait 2 mois. Quelle est la stratégie défensive ?"
+  options={[
+    'Rien, c\'est cool',
+    'Encapsuler les fonctionnalités spécifiques derrière une interface applicative (port/adapter), de sorte que le jour du switch tu changes l\'implémentation, pas l\'app',
+    'Tout réécrire en bash',
+    'Refactor préventif vers AWS'
+  ]}
+  answerIndex={1}
+  explanation="Le pattern ports & adapters (hexagonal) protège des changements d'infra. Tu ne dois pas tout fuir, juste t'assurer qu'au moment de partir, le coût soit chiffrable et borné. Tout réécrire avant nécessité = coût certain pour bénéfice incertain."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Cost of Cloud, a Trillion Dollar Paradox* — a16z (2021), toujours d'actualité
+- *Hetzner CCX line* — [hetzner.com/cloud](https://www.hetzner.com/cloud)
+- *Caddy* — [caddyserver.com](https://caddyserver.com/)
+- *Fly.io machines* — [fly.io/docs/machines](https://fly.io/docs/machines/)
+- *Cloudflare Workers* — [developers.cloudflare.com/workers](https://developers.cloudflare.com/workers/)
+- *DigitalOcean Tutorials* — guides VPS très complets
+
+---
+
+**Suite** : [14.4 — Conteneurs en production](/14-devops/04-conteneurs/) pour l'industrialisation Docker / Kubernetes.

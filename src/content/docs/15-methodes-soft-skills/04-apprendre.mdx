@@ -1,0 +1,409 @@
+---
+title: 15.4 — Apprendre à apprendre
+description: Méthode Feynman, espacement, lecture de doc / code source, veille soutenable, usage raisonné de l'IA — comment rester pertinent sur 20 ans.
+sidebar:
+  order: 4
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : ne plus paniquer à chaque nouveau framework. Construire une méthode personnelle pour apprendre vite, retenir longtemps, et faire le tri dans le bruit ambiant — IA incluse.
+
+<ObjectiveList items={[
+  "Apprendre via la méthode Feynman et l'espacement",
+  "Lire la doc officielle et le code source comme première source",
+  "Mettre en place une veille soutenable (pas de FOMO)",
+  "Utiliser l'IA comme accélérateur sans court-circuiter la compréhension",
+  "Construire un projet fil rouge qui consolide les apprentissages"
+]} />
+
+<Level value="confirmé" reading="13 min" prereq="aucun prérequis technique" />
+
+
+## La spirale du dev qui apprend mal
+
+```
+Tutoriel YouTube → Mini-projet → Bibliothèque "trending" → Tuto 2 → Burn-out
+```
+
+Beaucoup de devs en début de carrière passent leur temps à **regarder** des tutoriels sans **construire**. Résultat : impression d'avancer, en vrai oubli en 2 semaines.
+
+La science cognitive est claire :
+
+| Activité | Rétention à 1 mois |
+|----------|--------------------|
+| Lire passivement | ~ 10 % |
+| Écouter un cours | ~ 20 % |
+| Voir une démo | ~ 30 % |
+| Discussion / débat | ~ 50 % |
+| **Pratique active** | ~ 75 % |
+| **Enseigner à quelqu'un d'autre** | ~ 90 % |
+
+> Si tu veux retenir, **enseigne**. Bloggue. Explique à un collègue. Réponds sur Stack Overflow. Le cerveau encode profondément ce qu'il restitue.
+
+---
+
+## La méthode Feynman
+
+Richard Feynman (physicien Nobel) avait une technique simple :
+
+1. **Choisis** un sujet à apprendre.
+2. **Explique-le à voix haute** comme à un débutant. Mots simples, pas de jargon.
+3. **Identifie** les trous dans ton explication — c'est là que tu n'as pas compris.
+4. **Retourne à la source** combler les trous.
+5. **Re-explique** jusqu'à ce que ça coule.
+
+Concrètement, pour apprendre les **Server Components** :
+
+- Étape 1 : Tu lis la doc Next.js.
+- Étape 2 : Tu écris un Markdown *« RSC en 200 mots »* ou tu enregistres un Loom de 2 min.
+- Étape 3 : *« Hmm, je sais pas vraiment dire ce qui rend RSC différent du SSR classique. »*
+- Étape 4 : Tu retournes lire — et là tu comprends que RSC ne sert **jamais** de JS au client (vs SSR qui sert le HTML + JS).
+- Étape 5 : Tu re-écris. Et tu retiens.
+
+> Le test : peux-tu expliquer ce concept à un débutant **sans Google** ouvert ? Si non, tu ne le sais pas vraiment.
+
+---
+
+## Espacement et active recall
+
+### Le piège du re-read
+
+Relire un cours = sentiment d'apprendre. En vrai : **rétention médiocre**.
+
+### Active recall
+
+**Tester** sa mémoire (sans regarder) consolide bien plus que relire.
+
+Outils :
+
+- **Anki** — flashcards à répétition espacée (mauvaise UX mais imbattable).
+- **Mochi** / **RemNote** — alternatives modernes.
+- **Mémo papier** : note 5 questions sur un papier après chaque session, teste-toi 1 j / 3 j / 1 sem / 1 mois plus tard.
+
+Exemple de carte Anki :
+
+```
+Front: "Quelle directive Astro hydrate un composant uniquement quand visible ?"
+Back: "client:visible — utilise IntersectionObserver"
+```
+
+```
+Front: "Pourquoi argon2id plutôt que bcrypt en 2026 ?"
+Back: "argon2id est lauréat du Password Hashing Competition,
+       résistant GPU/ASIC via memoryCost (vs bcrypt CPU-only)."
+```
+
+### Espacement
+
+Le *spacing effect* (Ebbinghaus) : revoir à intervalles croissants (J+1, J+3, J+7, J+15, J+30, J+90) consolide jusqu'à 5× mieux que cramming.
+
+Anki applique ça automatiquement.
+
+---
+
+## Lecture de doc officielle — la compétence sous-cotée
+
+> Premier réflexe avant de Googler : ouvrir la doc officielle.
+
+| Type de doc | Pourquoi |
+|-------------|----------|
+| **MDN** (web standards) | Source la plus fiable sur HTML/CSS/JS |
+| **Doc framework** (Next.js, Astro, Vue, …) | À jour avec la version courante |
+| **Spec officielle** (TC39, RFCs IETF) | Pour comprendre **pourquoi** |
+| **CHANGELOG** d'une lib | Comprendre l'évolution + breaking changes |
+| **Code source** | Quand la doc est insuffisante |
+
+Beaucoup de devs juniors n'ouvrent jamais la doc officielle, préférant les blogs / tutos. Conséquence : ils apprennent des **versions périmées** ou des **patterns folkloriques**.
+
+### Skim → Deep dive
+
+Une lecture saine de doc :
+
+1. **Skim** la table des matières en 2 min.
+2. **Identifier** les sections vraiment pertinentes pour ton problème.
+3. **Lire en profondeur** ces sections.
+4. **Tester** au REPL / sandbox.
+5. **Note** dans tes propres mots (Feynman).
+
+### Diátaxis — comprendre la structure
+
+[Diátaxis](https://diataxis.fr/) catégorise toute doc en 4 quadrants :
+
+| | Pratique | Théorie |
+|---|---------|---------|
+| **Apprendre** | **Tutoriel** (étape par étape) | **Explication** (concept) |
+| **Travailler** | **Guide pratique** (résoudre une tâche) | **Référence** (API exhaustive) |
+
+Quand tu cherches un truc, **vise le bon quadrant**. Cherchant à comprendre RSC ? Lis l'**explication** dans la doc Next.js, pas le tuto.
+
+---
+
+## Lecture de code source
+
+> Un dev qui ne lit jamais le code source est un dev qui plafonne au junior.
+
+Lire le code de la lib qu'on utilise donne :
+
+- Compréhension réelle du fonctionnement.
+- Détection des bugs / edge cases avant de tomber dessus.
+- Meilleure intuition pour debug (« je sais ce que fait fetch en interne »).
+- Inspiration sur des patterns à réutiliser.
+
+### Comment ?
+
+1. **Trouve l'entrée** : `package.json` → `"main"` ou `"exports"`.
+2. **Lis** le fichier d'entrée : tu vois ce qui est exposé.
+3. **Cherche** la fonction qui t'intéresse (Cmd+F).
+4. **Suis les imports** : descends dans les détails utiles uniquement.
+5. **Compare** avec la doc — souvent, le code documente mieux que la doc.
+
+Pour des libs très complexes (React, Vue), commence par les **PRs récentes** ou les **issues fermées** : tu vois le code en contexte d'un changement précis.
+
+### Reading clubs
+
+Dans certaines équipes mûres, un **code reading club** mensuel : 4 personnes lisent ensemble un bout de code OSS, débat 1h. Apprentissage exceptionnel.
+
+---
+
+## Veille soutenable — sans FOMO
+
+### Le piège de l'hyperflux
+
+Twitter/X, Reddit, Hacker News, newsletters quotidiennes, podcasts : il y a **largement** plus de contenu que de temps. Si tu essaies de tout suivre, tu :
+
+- Lis des trucs sans les digérer.
+- Stresse de manquer un truc important.
+- Brûles ta capacité de focus sur le vrai travail.
+
+### Comment veiller sainement
+
+1. **Limite le flux entrant.** 3-5 sources max.
+2. **Prends rendez-vous avec la veille** : 30 min, 2-3×/sem, pas en continu.
+3. **Capture** ce qui te semble important (Pocket, Readwise, Obsidian) — tu y reviens, ou non.
+4. **Vis avec le retard.** Tu n'as pas besoin de lire un article au moment où il sort.
+
+### Sources solides 2026
+
+| Catégorie | Recommandation |
+|-----------|---------------|
+| **Newsletters** | TLDR Tech, Bytes, JS Weekly, Pointer, Console.dev |
+| **Newsletters niche** | Frontend Focus, Node Weekly, Postgres Weekly, ml.stackpipe.io |
+| **Podcasts** | Syntax, JS Party, ChangeLog, ShopTalk Show, Software Engineering Daily |
+| **Aggregateurs** | Hacker News (front page), Lobste.rs |
+| **Blogs personnels** | Sites de dev seniors via RSS |
+| **Conférences** | JSConf, dotJS, Vue Amsterdam, React Conf, FOSDEM |
+
+### Le RSS — la veille qui dure
+
+Ouvre un compte **Feedbin** / **Inoreader** / **Miniflux**. Abonne-toi aux blogs et aux releases GitHub des libs critiques. Tu **contrôles** ton flux, pas un algo.
+
+Avantage : un blog que tu suis depuis 5 ans donnera plus de valeur que 5 ans de Twitter.
+
+---
+
+## Usage raisonné de l'IA
+
+L'IA (Copilot, Claude, ChatGPT) est devenue **omniprésente** chez les devs en 2026. Bien utilisée : 1,5-2× plus productif. Mal utilisée : régression compétences + dépendance.
+
+### Bons usages
+
+| Usage | Bénéfice |
+|-------|----------|
+| **Boilerplate** : générer un schéma Zod à partir d'un type | Rapide, peu de cognitive load |
+| **Refactor** mécanique | Économie pure |
+| **Recherche** : « comment fait-on X dans Y framework ? » | Plus rapide que Google |
+| **Explication** d'un code legacy | « Que fait cette fonction ? » |
+| **Brainstorm** d'options | Souvent le 3e n'est pas évident |
+| **Tests unitaires** sur du code connu | Couverture accélérée |
+| **Code review** premier passage | Trouve les erreurs basiques |
+| **Trad / format** | Doc traduite, JSON formatée |
+
+### Mauvais usages
+
+| Anti-pattern | Risque |
+|--------------|--------|
+| **Copier-coller sans relire** | Bugs subtils, mauvais patterns, hallucinations |
+| **Refuser de comprendre** le code généré | Tu plafonnes en compétence |
+| **Confier l'architecture** à l'IA | Pas son fort, contexte limité |
+| **Outsourcer ta pensée** | Atrophie cognitive mesurable (études récentes) |
+| **Croire les chiffres / dates** sans vérif | Hallucinations fréquentes |
+| **Utiliser sur du code sensible** sans réflexion sécu | Vulnérabilités glissées |
+
+### Discipline saine
+
+- **Comprends** chaque ligne avant de merger.
+- **Tests** systématiques sur le code généré.
+- **Pose-toi** : *« Aurais-je fait pareil ? Mieux ? Pourquoi ? »*
+- **Relis le diff complet**.
+- **Demande à l'IA d'expliquer** plutôt que de générer pour les concepts nouveaux.
+
+> L'IA est un **collègue très junior, très productif, parfois génial, parfois absurde**. Tu le manages, tu ne lui obéis pas.
+
+### Coding agents
+
+Claude Code, Cursor, Aider, Codex — les **agents** vont plus loin : ils éditent ton repo, lancent les tests, itèrent. Excellents pour :
+
+- Refactor étendu sur consigne précise.
+- Pipeline de migration (« migre tous les .css vers Tailwind »).
+- Génération de boilerplate à partir d'un schéma OpenAPI.
+
+À éviter sur :
+
+- **Architecture nouvelle** (le contexte produit leur manque).
+- **Décisions stratégiques**.
+- **Code legacy non documenté** (ils inventent).
+
+---
+
+## Construire des projets fil rouge
+
+> *« Le portefeuille bat le CV. »*
+
+Apprendre via projets concrets ancre 5× mieux que les tutoriels.
+
+### Critères d'un bon projet d'apprentissage
+
+| Critère | Pourquoi |
+|---------|----------|
+| **Tu y reviens** plusieurs mois | Tu vois ton code « à froid » — apprentissage massif |
+| **Public** (GitHub, démo en ligne) | Pression positive de la qualité |
+| **Mini-stack complète** (front + back + DB + déploiement) | Couvre tout le pipeline |
+| **Pas trop ambitieux** | Pas de Twitter clone à 50 features |
+| **Choisi pour t'apprendre une chose précise** | Pas dispersé sur 5 frontières |
+
+### Idée 2026 — checklist
+
+- [ ] Une **landing page** statique (HTML/CSS/JS).
+- [ ] Une **TODO list** persistée (localStorage puis backend).
+- [ ] Une **app météo** consommant une API publique.
+- [ ] Une **SPA avec routing** (React, Vue ou Svelte).
+- [ ] Une **app full-stack CRUD avec auth** (Next.js, Hono, Postgres).
+- [ ] Un **mini-SaaS** (Stripe, RLS, multi-tenant).
+- [ ] Une **app temps réel** (WebSocket).
+- [ ] Une **contribution OSS** significative (pas un typo, un patch réel).
+
+À chaque étape, ajoute la pratique correspondante :
+
+- Tests Vitest / Playwright.
+- CI GitHub Actions.
+- Sentry.
+- Lighthouse CI.
+
+À la fin de cette progression, tu as un **portfolio convaincant** + une compétence opérationnelle réelle.
+
+---
+
+## Routines quotidiennes des devs qui progressent
+
+> Deux profils inspirants à connaître : Julia Evans (zines), Dan Abramov (React core), Charity Majors (observability) — ils écrivent **publiquement** ce qu'ils apprennent.
+
+Habitudes communes :
+
+- **Écrire** régulièrement (blog, X, Mastodon, Bluesky, Loom).
+- **Construire** régulièrement (1 projet/mois, même petit).
+- **Lire** un livre tech / mois.
+- **Pause** régulière (le cerveau consolide hors-clavier).
+- **Pas de cargo culte** : *« On utilise X parce que tout le monde l'utilise »* est une mauvaise raison.
+
+---
+
+## Connais ton mode d'apprentissage
+
+| Mode | Comment l'optimiser |
+|------|---------------------|
+| **Visuel** | Diagrammes, schémas, vidéos |
+| **Auditif** | Podcasts, conf en marchant |
+| **Lecture / écriture** | Doc, blog, prise de notes |
+| **Kinesthésique** | Coder en suivant, tester en live |
+
+> Aucun mode n'est meilleur. Identifie le tien et donne-toi les conditions de réussite.
+
+Beaucoup de devs apprennent **mieux en codant** : ouvre un sandbox CodeSandbox / StackBlitz / Replit dès la lecture, tape les exemples, casse-les, comprends.
+
+---
+
+## Limiter le burn-out
+
+Apprendre soutiennent demande de **ne pas se vider**.
+
+| Signal | Action |
+|--------|--------|
+| Plus de plaisir à coder | Pause 1 sem, projet sans pression |
+| Tu lis 30 articles sans en retenir un | Pause de la veille 2 sem |
+| Insomnie + écran le soir | Stop écrans 1h avant dodo |
+| Compulsif Twitter / X / etc. | Sabotage écran (Cold Turkey, etc.) |
+| Sentiment d'inutilité face aux nouveautés | Refais un projet ancien — tu verras combien tu as appris |
+
+> *« Slow is smooth, smooth is fast. »* La progression durable bat la course épuisante. Une carrière dev se joue sur **20 ans**, pas 6 mois.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu lis un article sur les Server Components et tu penses « j'ai compris ». Comment **vérifier** que tu as vraiment compris ?"
+  options={[
+    'Le relire',
+    'Méthode Feynman : explique-le à voix haute en 2 minutes, sans regarder. Si tu butes, tu n\'as pas compris cette partie',
+    'Demander à un ami',
+    'Coder pendant des heures'
+  ]}
+  answerIndex={1}
+  explanation="L'illusion de comprehension est l'un des plus gros pièges. Le test Feynman (expliquer en mots simples) est imparable : si tu ne peux pas, tu ne le sais pas. Relire renforce l'illusion. Coder pendant des heures sans la conceptuelle peut figer un mauvais modèle mental."
+/>
+
+<Quiz
+  question="Tu utilises Copilot et acceptes 80 % des suggestions sans relire. Quel risque sur 1 an ?"
+  options={[
+    'Aucun, c\'est plus rapide',
+    'Régression de compétences (tu n\'apprends plus à structurer), bugs subtils intégrés sans détection, dépendance forte. Discipline : comprendre chaque ligne acceptée',
+    'Devenir 10× plus productif',
+    'Comprendre l\'IA mieux'
+  ]}
+  answerIndex={1}
+  explanation="L'IA accélère ce que tu sais faire. Sur ce que tu ne maîtrises pas, accepter à l'aveugle te fige à un niveau de compétence et glisse des bugs subtils (souvent niveau sécu, perf, edge cases). La discipline saine : Copilot suggère, tu décides. Et tu utilises ses suggestions comme matériau d'apprentissage (« je n'aurais pas écrit ça, pourquoi cette approche ? »)."
+/>
+
+<Quiz
+  question="Une nouvelle techno (X) sort, tout Twitter en parle. Tu ne la connais pas. Que fais-tu ?"
+  options={[
+    'Tout abandonner pour l\'apprendre tout de suite',
+    'Vivre avec le retard. Lis 1 article de fond après 1-2 mois (le bruit sera filtré), juge si elle dure et si elle est pertinente pour TON contexte. Ne pas la sentir, c\'est OK',
+    'Ignorer pour toujours',
+    'Critiquer publiquement'
+  ]}
+  answerIndex={1}
+  explanation="80 % des « game-changers » Twitter ne durent pas 18 mois. Apprendre tout de suite = gâcher du temps sur quelque chose qui sera oublié. Attendre quelques mois filtre le bruit. La compétence importante n'est pas de TOUT savoir mais de juger ce qui compte pour ton contexte. La FOMO est un piège."
+/>
+
+<Quiz
+  question="Tu apprends mieux quand tu codes en suivant. Comment optimiser tes sessions de lecture de doc ?"
+  options={[
+    'Lire en entier puis essayer après',
+    'Ouvrir un sandbox (CodeSandbox, StackBlitz, Replit ou repo local) en parallèle. Tape les exemples, casse-les, modifie-les. La rétention monte en flèche',
+    'Imprimer la doc',
+    'Regarder une vidéo à la place'
+  ]}
+  answerIndex={1}
+  explanation="Si tu es kinesthésique, lire passivement n'encode pas. Coder en parallèle (tape, casse, modifie) ancre profondément. C'est plus lent en surface mais 5× plus efficace en rétention. Pour les autres modes (visuel, auditif), même principe : adapte la consommation à ton encodage cognitif."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Make It Stick* — Brown, Roediger, McDaniel (rétention durable)
+- *A Mind for Numbers* — Barbara Oakley (méthode d'apprentissage)
+- *Ultralearning* — Scott Young
+- *Anki* — [apps.ankiweb.net](https://apps.ankiweb.net/)
+- *Diátaxis* — [diataxis.fr](https://diataxis.fr/)
+- *Julia Evans zines* — [wizardzines.com](https://wizardzines.com/)
+- *Charity Majors blog* — [charity.wtf](https://charity.wtf/)
+
+---
+
+**Retour** : [Index axe 15](/15-methodes-soft-skills/) — applique tout ça via le projet de l'axe.

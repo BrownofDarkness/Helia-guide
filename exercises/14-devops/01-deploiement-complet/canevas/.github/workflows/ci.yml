@@ -1,0 +1,27 @@
+# 🚧 Stub à remplir — voir correction/ pour la version complète.
+# Étapes attendues :
+# 1. checkout
+# 2. setup-node 24 + cache npm
+# 3. lint, typecheck, tests
+# 4. build image Docker (multi-arch optionnel)
+# 5. scan Trivy --severity CRITICAL --exit-code 1
+# 6. push vers ghcr.io (sur main + sur PR avec tag preview-{number})
+# 7. déploiement Fly (sur main → prod ; sur PR → preview app)
+#
+# Sécurité :
+# - permissions: minimum requis (contents: read, packages: write, id-token: write)
+# - concurrency : cancel-in-progress
+# - secrets via OIDC (FLY_API_TOKEN éphémère ou flyctl deploy avec FLY_API_TOKEN scope)
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO — implémenter le pipeline CI"

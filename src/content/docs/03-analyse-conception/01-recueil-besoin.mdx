@@ -1,0 +1,257 @@
+---
+title: 3.1 — Recueil du besoin
+description: Interviews, personas, parcours utilisateur, user stories — comprendre avant de coder.
+sidebar:
+  order: 1
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="0">
+Marie reçoit son premier brief de Lina : « il me faut un site pour ma boulangerie ». C'est tout. Marie sait qu'elle doit creuser : quels produits ? quels horaires ? livraison ou click & collect ? clientèle âgée ? Si elle code sans poser ces questions, elle va livrer un site inutilisable.
+</Scenario>
+
+<Scenario parcours="B" episode="0">
+Inès dit à Hugo : « il me faut un site pour Studio Pulse, comme Mindbody mais en plus simple ». Hugo ne sait pas ce qu'est Mindbody. Il doit éviter de coder à l'aveugle un clone qui ne servira pas Inès. Recueil du besoin : le métier d'Inès, ses contraintes, ses utilisateurs.
+</Scenario>
+
+<Scenario parcours="C" episode="0">
+Sami a son idée : épicerie zéro-déchet. Mais il fait l'erreur de coder avant de parler à 5 clients potentiels. Heureusement, il s'arrête à temps. 30 minutes d'interview avec 3 voisines lui font découvrir qu'elles veulent surtout **un suivi des consignes**, pas un catalogue.
+</Scenario>
+
+<Scenario parcours="D" episode="0">
+Léa interviewe 8 voisins de son quartier avant de coder CoupDeMain. Elle découvre qu'ils veulent **moins de bruit** que sur Telegram, et **plus de filtre** par type de demande. C'est différent de ce qu'elle imaginait. Bonne chose qu'elle ait posé les questions.
+</Scenario>
+
+<Scenario parcours="E" episode="0">
+Yanis va voir le président de l'asso : « on a besoin d'un task manager ». Il pose les vraies questions : qui utilise ? quelle fréquence ? quoi remplacer ? La réponse révèle qu'ils veulent surtout **réduire les emails de coordination** — l'app doit donc avoir un email digest.
+</Scenario>
+
+> 🎯 **Objectif** : ne plus jamais coder sur un brief flou. Apprendre à transformer une demande vague (« je veux un site comme Airbnb mais pour les chiens ») en spécifications actionnables.
+
+<ObjectiveList items={[
+  "Mener un entretien utilisateur efficace en posant les bonnes questions",
+  "Identifier les vrais besoins derrière les demandes (jobs to be done)",
+  "Construire un persona qui sert vraiment à concevoir",
+  "Cartographier un parcours utilisateur et repérer les frictions",
+  "Écrire des user stories avec critères d'acceptation testables"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="aucun (parallélisable avec axe 1)" />
+
+
+## Le piège fondamental : le besoin n'est pas la solution
+
+> *« Les gens ne veulent pas une perceuse 6 mm. Ils veulent un trou de 6 mm. Et même : ils veulent accrocher un cadre. »*
+
+Quand un client dit *« je veux un système de notation 5 étoiles »*, il faut entendre *« je veux que mes utilisateurs distinguent rapidement les bons restaurants des mauvais »*. Peut-être qu'un simple « pouce vers le haut » fait mieux le job. Peut-être qu'on n'a même pas besoin de notation et qu'un classement par fréquentation suffit.
+
+**Ton job de dev/concepteur** : remonter au *vrai* besoin avant de coder la *solution proposée*.
+
+## L'entretien utilisateur
+
+### Avant l'entretien
+
+Prépare une **trame de questions ouvertes** et un objectif clair :
+
+> *« Comprendre comment Marie organise ses courses hebdomadaires aujourd'hui. »*
+
+### Pendant l'entretien
+
+**Règle d'or** : pose des questions sur le **passé**, pas sur le **futur**.
+
+| ❌ Mauvaise question | ✅ Bonne question |
+|---------------------|-------------------|
+| « Utiliseriez-vous une app de courses ? » | « Comment avez-vous fait vos courses la semaine dernière ? » |
+| « Aimeriez-vous des notifications push ? » | « La dernière fois qu'on vous a rappelé un truc important, qu'est-ce qui s'est passé ? » |
+| « Combien paieriez-vous pour ça ? » | « Quel outil utilisez-vous aujourd'hui pour ça, et combien ça vous coûte ? » |
+
+Les gens **prédisent mal leur comportement futur**. Mais ils racontent assez bien leur passé.
+
+### Les 5 « pourquoi »
+
+Quand un utilisateur exprime un besoin, demande **pourquoi** plusieurs fois pour atteindre le besoin réel :
+
+> — Je veux pouvoir exporter en PDF.
+> — Pourquoi ?
+> — Pour l'envoyer par email.
+> — Pourquoi par email ?
+> — Pour que mon comptable l'ait.
+> — Pourquoi votre comptable en a besoin ?
+> — Pour faire ma déclaration de TVA chaque trimestre.
+
+Le **vrai** besoin n'est pas « exporter en PDF » mais « transmettre les données fiscales au comptable trimestriellement ». Une intégration directe avec le logiciel du comptable serait peut-être 10× mieux.
+
+### Après l'entretien
+
+Note dans les 24 h. Tu seras déjà en train d'oublier des nuances.
+
+## Personas — qui utilise réellement ton produit ?
+
+Un **persona** est un personnage fictif basé sur des entretiens réels. Il rend tangibles les utilisateurs cibles et les décisions de conception.
+
+### Anatomie d'un persona utile
+
+| Champ | Exemple |
+|-------|---------|
+| **Nom + photo** | Marie, 38 ans (photo libre de droits) |
+| **Métier / contexte** | Comptable, 2 enfants, vit en banlieue |
+| **Objectifs** | Boucler la paie en moins de 2 jours par mois |
+| **Frustrations** | Les outils actuels demandent 8 clics pour valider une facture |
+| **Compétences tech** | À l'aise avec Excel, méfiante face aux nouveautés |
+| **Phrase clé** | *« Si je dois lire une notice, c'est déjà trop compliqué »* |
+
+<Aside type="tip" title="Persona < Job to be done">
+Les personas ont une limite : un même utilisateur a plusieurs « jobs ». Marie en réunion ≠ Marie le soir sur mobile. Le framework **JTBD** (Jobs To Be Done) recentre sur la situation et la mission, pas sur la personne.
+
+Format JTBD : *« Quand [situation], je veux [motivation], afin de [résultat attendu] »*.
+*« Quand je rentre du travail tard, je veux décider quoi cuisiner en moins de 2 minutes, afin de pouvoir manger sans fatigue mentale supplémentaire. »*
+</Aside>
+
+## Parcours utilisateur
+
+Aussi appelé **user journey map**. Il visualise les étapes qu'un utilisateur traverse pour atteindre un objectif, avec les émotions ressenties.
+
+<Diagram
+  caption="User journey simplifié — réservation d'un voyage"
+  code={`
+    flowchart LR
+      A[Inspiration<br/>😊] --> B[Recherche<br/>🤔]
+      B --> C[Comparaison<br/>😩]
+      C --> D[Réservation<br/>😬]
+      D --> E[Attente<br/>😐]
+      E --> F[Voyage<br/>😄]
+      F --> G[Retour & avis<br/>🤗]
+  `}
+/>
+
+Pour chaque étape, note :
+- **Action** : ce que fait l'utilisateur
+- **Pensée** : ce qu'il se dit
+- **Émotion** : 😊 😐 😩
+- **Point de friction** : où il bloque, où il abandonne
+
+C'est **dans les frictions** que se cachent les opportunités produit.
+
+## User stories
+
+Format standard, lisible par tout le monde :
+
+```
+En tant que [rôle], je veux [action], afin de [bénéfice].
+```
+
+Exemples :
+
+```
+En tant que client, je veux pouvoir suivre ma commande en temps réel,
+afin de planifier ma journée sans rester collé à la porte.
+
+En tant qu'admin, je veux désactiver un compte utilisateur,
+afin de répondre à une demande RGPD sous 30 jours.
+```
+
+### Critères d'acceptation
+
+Une user story sans critères, c'est un vœu. Avec critères, c'est une spec.
+
+**Format Gherkin** (BDD) :
+
+```gherkin
+Étant donné que je suis connecté en tant que client
+Quand je consulte la page de ma commande en cours
+Alors je vois le statut actuel (préparée / expédiée / livrée)
+Et je vois la date estimée de livraison
+Et je peux cliquer sur le numéro de tracking pour ouvrir le site du transporteur
+```
+
+**Format checkliste** (plus libre) :
+
+```
+✅ Le statut s'affiche en temps réel (rafraîchi auto toutes les 30 s)
+✅ La date estimée tient compte des jours fériés
+✅ Le bouton tracking ouvre dans un nouvel onglet
+✅ Si la commande est annulée, un bouton "remboursement" apparaît
+```
+
+### INVEST — bonnes user stories
+
+Une user story bien formée est :
+
+| Lettre | Sens | Mauvaise | Bonne |
+|--------|------|----------|-------|
+| **I** | Indépendante | « auth + dashboard + notifs » | « connexion par email » |
+| **N** | Négociable | « avec tableau qui scrolle horizontalement » | « afficher les commandes » (le « comment » se discute) |
+| **V** | Avoir une Valeur | « refactor du back » | « réduire le temps de connexion à 1 s » |
+| **E** | Estimable | « faire le truc » | une story dont on peut dire « ½ jour » ou « 2 jours » |
+| **S** | Suffisamment petite | une story de 3 semaines | une story de 1–5 jours |
+| **T** | Testable | « rendre l'app plus rapide » | « LCP < 2.5 s sur la page d'accueil » |
+
+## Distinguer besoin vs solution vs implémentation
+
+Un piège classique chez les juniors : sauter directement au **comment**.
+
+| Niveau | Exemple |
+|--------|---------|
+| **Besoin** | Les utilisateurs n'arrivent pas à retrouver leurs anciennes commandes. |
+| **Solution produit** | Ajouter un historique consultable avec filtres date / produit. |
+| **Implémentation** | Page React `/orders/history` + API `GET /orders?from=&to=&product=`. |
+
+Quand un client te dit « ajoute un historique consultable », **remonte d'un cran** : peut-être qu'un simple e-mail de confirmation que les utilisateurs gardent suffit.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu interviewes une utilisatrice qui te dit : « j'aimerais bien une notification quand mes amis viennent en ville ». Quelle est la prochaine question idéale ?"
+  options={[
+    'Quelle couleur préférez-vous pour la notification ?',
+    'La dernière fois qu\'un ami est venu sans que vous le sachiez à l\'avance, qu\'est-ce qui s\'est passé ?',
+    'Êtes-vous prête à payer pour ça ?',
+    'Préférez-vous push, e-mail ou SMS ?'
+  ]}
+  answerIndex={1}
+  explanation="Question sur le passé, ouverte. Elle révèle la fréquence du problème, l'ampleur du préjudice ressenti, les solutions de contournement actuelles. Les autres questions présupposent que la solution est une notification, ce qui n'est peut-être pas le bon angle."
+/>
+
+<Quiz
+  question="Quelle user story est la mieux formée selon INVEST ?"
+  options={[
+    'Le système doit être performant',
+    'En tant qu\'utilisateur, je veux que tout marche',
+    'En tant que cliente, je veux recevoir un e-mail de confirmation après paiement, afin de garder une trace pour ma comptabilité',
+    'Refactor de l\'auth'
+  ]}
+  answerIndex={2}
+  explanation="Format respecté (rôle/action/bénéfice), valeur claire (traçabilité), testable (l'e-mail est envoyé ou non), petite, indépendante. Les autres sont vagues, non testables ou techniques sans valeur utilisateur explicite."
+/>
+
+<Quiz
+  question="Un client dit : « je veux un système de gestion documentaire avec versioning, recherche full-text, OCR, signature électronique et workflow d'approbation ». Quelle est ta première réaction ?"
+  options={[
+    'Estimer le projet et commencer à coder',
+    'Demander pourquoi : quels documents, qui les utilise, quelle décision dépend d\'eux',
+    'Proposer Notion ou Google Drive',
+    'Refuser, c\'est trop gros'
+  ]}
+  answerIndex={1}
+  explanation="Une demande aussi large cache souvent un problème spécifique. Comprendre le contexte (peut-être qu'ils ont juste 50 contrats par an et que Google Drive + DocuSign suffisent) évite de coder un produit complet pour résoudre un problème de niche. C'est l'essence du recueil du besoin."
+/>
+
+## Pour aller plus loin
+
+- *The Mom Test* — Rob Fitzpatrick (~80 pages, livre culte sur les interviews utilisateurs)
+- *User Story Mapping* — Jeff Patton
+- *Jobs To Be Done — Theory & Practice* — Tony Ulwick
+- *Continuous Discovery Habits* — Teresa Torres
+
+---
+
+**Suite** : [3.2 — Formalisation](/03-analyse-conception/02-formalisation/) pour transformer ces interviews en cahier des charges.

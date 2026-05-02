@@ -1,0 +1,451 @@
+---
+title: 13.4 — Accessibilité avancée
+description: WCAG 2.2 niveau AA, tests automatiques + manuels, patterns ARIA (modales, menus, tableaux, formulaires), prefers-reduced-motion.
+sidebar:
+  order: 4
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : livrer des interfaces utilisables au clavier, par lecteurs d'écran, par malvoyants, par moteurs cognitifs variés. Ce n'est pas une option en 2026 (RGAA, ADA, EAA), c'est une exigence.
+
+<ObjectiveList items={[
+  "Comprendre les 4 principes WCAG (POUR) et les niveaux A / AA / AAA",
+  "Combiner tests automatiques (axe-core, Lighthouse) et tests manuels (clavier, lecteur d'écran)",
+  "Implémenter les patterns ARIA des composants courants : modale, menu, tabs, combobox",
+  "Respecter prefers-reduced-motion et prefers-color-scheme",
+  "Mener un audit RGAA / WCAG sur une app et écrire un rapport actionnable"
+]} />
+
+<Level value="confirmé" reading="12 min" prereq="axes 5-9 lus" />
+
+
+## Le contexte 2026 — l'accessibilité n'est plus optionnelle
+
+Trois forces de fond qui rendent le sujet incontournable :
+
+| Force | Conséquence |
+|-------|-------------|
+| **European Accessibility Act (EAA)** — entré en vigueur 28 juin 2025 | E-commerce, banque, transport, e-learning : conformité obligatoire dans l'UE |
+| **WCAG 2.2** (publié oct. 2023, intégré aux normes nationales) | 9 nouveaux critères (focus visible, drag, target size, etc.) |
+| **Procès ADA** aux US, **RGAA 4.1** en France | Risque légal réel pour les services publics et grandes entreprises |
+
+**Conclusion pratique** : si tu codes du logiciel client en 2026 sans pratique a11y, tu prends un risque juridique pour ton employeur ou client.
+
+---
+
+## Les 4 principes WCAG — POUR
+
+WCAG 2.2 organise tous ses critères autour de 4 principes :
+
+| Principe | Sens | Exemples concrets |
+|----------|------|-------------------|
+| **P**erceptible | L'info doit être perçue par tous | Alt sur images, captions vidéo, contraste, taille texte |
+| **O**pérable | Tout doit fonctionner sans souris | Navigation clavier, raccourcis, target size 24×24 px |
+| **U**tilisable / Compréhensible | L'interaction doit être prévisible | Lang attribute, labels, messages d'erreur clairs |
+| **R**obuste | Code valide, compatible AT (Assistive Tech) | HTML sémantique, ARIA correct, parsing valide |
+
+### Niveaux A / AA / AAA
+
+| Niveau | Cible | En pratique |
+|--------|-------|-------------|
+| **A** | Minimum vital — sans, le site est inutilisable par certains | Doit être atteint, toujours |
+| **AA** | Exigence légale standard (EAA, RGAA, ADA) | **Cible normale** des projets pro |
+| **AAA** | Exigeant, parfois impossible (sous-titrage live, contraste 7:1) | Cas où tu veux exceller, pas une cible globale |
+
+> Vise **AA** systématiquement. Le AAA partiel selon les composants critiques.
+
+### Nouveautés WCAG 2.2
+
+| Critère | Niveau | Quoi |
+|---------|--------|------|
+| **2.4.11 Focus Not Obscured** | AA | Le focus visible n'est jamais masqué (par sticky header, par exemple) |
+| **2.5.7 Dragging Movements** | AA | Toute action drag doit avoir une alternative non-drag |
+| **2.5.8 Target Size** | AA | Cible interactive ≥ 24×24 px (sauf cas inline) |
+| **3.2.6 Consistent Help** | A | Les liens d'aide à la même position partout |
+| **3.3.7 Redundant Entry** | A | Ne pas redemander une info déjà donnée dans le tunnel |
+| **3.3.8 Accessible Authentication** | AA | Pas de puzzles cognitifs (« retape ton mot de passe sans coller ») |
+
+---
+
+## Tests automatiques vs manuels — combiner les deux
+
+> Les tests automatiques attrapent **~30 à 40 %** des problèmes WCAG. Le reste demande l'œil humain.
+
+### Tests automatiques
+
+| Outil | Type | Quand l'utiliser |
+|-------|------|------------------|
+| **axe-core** (DevTools, Playwright, Cypress) | Audit page | En CI sur chaque PR |
+| **Lighthouse a11y** | Audit page | Vue d'ensemble |
+| **eslint-plugin-jsx-a11y** | Lint à l'écriture | Au moment du dev |
+| **pa11y** | CLI / CI | Audits de masse multi-pages |
+| **Storybook a11y addon** | Composant unitaire | En développement de design system |
+
+Exemple Playwright + axe :
+
+```ts
+import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+
+test('home is a11y compliant', async ({ page }) => {
+  await page.goto('/');
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toHaveLength(0);
+});
+```
+
+### Tests manuels — les irremplaçables
+
+1. **Naviguer au clavier seul** (Tab, Shift+Tab, Enter, Escape, flèches).
+2. **Utiliser un lecteur d'écran** : NVDA (Windows, gratuit), VoiceOver (Mac/iOS, intégré), TalkBack (Android).
+3. **Zoomer à 200 %** : les contenus restent lisibles, pas de scroll horizontal.
+4. **Désactiver les CSS** (DevTools : *Disable styles*) : la structure HTML reste-t-elle compréhensible ?
+5. **Utiliser le mode contraste élevé** Windows.
+6. **Tester avec `prefers-reduced-motion: reduce`**.
+
+<Aside type="tip" title="Apprendre NVDA en 30 minutes">
+NVDA + Firefox sur Windows :
+
+| Touche | Action |
+|--------|--------|
+| `Caps Lock + flèches` | Lire élément par élément |
+| `Tab` / `Maj+Tab` | Élément focusable suivant/précédent |
+| `H` | Heading suivant |
+| `D` | Landmark suivant |
+| `K` | Lien suivant |
+| `F` | Champ de formulaire suivant |
+
+Tu vas vite réaliser que sans `<h1>` cohérents, sans landmarks (`<main>`, `<nav>`), sans labels, ton site est **inutilisable**.
+</Aside>
+
+---
+
+## HTML sémantique — la base inattaquable
+
+L'erreur la plus courante : tout faire avec `<div>` et empiler des ARIA pour compenser.
+
+```html
+<!-- ❌ -->
+<div class="button" onclick="...">Soumettre</div>
+
+<!-- ✅ Le navigateur fournit gratuitement : focus, role, clavier, lecteur d'écran -->
+<button type="submit">Soumettre</button>
+```
+
+### La hiérarchie des landmarks
+
+```html
+<header>...</header>           <!-- = role banner -->
+<nav>...</nav>                  <!-- = role navigation -->
+<main>...</main>                <!-- = role main, le contenu unique de la page -->
+<aside>...</aside>              <!-- = role complementary -->
+<footer>...</footer>            <!-- = role contentinfo -->
+```
+
+Un lecteur d'écran propose alors « aller au contenu principal » via D — quasi gratuit.
+
+### Headings cohérents
+
+```html
+<!-- ✅ Hiérarchie : 1 seul h1, h2 sous le h1, h3 sous h2 -->
+<h1>Mon site</h1>
+  <h2>Articles récents</h2>
+    <h3>Premier article</h3>
+    <h3>Deuxième article</h3>
+  <h2>Newsletter</h2>
+```
+
+Pas de saut (h1 → h3 directement), pas de h1 multiples par page.
+
+---
+
+## ARIA — quand, où, comment
+
+### Première règle d'ARIA : ne pas l'utiliser
+
+> *« No ARIA is better than bad ARIA »* — W3C
+
+Avant d'écrire `role` ou `aria-*`, demande-toi : **est-ce qu'un élément HTML standard ne suffirait pas ?** 90 % du temps, oui.
+
+| Tu veux | HTML standard suffit |
+|---------|----------------------|
+| Un bouton | `<button>` |
+| Un lien | `<a href>` |
+| Une case à cocher | `<input type="checkbox">` |
+| Un onglet ouvrable | `<details><summary>` |
+
+ARIA devient nécessaire pour les **patterns sans équivalent HTML** : combobox, tabs, tree, dialog, menu, etc.
+
+### Patterns ARIA essentiels
+
+#### Modale / Dialog
+
+```html
+<dialog id="dlg" aria-labelledby="dlg-title">
+  <h2 id="dlg-title">Confirmer la suppression</h2>
+  <p>Cette action est irréversible.</p>
+  <button autofocus>Annuler</button>
+  <button>Supprimer</button>
+</dialog>
+```
+
+```js
+const dlg = document.getElementById('dlg');
+dlg.showModal(); // bloque le focus sur la modale, gère Escape
+```
+
+L'élément `<dialog>` natif (universel en 2026) gère tout : focus trap, `Escape`, `aria-modal="true"`, retour de focus.
+
+#### Menu / Combobox
+
+Les patterns ARIA sont **complexes** et peu intuitifs. **Utilise une lib éprouvée** plutôt que de les réécrire :
+
+| Pattern | Lib recommandée |
+|---------|-----------------|
+| Combobox / Listbox / Menu / Tabs / Dialog | **Radix UI** (React) |
+| Idem Vue | **Reka UI** (anciennement Radix Vue) |
+| Idem Svelte | **Bits UI** ou **Melt UI** |
+| Headless universel | **Headless UI** (Tailwind Labs) |
+
+Ces librairies sont *headless* : zéro style imposé, accessibilité gérée. Économie monumentale.
+
+#### Live regions
+
+Pour annoncer une mise à jour dynamique au lecteur d'écran :
+
+```html
+<div role="status" aria-live="polite">
+  Panier mis à jour : 3 articles
+</div>
+```
+
+| `aria-live` | Quand |
+|-------------|-------|
+| `polite` | Annonce dès que possible, sans interrompre |
+| `assertive` | Interrompt immédiatement (réservé aux erreurs critiques) |
+
+### Erreurs ARIA fréquentes
+
+| Anti-pattern | Pourquoi mauvais |
+|--------------|------------------|
+| `role="button"` sur un `<div>` | Manque le clavier, le focus, l'état actif |
+| `aria-hidden="true"` sur un élément focusable | Confusion : le screen reader skip mais l'utilisateur clavier l'atteint |
+| `aria-label` redondant avec le texte visible | Bruit pour le lecteur d'écran |
+| `tabindex="0"` partout | L'ordre de tab devient absurde |
+| `tabindex="5"` (ou autre nombre > 0) | À NE JAMAIS faire — détourne l'ordre naturel |
+
+---
+
+## Formulaires accessibles
+
+```html
+<label for="email">Adresse email</label>
+<input id="email" name="email" type="email"
+       autocomplete="email" required
+       aria-describedby="email-help email-err"
+       aria-invalid="true">
+<small id="email-help">On ne le partage avec personne.</small>
+<small id="email-err" role="alert">Format invalide.</small>
+```
+
+| Bonne pratique | Pourquoi |
+|----------------|----------|
+| `<label for>` lié à `<input id>` | Clic sur label active l'input, lecteur d'écran annonce |
+| `autocomplete` correct | Remplissage navigateur + lecteurs d'écran |
+| `aria-describedby` | Description et erreur lues |
+| `aria-invalid` + `role="alert"` | L'erreur est annoncée en live |
+| Type spécifique (`email`, `tel`, `number`) | Clavier mobile adapté |
+| `inputmode="numeric"` | Précise le clavier pour PIN, OTP |
+| Erreurs **textuelles** | Pas seulement « bordure rouge » |
+
+<Aside type="caution" title="Placeholder ≠ label">
+`placeholder="Email"` n'est PAS un label. Il disparaît à la saisie, n'est pas annoncé par tous les lecteurs d'écran et a un contraste insuffisant.
+
+→ Toujours un `<label>` visible (ou éventuellement `aria-label` si l'icône suffit).
+</Aside>
+
+---
+
+## Couleurs et contraste
+
+### Ratios à respecter
+
+| Élément | Niveau AA |
+|---------|-----------|
+| Texte normal | **4.5:1** |
+| Texte large (≥ 18.66 px bold ou 24 px normal) | **3:1** |
+| UI (bordures focus, icônes informatives) | **3:1** |
+
+### Outils
+
+- **Chrome DevTools** → Inspector → couleur du texte → l'outil affiche le ratio.
+- **Stark** (extension navigateur) → audit complet.
+- **APCA** (Accessible Perceptual Contrast Algorithm) → futur successeur du WCAG 2.x ratio, plus juste perceptivement.
+
+### Ne pas se reposer sur la couleur seule
+
+```html
+<!-- ❌ Le rouge seul ne suffit pas pour un daltonien -->
+<input class="error" />
+
+<!-- ✅ Couleur + icône + texte -->
+<input class="error" aria-invalid="true" />
+<span role="alert">⚠ Email invalide</span>
+```
+
+---
+
+## Mouvement et animations
+
+### `prefers-reduced-motion`
+
+Certains utilisateurs (vestibulaires, neurodivergents) ressentent du malaise face aux animations.
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+```
+
+```js
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (!reduce) {
+  // animation décorative
+}
+```
+
+| Animation type | Reduce → |
+|----------------|----------|
+| Décorative (parallax, fade) | Désactiver |
+| Fonctionnelle (transition entre états) | Réduire la durée mais garder |
+| Auto-play vidéo | Désactiver (WCAG 2.2.2) |
+
+### Autres préférences à respecter
+
+| Media query | Quoi |
+|-------------|------|
+| `prefers-color-scheme: dark` | Thème sombre |
+| `prefers-contrast: more` | Augmenter le contraste |
+| `prefers-reduced-transparency` | Désactiver les flous |
+| `prefers-reduced-data` | Servir moins de média |
+
+---
+
+## Cibles tactiles — 24×24 minimum
+
+WCAG 2.2 critère 2.5.8 : **24×24 px minimum** pour tout élément interactif (sauf inline dans un paragraphe).
+
+```css
+button, a {
+  min-height: 24px;
+  min-width: 24px;
+}
+```
+
+44×44 px est le standard Apple HIG, encore plus confortable. Iconique pour les boutons mobile.
+
+---
+
+## Focus visible — la règle d'or
+
+```css
+/* ✅ Focus visible uniquement quand on navigue au clavier */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* ❌ Ne JAMAIS faire :focus { outline: none } sans alternative */
+```
+
+WCAG 2.4.11 : ce focus ne doit pas être **caché** par un sticky header, une banière fixe, etc. Test : Tab à travers la page et vérifie que le focus reste toujours visible.
+
+---
+
+## i18n et lang attribute
+
+L'attribut `lang` fait que le lecteur d'écran prononce correctement :
+
+```html
+<html lang="fr">
+  ...
+  <p>Le mot <span lang="en">framework</span> vient de l'anglais.</p>
+</html>
+```
+
+Sans `lang`, NVDA va lire « framework » avec une prononciation française très étrange.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu lances axe-core sur ton site, 0 violation. Peux-tu déclarer le site WCAG AA conforme ?"
+  options={[
+    'Oui, axe est exhaustif',
+    'Non, axe attrape ~30-40 % des problèmes ; il faut tests manuels (clavier, lecteur d\'écran, zoom 200 %)',
+    'Oui à 99 %',
+    'Non, il faut absolument un audit payant'
+  ]}
+  answerIndex={1}
+  explanation="Les outils automatiques détectent les problèmes structurels (contraste, alt manquant, label oublié) mais pas les problèmes sémantiques (mauvais ordre de tab, label trompeur, structure heading absurde). Un audit manuel ciblé est indispensable. Un audit externe est utile pour les sites à risque légal mais pas obligatoire."
+/>
+
+<Quiz
+  question="Tu codes une modale `<div role='dialog' aria-modal='true'>` avec ton focus trap maison. Quelle alternative 2026 t'évite la moitié du travail ?"
+  options={[
+    'Utiliser un iframe',
+    'Utiliser l\'élément <dialog> natif avec showModal() — focus trap, Escape et retour focus gérés gratuitement',
+    'Mettre tabindex=-1 partout',
+    'Bloquer le scroll de la page'
+  ]}
+  answerIndex={1}
+  explanation="<dialog> est universellement supporté en 2026. showModal() bloque l'arrière-plan, gère le focus, ferme à Escape, et restitue le focus en sortie. Tu n'as plus à le réinventer. Pour les patterns plus complexes (combobox, etc.), Radix UI / Reka UI / Headless UI sont préférables à du code maison."
+/>
+
+<Quiz
+  question="Pour un texte rouge sur fond gris clair, le contraste est de 3.8:1. Niveau WCAG AA pour du texte normal ?"
+  options={[
+    'Conforme — 3:1 suffit',
+    'Non conforme — il faut 4.5:1 pour du texte normal en AA',
+    'Conforme si le texte est en gras',
+    'Conforme uniquement en mode sombre'
+  ]}
+  answerIndex={1}
+  explanation="AA exige 4.5:1 pour le texte normal et 3:1 pour le texte large (≥ 24 px ou 18.66 px bold). Un ratio de 3.8:1 est insuffisant pour du texte normal — il faut foncer le rouge ou éclaircir le fond."
+/>
+
+<Quiz
+  question="Un utilisateur active prefers-reduced-motion: reduce. Comment dois-tu adapter une transition de hover sur un bouton (200 ms) et une animation de parallax background ?"
+  options={[
+    'Désactiver les deux',
+    'Garder la transition courte (fonctionnelle), désactiver le parallax (décoratif)',
+    'Désactiver la transition, garder le parallax',
+    'Ne rien changer'
+  ]}
+  answerIndex={1}
+  explanation="L'idée n'est pas de tout couper — une transition courte (200 ms) est fonctionnelle (montre que l'état change) et reste tolérable. Le parallax est purement décoratif et c'est précisément ce genre d'effet qui provoque des nausées vestibulaires : à désactiver."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *WCAG 2.2 — Quick Reference* — [w3.org/WAI/WCAG22/quickref](https://www.w3.org/WAI/WCAG22/quickref/)
+- *RGAA 4.1* — [accessibilite.numerique.gouv.fr](https://accessibilite.numerique.gouv.fr/)
+- *Inclusive Components* — Heydon Pickering ([inclusive-components.design](https://inclusive-components.design/))
+- *Accessible to all* — Adrian Roselli (excellent blog technique)
+- *MDN ARIA* — [developer.mozilla.org/.../ARIA](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA)
+- *Radix UI / Reka UI / Headless UI* — librairies headless accessibles
+
+---
+
+**Suite** : [13.5 — Internationalisation](/13-performance-a11y/05-i18n/) pour rendre l'application multilingue et culturellement adaptée.

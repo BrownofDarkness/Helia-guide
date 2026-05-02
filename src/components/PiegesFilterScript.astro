@@ -1,0 +1,82 @@
+---
+/**
+ * Script de filtrage de la page pièges — search + filtres catégorie + axe.
+ * Extrait dans un composant Astro pour éviter le parsing JSX des `{` dans le JS.
+ */
+---
+
+<script is:inline>
+  (function () {
+    function init() {
+      const searchInput = document.getElementById('pieges-search');
+      const countEl = document.getElementById('pieges-count');
+      const emptyEl = document.getElementById('pieges-empty');
+      const cards = Array.from(document.querySelectorAll('.pitfall-card'));
+      const sections = Array.from(document.querySelectorAll('.pitfall-cat-section'));
+      const catPills = Array.from(document.querySelectorAll('.cat-pill'));
+      const axePills = Array.from(document.querySelectorAll('.axe-pill'));
+      if (!searchInput || !cards.length) return;
+
+      const totalLabel = cards.length + ' pièges';
+      let activeCat = 'all';
+      let activeAxe = 'all';
+      let query = '';
+
+      function apply() {
+        const q = query.trim().toLowerCase();
+        let visible = 0;
+        const visibleByCat = {};
+        for (const c of cards) {
+          const catMatch = activeCat === 'all' || c.dataset.category === activeCat;
+          const axeMatch = activeAxe === 'all' || c.dataset.axe === activeAxe;
+          const queryMatch = !q || (c.dataset.search || '').includes(q);
+          const show = catMatch && axeMatch && queryMatch;
+          c.hidden = !show;
+          if (show) {
+            visible++;
+            visibleByCat[c.dataset.category] = (visibleByCat[c.dataset.category] || 0) + 1;
+          }
+        }
+        for (const s of sections) {
+          const cat = s.dataset.cat;
+          s.hidden = !visibleByCat[cat];
+          const counter = s.querySelector('[data-cat-counter]');
+          if (counter) counter.textContent = '(' + (visibleByCat[cat] || 0) + ')';
+        }
+        countEl.textContent = visible === cards.length
+          ? totalLabel
+          : visible + ' / ' + cards.length + ' pièges';
+        if (emptyEl) emptyEl.hidden = visible !== 0;
+      }
+
+      searchInput.addEventListener('input', (ev) => {
+        query = ev.target.value;
+        apply();
+      });
+
+      for (const pill of catPills) {
+        pill.addEventListener('click', () => {
+          activeCat = pill.dataset.cat;
+          for (const p of catPills) p.classList.toggle('active', p === pill);
+          apply();
+        });
+      }
+      for (const pill of axePills) {
+        pill.addEventListener('click', () => {
+          activeAxe = pill.dataset.axe;
+          for (const p of axePills) p.classList.toggle('active', p === pill);
+          apply();
+        });
+      }
+
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#piege-')) {
+        const target = document.querySelector(hash);
+        if (target) target.open = true;
+      }
+    }
+
+    init();
+    document.addEventListener('astro:page-load', init);
+  })();
+</script>

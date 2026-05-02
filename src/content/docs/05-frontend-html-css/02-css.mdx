@@ -1,0 +1,592 @@
+---
+title: 5.2 — CSS moderne
+description: Sélecteurs, box model, Flexbox, Grid, responsive, variables, animations — tout ce qu'il faut en 2026.
+sidebar:
+  order: 2
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import Pitfall from '../../../components/Pitfall.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<Level value="débutant" reading="35 min" prereq="axe 5.1 lu" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="2">
+La page HTML de Lina existe, mais **elle n'a aucun style** : tout est aligné à gauche, les pains sont les uns sous les autres dans une longue colonne, le téléphone est minuscule. Marie sait qu'elle doit habiller la page. Elle va découvrir <Term>Flexbox</Term> pour aligner les cartes produits, <Term>Grid</Term> pour la galerie, et les variables CSS pour cohérencer les couleurs « pain et beurre » (or et brun).
+</Scenario>
+
+<Scenario parcours="B" episode="2">
+Hugo a la structure HTML du studio. Pour l'instant le planning hebdomadaire est… une liste à puces. Pas vraiment vendeur pour un studio yoga & danse. Il va monter une grille hebdo avec **CSS Grid**, aligner les profils des profs en **Flexbox**, et poser une palette douce (verts d'eau + cream).
+</Scenario>
+
+<Scenario parcours="C" episode="2">
+Sami a 200 fiches produit générées. Sans CSS, c'est illisible : tout en colonne, pas de séparation, images sans cadre. Il faut un **catalogue responsive** (3 colonnes desktop, 2 tablette, 1 mobile), des cartes avec ombres douces, et un mode sombre pour économiser la batterie sur mobile. Mobile-first dès le 1ᵉʳ jour.
+</Scenario>
+
+<Scenario parcours="D" episode="2">
+Léa a la structure du feed CoupDeMain. Elle vise mobile-first car ses voisins consultent depuis leur téléphone. Elle veut un **feed cards** avec photos rondes, tags colorés par type de demande (entraide / objet / info), et un mode sombre par défaut. Pour les modales et drawers, elle prépare déjà le terrain pour Radix UI plus tard.
+</Scenario>
+
+<Scenario parcours="E" episode="2">
+Yanis a son squelette kanban en HTML. Mais sans CSS, ce sont des `<ul>` empilés. Il lui faut **3 colonnes côte à côte** (To do / In progress / Done) qui remplissent l'écran, des cartes draggables, et un thème sombre / clair selon préférence système. Il sait que le drag visuel dépend beaucoup de la qualité CSS.
+</Scenario>
+
+> 🎯 **Objectif** : maîtriser CSS au point que **Flexbox et Grid sont des réflexes**, que tu connais le piège de la cascade, et que tu construis des thèmes cohérents avec des variables.
+
+<ObjectiveList items={[
+  "Maîtriser sélecteurs, spécificité, cascade, héritage",
+  "Comprendre le box model et le contexte de mise en forme",
+  "Mettre en page avec Flexbox et Grid en réflexe",
+  "Construire un design responsive mobile-first sans framework",
+  "Utiliser variables CSS, container queries, :has()",
+  "Créer des animations performantes (transform, opacity)"
+]} />
+
+
+## Sélecteurs et spécificité
+
+### Les sélecteurs essentiels
+
+```css
+/* Type */
+button { ... }
+
+/* Classe */
+.btn-primary { ... }
+
+/* Id (à éviter en styling, c'est trop spécifique) */
+#hero { ... }
+
+/* Attribut */
+[type="email"] { ... }
+[data-state="open"] { ... }
+
+/* Combinateurs */
+nav a              { ... }  /* descendant */
+nav > a            { ... }  /* enfant direct */
+h2 + p             { ... }  /* frère adjacent */
+h2 ~ p             { ... }  /* tous les frères suivants */
+
+/* Pseudo-classes */
+a:hover            { ... }
+input:focus-visible { ... }    /* focus seulement au clavier */
+button:disabled    { ... }
+li:nth-child(odd)  { ... }
+li:nth-child(2n+1) { ... }
+:not(.disabled)    { ... }
+
+/* Pseudo-éléments */
+p::first-letter    { ... }
+p::before          { content: '→'; }
+::selection        { background: yellow; }
+```
+
+### Modernes (à connaître)
+
+```css
+/* :where() — spécificité de 0 (prend la spécificité de l'élément) */
+:where(article, section, aside) h2 { color: blue; }
+
+/* :is() — comme :where() mais prend la plus haute spécificité */
+:is(article, section) h2 { color: blue; }
+
+/* :has() — relation parent → enfant ! (champion 2024+) */
+article:has(img) { padding: 1rem; }   /* article QUI contient une img */
+form:has(input:invalid) { border: 2px solid red; }
+
+/* Focus dans un conteneur */
+.card:has(:focus) { outline: 2px solid blue; }
+```
+
+### Spécificité — le calcul
+
+Quand 2 règles s'appliquent, **la plus spécifique gagne**. Score :
+
+```
+[id, class/attr/pseudo-class, type/pseudo-element]
+```
+
+| Sélecteur | Spécificité |
+|-----------|-------------|
+| `*` | 0,0,0 |
+| `div` | 0,0,1 |
+| `.btn` | 0,1,0 |
+| `nav a` | 0,0,2 |
+| `nav .link` | 0,1,1 |
+| `#header` | 1,0,0 |
+| `style="..."` (inline) | 1,0,0,0 |
+| `!important` | au-dessus de tout |
+
+**Règle pratique** : si tu écris `!important`, c'est souvent qu'il y a un problème de design CSS. Refactore plutôt que d'enchaîner les `!important`.
+
+## Cascade et héritage
+
+### La cascade
+
+Quand plusieurs règles ont **la même spécificité**, **la dernière déclarée gagne**. C'est pour ça que les **resets / utility classes** vont en bas.
+
+### Héritage
+
+Certaines propriétés s'héritent du parent (`color`, `font-family`, `line-height`), d'autres pas (`margin`, `padding`, `border`). Pour forcer l'héritage : `inherit`.
+
+```css
+.parent { color: red; }
+.parent button { color: inherit; }  /* hérite de red, sinon le bouton aurait son propre noir natif */
+```
+
+## Le box model
+
+<Diagram
+  caption="Le box model — ce que tu vois et ce que prend chaque élément"
+  code={`
+    flowchart TD
+      Margin["margin (espace EXTÉRIEUR — autour de la border)"]
+      Border["border"]
+      Padding["padding (espace INTÉRIEUR — entre border et contenu)"]
+      Content["content (le texte, les enfants…)"]
+      Margin --> Border --> Padding --> Content
+  `}
+/>
+
+### `box-sizing: border-box` — toujours
+
+```css
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+```
+
+Avec ça : `width: 200px` inclut padding et border. Sans (mode `content-box` historique), un padding de 20px ferait dépasser à 240px → galère.
+
+**À mettre dans toute base CSS de projet.**
+
+## Flexbox — le couteau suisse
+
+Pour les mises en page **en une dimension** (ligne **ou** colonne).
+
+```css
+.parent {
+  display: flex;
+  /* axe principal (horizontal par défaut) */
+  flex-direction: row | row-reverse | column | column-reverse;
+  /* alignement sur l'axe principal */
+  justify-content: flex-start | center | flex-end | space-between | space-around | space-evenly;
+  /* alignement sur l'axe secondaire */
+  align-items: stretch | flex-start | center | flex-end | baseline;
+  /* retour à la ligne si pas assez de place */
+  flex-wrap: nowrap | wrap;
+  /* espace entre items */
+  gap: 1rem;
+}
+
+.enfant {
+  flex: 1;        /* grandit proportionnellement à l'espace dispo */
+  flex: 0 0 auto; /* taille fixe, ne grandit ni ne réduit */
+  flex: 1 1 200px; /* base 200px, grandit, réduit */
+}
+```
+
+### Patterns Flexbox courants
+
+```css
+/* Centrer parfaitement (le mythique) */
+.center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Header avec logo à gauche, nav à droite */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Cards qui prennent tout l'espace dispo en s'étirant */
+.cards {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.cards > * { flex: 1 1 250px; }  /* min 250px, sinon flexibles */
+
+/* Push un élément en bas (footer dans une carte) */
+.card { display: flex; flex-direction: column; }
+.card .actions { margin-top: auto; }
+```
+
+## CSS Grid — la 2D
+
+Pour les mises en page **en 2 dimensions** (lignes ET colonnes).
+
+```css
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;       /* 3 colonnes, ratios */
+  grid-template-columns: repeat(12, 1fr);   /* 12 colonnes égales */
+  grid-template-columns: 200px 1fr 200px;   /* sidebar fixe, contenu fluide */
+  grid-template-rows: 60px 1fr 60px;        /* header / main / footer */
+  gap: 1rem;
+}
+
+/* Aire nommée — la magie du grid */
+.layout {
+  display: grid;
+  grid-template-areas:
+    "header header"
+    "nav    main"
+    "footer footer";
+  grid-template-columns: 200px 1fr;
+  grid-template-rows: 60px 1fr 60px;
+  min-height: 100vh;
+}
+.layout > header { grid-area: header; }
+.layout > nav    { grid-area: nav; }
+.layout > main   { grid-area: main; }
+.layout > footer { grid-area: footer; }
+```
+
+### Patterns Grid courants
+
+```css
+/* Cards responsive sans media queries (auto-fit) */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+/* Sur grand écran : autant de colonnes de 250px+ que possible
+   Sur mobile : 1 colonne automatiquement */
+
+/* Span sur plusieurs colonnes */
+.featured { grid-column: span 2; }
+.full { grid-column: 1 / -1; }   /* du début à la fin */
+```
+
+### Flexbox vs Grid — quand utiliser quoi ?
+
+| | Flexbox | Grid |
+|---|---------|------|
+| Dimensions | 1 (ligne ou col) | 2 (ligne ET col) |
+| Cas type | Toolbar, header, navigation | Layout de page, dashboard, galerie |
+| Items | Le contenu dicte la taille | La grille dicte les positions |
+
+**Conseil** : Grid pour le **layout**, Flexbox pour les **composants**. Tu peux nester l'un dans l'autre sans souci.
+
+<Pitfall title="Image sans width+height plombe le CLS" category="perf" axe="5.2">
+**🩹 Symptôme** : Lighthouse CLS = 0.4 (cible ≤ 0.1). Le contenu en dessous de l'image saute quand elle charge.
+
+**🔍 Cause** : sans `width` et `height` (ou `aspect-ratio`), le navigateur ne sait pas combien de place réserver. Quand l'image charge, le contenu en dessous est poussé.
+
+**🩺 Fix** : toujours fournir les dimensions intrinsèques.
+
+```html
+<img src="/hero.jpg" width="1024" height="600" alt="..." />
+```
+
+Le ratio est préservé même avec `max-width: 100%; height: auto;` en CSS.
+
+**🧠 Leçon** : sur 9 sites/10, `width`+`height` manquants sont la 1ère cause de mauvais CLS. Linter HTML ou Lighthouse en CI bloquant te le rappelle automatiquement.
+
+Voir aussi tous les pièges sur [/pieges/](/pieges/).
+</Pitfall>
+
+## Responsive design
+
+### Mobile first — par défaut
+
+```css
+/* Styles mobile (par défaut) */
+.container { padding: 1rem; }
+.card { width: 100%; }
+
+/* Tablet et plus */
+@media (min-width: 768px) {
+  .container { padding: 2rem; }
+  .card { width: calc(50% - 1rem); }
+}
+
+/* Desktop */
+@media (min-width: 1024px) {
+  .container { max-width: 1200px; margin: 0 auto; }
+  .card { width: calc(33% - 1rem); }
+}
+```
+
+**3 breakpoints** suffisent généralement. Ne traque pas chaque appareil.
+
+### Tailles fluides — `clamp()`
+
+```css
+h1 {
+  /* 2rem min, 5vw préféré, 4rem max */
+  font-size: clamp(2rem, 5vw, 4rem);
+}
+
+.section {
+  padding-block: clamp(2rem, 8vw, 8rem);
+}
+```
+
+`clamp(min, ideal, max)` adapte la valeur sans media queries. Plus fluide qu'un changement abrupt à un breakpoint.
+
+### Container queries (révolution 2023+)
+
+Le composant s'adapte à son **conteneur**, pas à la fenêtre :
+
+```css
+.card-list {
+  container-type: inline-size;
+}
+
+.card { display: block; }
+
+@container (min-width: 600px) {
+  .card { display: flex; }
+}
+```
+
+Ainsi une `card` peut être en colonne dans une sidebar étroite et en ligne dans le main, **sur la même page**.
+
+## Variables CSS
+
+```css
+:root {
+  --color-primary: #2563eb;
+  --color-bg: #ffffff;
+  --space-md: 1rem;
+  --radius-md: 0.5rem;
+}
+
+[data-theme='dark'] {
+  --color-bg: #111827;
+}
+
+.btn {
+  background: var(--color-primary);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+}
+
+/* Avec fallback */
+.foo { color: var(--accent, #333); }
+```
+
+**Bénéfices** :
+- Changement de thème en 1 ligne (`data-theme="dark"`).
+- Cohérence : impossible d'avoir 47 nuances de bleu par accident.
+- Lisibilité : `var(--space-md)` est plus parlant que `0.75rem`.
+
+### Tailwind v4 et `@theme` — tokens CSS-first
+
+Depuis **Tailwind v4** (sortie en janvier 2025), la configuration des design tokens se fait directement en CSS via la directive `@theme`, plus dans un `tailwind.config.js` :
+
+```css
+@import 'tailwindcss';
+
+@theme {
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --spacing-tight: 0.25rem;
+  --radius-md: 0.5rem;
+}
+```
+
+Tailwind génère automatiquement les utilities correspondantes (`bg-primary`, `text-primary-hover`, etc.) — **ton CSS et ton design system sont au même endroit**. C'est la pratique recommandée 2026.
+
+### Détecter le thème système
+
+```css
+:root {
+  --color-bg: #fff;
+  --color-text: #111;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #111;
+    --color-text: #f9f9f9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0s !important;
+    transition-duration: 0s !important;
+  }
+}
+```
+
+## Animations et transitions
+
+### Transitions — pour l'interaction
+
+```css
+.btn {
+  background: blue;
+  transition: background 200ms ease, transform 150ms ease;
+}
+.btn:hover {
+  background: darkblue;
+  transform: translateY(-2px);
+}
+```
+
+**Règle de perf** : anime `transform` et `opacity` (composite seulement). Évite `width`, `height`, `top`, `left` (déclenchent layout — voir [axe 2.4](/02-web/04-navigateur/)).
+
+### Keyframes
+
+```css
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.loading {
+  animation: pulse 2s infinite ease-in-out;
+}
+```
+
+### View Transitions API (2024+)
+
+```css
+@view-transition {
+  navigation: auto;
+}
+```
+
+Active des transitions natives entre pages (Astro, SvelteKit le supportent).
+
+## Méthodologies CSS
+
+### BEM (Block Element Modifier)
+
+```css
+.card { ... }                /* Block */
+.card__title { ... }         /* Element (enfant) */
+.card--featured { ... }      /* Modifier (variante) */
+.card__title--large { ... }  /* Element + Modifier */
+```
+
+```html
+<article class="card card--featured">
+  <h2 class="card__title card__title--large">...</h2>
+</article>
+```
+
+✅ Pas de conflit de nom global.
+❌ Verbeux.
+
+### Utility-first (Tailwind CSS)
+
+```html
+<article class="rounded-lg border border-gray-200 p-6 hover:shadow-md transition">
+  <h2 class="text-2xl font-bold mb-2">Titre</h2>
+</article>
+```
+
+✅ Vitesse de prototypage, design system par défaut, supprime le bikeshedding sur les noms.
+❌ HTML chargé visuellement, courbe d'apprentissage des classes.
+
+### Verdict 2026
+
+- **Petit projet / prototype** : Tailwind CSS, sans hésiter.
+- **Design system custom** : CSS modules ou plain CSS avec variables et BEM.
+- **Mix** : tu peux faire un design system avec Tailwind (`@apply` ou CVA) et garder la cohérence.
+
+## Reset moderne — la base d'un projet
+
+```css
+/* Modern CSS Reset (inspiré de Josh Comeau) */
+*, *::before, *::after { box-sizing: border-box; }
+
+* { margin: 0; }
+
+html, body { height: 100%; }
+
+body {
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-family: system-ui, sans-serif;
+}
+
+img, picture, video, canvas, svg {
+  display: block;
+  max-width: 100%;
+}
+
+input, button, textarea, select {
+  font: inherit;
+}
+
+p, h1, h2, h3, h4, h5, h6 {
+  overflow-wrap: break-word;
+}
+
+#root, #__next {
+  isolation: isolate;
+}
+```
+
+À mettre en haut de ta CSS sur tout projet from-scratch. Fait disparaître 80 % des bugs CSS classiques.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu veux un layout : sidebar 200px à gauche + contenu fluide à droite, qui passe en colonne sur mobile. Outil idéal ?"
+  options={[
+    'Float',
+    'CSS Grid avec grid-template-columns: 200px 1fr et media query',
+    'Flexbox avec flex: 0 0 200px sur la sidebar',
+    'Position absolute'
+  ]}
+  answerIndex={1}
+  explanation="Grid est conçu pour ce genre de layout 2D avec colonnes de tailles différentes. Flexbox marche aussi (option 3), mais Grid est plus déclaratif et permet d'ajouter des aires nommées si le layout grandit."
+/>
+
+<Quiz
+  question="Tu veux animer un menu qui passe de width: 0 à width: 300px. L'animation est saccadée. Solution ?"
+  options={[
+    'Augmenter la durée pour qu\'elle paraisse plus fluide',
+    'Animer transform: translateX(-300px) → translateX(0) — pas de layout, juste composite',
+    'Utiliser !important',
+    'Rien à faire, c\'est intrinsèque à width'
+  ]}
+  answerIndex={1}
+  explanation="width déclenche le layout (recalcul positions/tailles dans toute la page) à chaque frame. transform et opacity ne déclenchent que le composite (étape GPU). C'est pourquoi les animations modernes utilisent transform/opacity quasi exclusivement."
+/>
+
+<Quiz
+  question="Quelle ligne fait des cards responsive sans aucune media query ?"
+  options={[
+    'grid-template-columns: 1fr 1fr 1fr',
+    'grid-template-columns: repeat(auto-fit, minmax(250px, 1fr))',
+    'flex: 1 1 0',
+    'display: inline-block'
+  ]}
+  answerIndex={1}
+  explanation="auto-fit + minmax(min, 1fr) donne des colonnes d'au moins 250px qui se multiplient si l'espace le permet, et passent à 1 colonne sur mobile sans media query. C'est le pattern moderne incontournable."
+/>
+
+## Pour aller plus loin
+
+- *MDN — CSS* — [developer.mozilla.org/fr/docs/Web/CSS](https://developer.mozilla.org/fr/docs/Web/CSS)
+- *CSS-Tricks — A Complete Guide to Flexbox / Grid* — les références illustrées
+- *web.dev — Learn CSS* — cours gratuit Google
+- *Modern CSS Reset* — Josh Comeau : [joshwcomeau.com/css/custom-css-reset](https://www.joshwcomeau.com/css/custom-css-reset/)
+- *Tailwind CSS Docs* — [tailwindcss.com](https://tailwindcss.com/)
+- *Refactoring UI* — Adam Wathan & Steve Schoger (le livre)
+
+---
+
+**Suite** : [5.3 — Accessibilité](/05-frontend-html-css/03-accessibilite/) — passer du bon HTML/CSS à un site **vraiment** utilisable par tout le monde.

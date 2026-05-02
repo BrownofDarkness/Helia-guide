@@ -1,0 +1,588 @@
+---
+title: 6.4 — TypeScript
+description: Types, génériques, utility types, discriminated unions — typer son JS pour éliminer 80 % des bugs.
+sidebar:
+  order: 4
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import Pitfall from '../../../components/Pitfall.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<Level value="débutant" reading="30 min" prereq="axes 6.1 à 6.3 lus" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="5">
+Marie a un bug en prod : un produit s'est ajouté au panier **avec un prix `undefined`**. Total : `NaN €`. Embarrassant pour Lina. Elle découvre que JavaScript laisse passer ces erreurs silencieusement. Avec TypeScript, un `Product` doit avoir `prix: number` — le bug aurait été refusé à la compilation. Marie type tout son code panier.
+</Scenario>
+
+<Scenario parcours="B" episode="4">
+Hugo a un cas vicieux : **deux clients réservent simultanément la dernière place** d'un cours. Son code accepte les deux. Catastrophe. Il sait qu'un type `Slot` strict avec `capacity` et `booked` aurait clarifié l'intention, mais surtout qu'il faut maintenant typer son contrat API pour éviter les divergences front/back. Bienvenue dans TypeScript.
+</Scenario>
+
+<Scenario parcours="C" episode="5">
+Sami est ingénieur — il **veut un système de types strict dès le début** (pas après 6 mois de bugs). Il met `strict: true` dans tsconfig, type ses produits, son panier, ses commandes. Bonus : son IDE auto-complète tout, et le refactor « renommer `price_eur` en `priceEur` » se fait en 1 clic safe.
+</Scenario>
+
+<Scenario parcours="D" episode="5">
+Léa veut typer son domaine CoupDeMain : `Demande` peut être de type `objet`, `service` ou `info`, chacune avec ses champs propres. Elle découvre les **discriminated unions** : `type Demande = { kind: 'objet'; ... } | { kind: 'service'; ... } | { kind: 'info'; ... }`. Le compilateur force à gérer chaque cas — fini les `if (kind === 'foo' && undefined)`.
+</Scenario>
+
+<Scenario parcours="E" episode="5">
+Yanis sait que dans une vraie boîte, `noImplicitAny` et `strict: true` sont des prérequis. Il type son domaine : `Task`, `Project`, `User`, `Role`. Pour les rôles, il fait un type strict `'admin' | 'editor' | 'viewer'` plutôt que des strings libres. Le compilateur l'aide à oublier zéro permission.
+</Scenario>
+
+> 🎯 **Objectif** : pouvoir typer correctement une vraie application — fonctions, données API, formulaires, hooks — sans `any` et sans douleur.
+
+<Aside type="tip" title="Cet axe peut attendre — tu n'es pas obligé de le faire avant l'axe 7">
+Beaucoup de devs apprennent **React/Vue en JS pur** d'abord, puis ajoutent TypeScript après quelques semaines de pratique. C'est un parcours **valide** et souvent plus confortable :
+
+- Tu codes du React avec les concepts JS de 6.1-6.3 → tu vois où le typage manquerait → tu reviens ici motivé.
+- L'apprentissage est plus rapide quand tu as des exemples concrets de bugs typage qui t'auraient sauvé.
+
+**Tu peux aussi attaquer ce sous-axe immédiatement après 6.3** si tu préfères le parcours linéaire. Les deux ordres marchent. Choisis selon ton confort — ne te force pas si tu sens que React te tente plus.
+</Aside>
+
+<ObjectiveList items={[
+  "Distinguer interface vs type, union vs intersection",
+  "Utiliser les utility types (Partial, Pick, Omit, Record, ReturnType)",
+  "Manier les génériques pour des fonctions et types réutilisables",
+  "Affiner un type avec narrowing et discriminated unions",
+  "Configurer tsconfig en mode strict"
+]} />
+
+
+## Pourquoi TypeScript ?
+
+3 raisons concrètes :
+
+1. **Bugs détectés à la compilation** : tu sais que `user.email` existe avant de pousser en prod.
+2. **Auto-complétion magique** : ton IDE devient ton meilleur ami.
+3. **Documentation vivante** : les types sont une doc qui ne ment jamais.
+
+Les langages typés sont devenus la norme côté front (React, Vue, Svelte ont tous une excellente intégration TS) et côté back (Node, Bun, Deno).
+
+## Setup minimal
+
+```bash
+npm init -y
+npm install -D typescript tsx @types/node
+npx tsc --init
+```
+
+Un `tsconfig.json` pragmatique :
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"]
+}
+```
+
+`strict: true` active **8 vérifications** d'un coup. Active aussi `noUncheckedIndexedAccess` pour que `arr[0]` soit typé `T | undefined` (plus sûr).
+
+## Annotations de base
+
+```ts
+// Variables
+const name: string = 'Alice';
+const age: number = 30;
+const active: boolean = true;
+const tags: string[] = ['js', 'web'];
+const tuple: [string, number] = ['Alice', 30];
+
+// Fonctions
+function add(a: number, b: number): number {
+  return a + b;
+}
+
+const double = (x: number): number => x * 2;
+
+// Optionnel et défaut
+function greet(name: string, formal?: boolean): string {
+  return formal ? `Bonjour ${name}` : `Salut ${name}`;
+}
+
+function pad(text: string, char: string = ' '): string {
+  return char + text + char;
+}
+```
+
+**TypeScript infère** la plupart du temps — tu n'as pas besoin d'annoter ce qui est évident :
+
+```ts
+const name = 'Alice';            // string inféré
+const ages = [25, 30, 35];       // number[] inféré
+const double = (x: number) => x * 2;  // retour inféré
+```
+
+**Bonne pratique** : annoter **les paramètres** de fonction et **les types d'API publique** ; laisser TypeScript inférer le reste.
+
+## interface vs type
+
+```ts
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+type User = {
+  id: number;
+  name: string;
+  email: string;
+};
+```
+
+Quasi équivalents. Différences marginales :
+
+| | `interface` | `type` |
+|---|---|---|
+| Étendre | `extends` | `&` (intersection) |
+| Fusion automatique | ✅ (déclarative) | ❌ |
+| Unions, primitifs, tuples | ❌ | ✅ |
+| Performance | Légèrement mieux pour le compilateur | |
+
+**Règle pratique** : `interface` pour les **objets**, `type` pour les **unions, alias, tuples**.
+
+## Unions et intersections
+
+```ts
+// Union — A ou B
+type ID = string | number;
+type Status = 'idle' | 'loading' | 'success' | 'error';   // string literal union
+
+function format(id: ID) {
+  if (typeof id === 'string') {
+    // ici TS sait que id est string
+    return id.toUpperCase();
+  }
+  return id.toFixed(2);   // ici number
+}
+
+// Intersection — A ET B
+type Named = { name: string };
+type Aged = { age: number };
+type Person = Named & Aged;  // { name, age }
+```
+
+### Discriminated unions — le pattern roi
+
+```ts
+type Result<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: Error };
+
+function handle(result: Result<User>) {
+  if (result.ok) {
+    console.log(result.value.name);  // TS sait que value existe
+  } else {
+    console.error(result.error);     // TS sait que error existe
+  }
+}
+```
+
+Le compilateur **affine** (narrowing) le type selon le `ok` — tu ne peux pas faire d'erreur.
+
+## Génériques
+
+Une fonction qui marche pour **n'importe quel type**, sans perdre l'information :
+
+```ts
+function identity<T>(value: T): T {
+  return value;
+}
+
+identity('hello');     // T = string
+identity(42);          // T = number
+identity({ a: 1 });    // T = { a: number }
+```
+
+### Génériques contraints
+
+```ts
+function getProperty<T extends object, K extends keyof T>(obj: T, key: K): T[K] {
+  return obj[key];
+}
+
+const user = { name: 'Alice', age: 30 };
+getProperty(user, 'name');   // string
+getProperty(user, 'age');    // number
+getProperty(user, 'email');  // ❌ erreur : 'email' n'existe pas dans T
+```
+
+### Composants génériques (React)
+
+```tsx
+interface ListProps<T> {
+  items: T[];
+  render: (item: T) => React.ReactNode;
+}
+
+function List<T>({ items, render }: ListProps<T>) {
+  return <ul>{items.map((it, i) => <li key={i}>{render(it)}</li>)}</ul>;
+}
+
+<List items={users} render={u => u.name} />  // T = User inféré
+```
+
+## Utility types — la boîte à outils
+
+```ts
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  password: string;
+}
+
+// Tous les champs optionnels
+type PartialUser = Partial<User>;
+// { id?, name?, email?, password? }
+
+// Tous requis
+type RequiredUser = Required<PartialUser>;
+
+// Sélectionner certains champs
+type PublicUser = Pick<User, 'id' | 'name' | 'email'>;
+
+// Exclure certains champs
+type NonSensitive = Omit<User, 'password'>;
+
+// Lecture seule
+type ReadonlyUser = Readonly<User>;
+
+// Map clé → valeur
+type Roles = Record<string, 'admin' | 'user'>;
+// équivalent à : { [key: string]: 'admin' | 'user' }
+
+// Type de retour d'une fonction
+type Result = ReturnType<typeof loadUsers>;
+// si loadUsers: () => Promise<User[]>, alors Result = Promise<User[]>
+
+// Awaited — extraire le type d'une Promise
+type Users = Awaited<ReturnType<typeof loadUsers>>;
+// Users = User[]
+```
+
+### `keyof` et `typeof`
+
+```ts
+const config = {
+  apiUrl: 'https://api.example.com',
+  timeout: 5000,
+  retries: 3,
+} as const;   // ← rend tout readonly et littéral
+
+type Config = typeof config;
+// { readonly apiUrl: 'https://api.example.com'; readonly timeout: 5000; ... }
+
+type ConfigKey = keyof typeof config;
+// 'apiUrl' | 'timeout' | 'retries'
+```
+
+## Narrowing — affiner le type
+
+```ts
+function describe(value: unknown) {
+  if (typeof value === 'string') {
+    value.toUpperCase();    // string ici
+  } else if (Array.isArray(value)) {
+    value.length;            // any[] ici
+  } else if (value instanceof Date) {
+    value.toISOString();     // Date ici
+  } else if (value && typeof value === 'object' && 'name' in value) {
+    // { name: unknown } ici
+  }
+}
+```
+
+### Type guards personnalisés
+
+```ts
+function isUser(v: unknown): v is User {
+  return typeof v === 'object'
+    && v !== null
+    && 'id' in v
+    && 'email' in v;
+}
+
+const data: unknown = await response.json();
+if (isUser(data)) {
+  console.log(data.email);   // ✅ TS sait que data est User
+}
+```
+
+`v is User` est une **type predicate** : la valeur de retour de la fonction renseigne le compilateur.
+
+## `satisfies` — typer sans perdre l'inférence
+
+Opérateur introduit en **TS 4.9** (2022), devenu standard. Résout un problème courant : tu veux contraindre un objet à un type **sans perdre l'inférence des littéraux**.
+
+### Le problème
+
+```ts
+type Palette = Record<string, string | [number, number, number]>;
+
+// ❌ Avec annotation classique : tu perds le type littéral
+const palette: Palette = {
+  red: [255, 0, 0],
+  green: '#00ff00',
+};
+
+palette.red.toUpperCase();
+//      ↑ type est `string | [number, number, number]` → erreur :
+//      "Property 'toUpperCase' does not exist on type 'string | number[]'"
+```
+
+L'annotation `: Palette` **élargit** le type à l'union — TS oublie que `red` est un tuple et `green` une string.
+
+### La solution `satisfies`
+
+```ts
+// ✅ Avec satisfies : contrainte vérifiée + types littéraux préservés
+const palette = {
+  red: [255, 0, 0],
+  green: '#00ff00',
+} satisfies Palette;
+
+palette.green.toUpperCase();   // OK — TS sait que green est une string
+palette.red[0];                 // OK — TS sait que red est un tuple
+```
+
+`satisfies` **vérifie** que la valeur correspond au type, mais **garde** le type le plus précis (inféré). Tu obtiens validation **et** précision.
+
+### Cas d'usage typiques
+
+```ts
+// 1. Configuration avec valeurs hétérogènes
+const routes = {
+  home: { path: '/', exact: true },
+  user: { path: '/user/:id', exact: false },
+} satisfies Record<string, RouteConfig>;
+
+routes.home.exact;  // boolean ✅ (vs `boolean` perdu sans satisfies)
+
+// 2. Map de constantes typées
+const STATUS = {
+  PENDING: 'pending',
+  ACTIVE: 'active',
+  ARCHIVED: 'archived',
+} as const satisfies Record<string, string>;
+
+type Status = typeof STATUS[keyof typeof STATUS];
+// → 'pending' | 'active' | 'archived' (pas juste `string`)
+
+// 3. Validation de schéma sans perdre les clés
+const schema = {
+  name: z.string(),
+  age: z.number(),
+} satisfies Record<string, z.ZodSchema>;
+// schema.name typé `ZodString`, pas `ZodSchema` générique
+```
+
+### `satisfies` vs `as` vs annotation `:`
+
+| Syntaxe | Vérifie ? | Garde inférence ? | Quand |
+|---------|-----------|-------------------|-------|
+| `const x: T = ...` | ✅ | ❌ (élargit à T) | Tu veux le type abstrait T partout |
+| `const x = ... as T` | ❌ (assertion non vérifiée, dangereux) | ❌ | Sortie d'un `unknown`, dernier recours |
+| `const x = ... satisfies T` | ✅ | ✅ | **Le défaut moderne** pour les configs/constantes |
+
+**Règle 2026** : utilise `satisfies` quand tu écris une **valeur littérale** que tu veux contraindre. Réserve l'annotation `:` aux **paramètres de fonction** et aux types de retour.
+
+## Types branchés (branded types)
+
+Pour distinguer 2 types qui ont la même forme structurelle :
+
+```ts
+type UserId = string & { __brand: 'UserId' };
+type ProductId = string & { __brand: 'ProductId' };
+
+function findUser(id: UserId) { ... }
+
+const userId = 'u123' as UserId;
+const productId = 'p456' as ProductId;
+
+findUser(userId);     // ✅
+findUser(productId);  // ❌ erreur même si c'est techniquement une string
+```
+
+Permet d'éviter qu'on passe un ID de produit à une fonction qui attend un ID utilisateur.
+
+## any vs unknown
+
+```ts
+const a: any = 'hello';
+a.toUpperCase();       // pas d'erreur, mais aucun contrôle
+a.foo.bar.baz;         // pas d'erreur ! 💥 catastrophe en runtime
+
+const b: unknown = 'hello';
+b.toUpperCase();       // ❌ erreur : il faut narrowing avant
+if (typeof b === 'string') {
+  b.toUpperCase();     // ✅
+}
+```
+
+**Règle** : `any` est interdit. Utilise `unknown` quand tu ne sais pas le type — il te force à valider avant.
+
+## Validation runtime — Zod
+
+TypeScript valide à la **compilation**. Au runtime, les types sont **effacés**. Pour valider une réponse API, un input utilisateur, etc., utilise une lib :
+
+```ts
+import { z } from 'zod';
+
+const UserSchema = z.object({
+  id: z.number(),
+  name: z.string().min(1),
+  email: z.string().email(),
+});
+
+type User = z.infer<typeof UserSchema>;   // type extrait du schéma
+
+const data = await fetch('/api/me').then(r => r.json());
+const user = UserSchema.parse(data);      // throw si invalide
+// user est typé User automatiquement
+```
+
+C'est le combo gagnant 2026 : Zod + TypeScript = un seul schéma pour valider et typer.
+
+## Erreurs courantes et solutions
+
+### "Object is possibly 'undefined'"
+
+```ts
+const user = users.find(u => u.id === 1);
+console.log(user.name);  // ❌ user peut être undefined
+
+// Solutions
+console.log(user?.name);
+if (user) console.log(user.name);
+```
+
+### "Argument of type 'X' is not assignable to type 'Y'"
+
+```ts
+// ❌
+const status: 'success' | 'error' = response.status;  // si type est plus large
+
+// ✅ assertion explicite
+const status = response.status as 'success' | 'error';
+
+// ✅ mieux : valider d'abord
+if (response.status === 'success' || response.status === 'error') {
+  const status = response.status;  // narrowing
+}
+```
+
+### "Property 'X' does not exist on type 'Y'"
+
+Souvent : tu as une union et il faut narrower :
+
+```ts
+type Pet = { type: 'cat'; lives: number } | { type: 'dog'; barks: boolean };
+
+function info(pet: Pet) {
+  if (pet.type === 'cat') {
+    console.log(pet.lives);   // ✅
+  } else {
+    console.log(pet.barks);   // ✅
+  }
+}
+```
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu reçois `data: unknown` depuis fetch().json(). Tu fais `data.name`. Que dit TypeScript ?"
+  options={[
+    'Compile sans erreur',
+    'Erreur : il faut narrower (typeof, instanceof, ou type guard) avant d\'accéder aux propriétés',
+    'Compile avec un warning',
+    'unknown se comporte comme any'
+  ]}
+  answerIndex={1}
+  explanation="C'est la différence cruciale unknown vs any. unknown te force à valider avant utilisation. C'est exactement ce qu'on veut pour des données externes (API, localStorage, query params)."
+/>
+
+<Quiz
+  question="Tu veux Pick<User, 'id' | 'name'>. Quel résultat ?"
+  options={[
+    '{ id: number; name: string }',
+    'User sans id ni name',
+    'string | number',
+    'Le 1er est correct'
+  ]}
+  answerIndex={3}
+  explanation="Pick<T, K> garde les champs listés. Omit<T, K> fait l'inverse (exclut). Couple essentiel pour transformer des types existants sans recopier les champs."
+/>
+
+<Quiz
+  question="Quelle utilité de `as const` sur un objet de config ?"
+  options={[
+    'Rendre l\'objet immuable au runtime',
+    'Garder les types littéraux exacts (au lieu de string ou number génériques) pour pouvoir faire `keyof typeof config` et obtenir les vraies clés',
+    'Améliorer les performances',
+    'Activer le strict mode'
+  ]}
+  answerIndex={1}
+  explanation="Sans 'as const', { apiUrl: 'http://...' } a le type { apiUrl: string }. Avec 'as const', il a le type { readonly apiUrl: 'http://...' }. Permet typeof + keyof pour obtenir les types/clés exactes."
+/>
+
+## Pour aller plus loin
+
+- *TypeScript Handbook* (officiel) : [typescriptlang.org/docs/handbook](https://www.typescriptlang.org/docs/handbook/intro.html)
+- *Total TypeScript* — Matt Pocock (gratuit en partie, payant pour le reste)
+- *Type Challenges* — [github.com/type-challenges/type-challenges](https://github.com/type-challenges/type-challenges)
+- *Zod* — [zod.dev](https://zod.dev/)
+
+## 🪤 Pièges réels rencontrés
+
+<Pitfall title="Zod 4 incompatible avec @hono/zod-validator" category="deps" axe="6.4">
+
+**🩹 Symptôme**
+
+```
+npm error code ERESOLVE
+peer zod@"^3.19.1" from @hono/zod-validator@0.4.3
+Found: zod@4.4.1
+```
+
+**🔍 Cause**
+
+Zod 4 a introduit des breaking changes dans son API interne. Beaucoup de libs de l'écosystème (validators, ORM intégrations) ont des peer dependencies fixées sur Zod 3 et n'ont pas encore publié de version compatible Zod 4.
+
+**🩺 Fix**
+
+Deux options :
+
+- **Conservateur** — downgrade Zod à `^3.23.8` dans `package.json` : fonctionne avec tout l'écosystème actuel.
+- **Bleeding edge** — vérifier si `@hono/zod-validator@0.5+` est sorti, qui supporte Zod 4. Idem pour les autres libs concernées.
+
+**🧠 Leçon**
+
+Avant d'upgrader une dépendance « cœur » (Zod, React, TypeScript, ORM), faire `npm ls` ou `npm-check-updates --doctor` pour repérer les peer-deps qui ne suivront pas. **Une migration majeure ne se fait jamais seule** — elle entraîne tout son écosystème.
+
+</Pitfall>
+
+> 🔍 Tous les pièges du guide sont sur la page **[/pieges/](/pieges/)** — searchable par symptôme.
+
+---
+
+**Fin de l'axe 6.** Direction l'[axe 7 — Frameworks frontend](/07-frameworks-frontend/), ou attaque le projet « SPA TypeScript » dans `exercises/06-javascript-typescript/`.

@@ -1,0 +1,100 @@
+---
+title: Axe 8 — Backend (multi-langages)
+description: Trois écosystèmes complets et parallèles — Node.js/TypeScript, Python (Django/Flask/FastAPI) et PHP (natif/Laravel/Symfony).
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : construire des serveurs web robustes en choisissant *un* écosystème principal, et comprendre les autres assez pour pouvoir lire leur code.
+
+<Aside type="caution" title="Bagage SQL conseillé avant de commencer">
+Cet axe utilise des **ORM** (Drizzle, SQLAlchemy, Eloquent) qui génèrent du SQL pour toi. Si tu n'as pas de bagage SQL pratique, **lis [9.1 — Bases relationnelles (SQL)](/09-bases-de-donnees/01-sql/) avant d'attaquer l'exercice taskly-api**. Sans ça, tu vas écrire du `db.execute(...)` sans comprendre ce que fait l'ORM en dessous, ni pourquoi un index suffit ou pas.
+
+Si tu as déjà fait du SQL en école / au taf, tu peux y aller direct et lire 9.1 en survol après.
+</Aside>
+
+## Prérequis
+
+- **Axes 1, 2, 4** + connaissance d'au moins un langage généraliste (axe 6 pour TS).
+- **Recommandé** : [9.1 SQL](/09-bases-de-donnees/01-sql/) si tu n'as pas de bagage SQL.
+
+## Pourquoi multi-langages ?
+
+Beaucoup d'apprenants se figent dans un seul écosystème. Ce guide propose **trois parcours parallèles** qui implémentent **la même API** d'exemple — une gestion de tâches avec authentification — afin de pouvoir comparer les approches.
+
+Choisis-en **un comme principal** pour ton parcours, et survole les autres.
+
+## Structure de l'axe
+
+### Phase 1 — Backend essentiel (à faire pour ton premier job)
+
+#### Concepts communs (agnostiques au langage)
+HTTP, REST, middleware, validation, auth, files de messages — voir [Concepts communs](/08-backend/00-concepts-communs/).
+
+#### Parcours par écosystème
+
+| Parcours | Quand le choisir |
+|----------|------------------|
+| [Node.js / TypeScript](/08-backend/01-nodejs-typescript/) | Tu viens du frontend (mêmes outils, même langage). Idéal pour le full-stack JS. |
+| [Python](/08-backend/02-python/) | Tu vises data, ML, scripting, ou tu aimes la lisibilité. 3 frameworks au choix : Django, Flask, FastAPI. |
+| [PHP](/08-backend/03-php/) | Hébergement mutualisé, marché historique fort, écosystème Laravel/Symfony très productif. |
+
+### Phase 2 — Backend senior (pour Lead/Staff)
+
+> 💡 Ces deux sous-axes sont **culturels et orientés décision** — moins de code, plus de critères de choix. À lire **après** avoir terminé un parcours backend de la phase 1.
+
+| Sous-axe | Couvre |
+|----------|--------|
+| [8.4 — Architectures avancées](/08-backend/04-architectures-avancees/) | Monolith vs modulith vs microservices vs serverless · DDD light · hexagonal · clean architecture · event-driven · CQRS · sagas · outbox |
+| [8.5 — Protocols API modernes](/08-backend/05-protocols-api/) | REST · GraphQL · gRPC · tRPC · WebSocket · SSE · WebHooks signés/idempotents — quand utiliser quoi |
+
+## Objectifs (transverses)
+
+<ObjectiveList items={[
+  "Concevoir une API REST conforme (méthodes, codes, idempotence, pagination)",
+  "Implémenter une authentification sûre (sessions ou JWT, hash argon2/bcrypt)",
+  "Valider toutes les entrées côté serveur",
+  "Mettre en place des middlewares (logs, CORS, rate-limit)",
+  "Gérer des tâches asynchrones via une file (Redis, RabbitMQ)",
+  "Tester l'API avec des tests d'intégration sur base éphémère"
+]} />
+
+## Le projet fil rouge : `taskly-api`
+
+Une API de gestion de tâches avec :
+- Inscription / connexion (JWT)
+- CRUD sur les tâches (créer, lister, marquer faite, supprimer)
+- Liste partagée entre utilisateurs (RBAC)
+- Recherche full-text
+- Tâches récurrentes traitées par un worker
+
+Implémentée dans **chacun** des trois écosystèmes pour t'offrir une comparaison directe.
+
+> Code dans `exercises/08-backend/<langage>/taskly-api/`.
+
+## Backend qui parle aux LLM ? Voir aussi…
+
+En 2026, beaucoup d'APIs backend se mettent à intégrer des **LLM** — chat, RAG, function calling, agents. Si c'est ton cas :
+
+- [**16.4 — IA appliquée au web**](/16-specialisations/04-ia/) : intégration Claude / OpenAI / Mistral, RAG avec vector DB, prompts, function calling, MCP, observabilité, sécurité.
+- [Exercice 16.1 — Assistant RAG](/16-specialisations/01-assistant-rag/) : projet pratique qui combine `taskly-api` style backend + retrieval pgvector + streaming SSE LLM.
+
+C'est un **virage majeur du métier** depuis 2024 — pas optionnel pour rester employable en 2026.
+
+## Comment progresser dans cet axe
+
+1. Lis d'abord [Concepts communs](/08-backend/00-concepts-communs/) — ils sont valables partout.
+2. Choisis ton écosystème principal et fais le parcours en entier.
+3. Implémente `taskly-api`.
+4. (Optionnel mais recommandé) Refais *les bases* du même projet dans un second écosystème — ça consolide l'abstraction.
+5. **Quand tu vises Lead/Staff** : lis [8.4 (architectures avancées)](/08-backend/04-architectures-avancees/) et [8.5 (protocols API)](/08-backend/05-protocols-api/) — culturels, déclencheurs de bonnes décisions, pas urgents pour ton premier job.
+
+## Ressources transverses
+
+- *RESTful Web APIs* — Leonard Richardson
+- *Designing Data-Intensive Applications* — Martin Kleppmann (au-delà du backend)
+- *OpenAPI Specification* — [openapis.org](https://www.openapis.org/)
+- *OAuth 2.1* — [oauth.net/2.1](https://oauth.net/2.1/)

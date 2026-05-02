@@ -1,0 +1,315 @@
+---
+title: 2.2 — HTTP en détail
+description: Méthodes, codes, en-têtes, cookies, CORS — l'anatomie complète d'une requête HTTP.
+sidebar:
+  order: 2
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside, Code } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : être capable de lire et de construire à la main une requête HTTP, comprendre tous les codes de statut et les en-têtes courants, et savoir gérer cookies et CORS.
+
+<ObjectiveList items={[
+  "Décrire l'anatomie d'une requête et d'une réponse HTTP",
+  "Choisir la bonne méthode (GET, POST, PUT, PATCH, DELETE) selon l'action",
+  "Interpréter un code de statut (1xx → 5xx)",
+  "Configurer cookies, sessions et CORS correctement",
+  "Inspecter les requêtes dans les DevTools du navigateur"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 1 lu" />
+
+
+## Anatomie d'une requête
+
+Une requête HTTP est du **texte en clair** (avant chiffrement TLS), avec une structure stricte :
+
+```http
+GET /api/users/42 HTTP/1.1
+Host: api.example.com
+Accept: application/json
+User-Agent: Mozilla/5.0 ...
+Authorization: Bearer eyJhbGciOiJIUzI1...
+Cookie: session=abc123
+
+```
+
+**3 parties** :
+1. **Ligne de requête** : `MÉTHODE chemin VERSION`
+2. **En-têtes** : `Nom: Valeur`, un par ligne
+3. **Corps** (optionnel) : après une ligne vide ; pour POST/PUT/PATCH
+
+## Anatomie d'une réponse
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Content-Length: 87
+Cache-Control: max-age=300
+Set-Cookie: session=xyz789; HttpOnly; Secure; SameSite=Lax
+
+{"id":42,"name":"Alice","email":"alice@example.com"}
+```
+
+**3 parties** :
+1. **Ligne de statut** : `VERSION code message`
+2. **En-têtes**
+3. **Corps**
+
+## Les méthodes HTTP
+
+| Méthode | Sémantique | Idempotente ? | Corps ? |
+|---------|------------|---------------|---------|
+| `GET` | Lire une ressource | ✅ | Non |
+| `POST` | Créer ou action arbitraire | ❌ | Oui |
+| `PUT` | Remplacer entièrement | ✅ | Oui |
+| `PATCH` | Modifier partiellement | ❌ usuellement | Oui |
+| `DELETE` | Supprimer | ✅ | Optionnel |
+| `HEAD` | Comme GET, sans le corps | ✅ | Non |
+| `OPTIONS` | Capacités du serveur (préflight CORS) | ✅ | Non |
+
+<Aside type="note" title="Idempotence — un mot, une promesse">
+**Une méthode est idempotente si l'appeler N fois a le même effet que l'appeler 1 fois.** GET, PUT, DELETE le sont (en théorie). POST ne l'est pas : poster 3 fois un formulaire = 3 commandes créées.
+
+C'est crucial pour les **retries** automatiques : on peut rejouer une PUT en cas de timeout, jamais une POST sans précaution (idempotency keys).
+</Aside>
+
+## Les codes de statut
+
+5 familles, mémorise-les visuellement :
+
+| Famille | Sens | Exemples emblématiques |
+|---------|------|------------------------|
+| **1xx** Informationnel | Encore en cours | `100 Continue`, `101 Switching Protocols` |
+| **2xx** Succès | Tout va bien | `200 OK`, `201 Created`, `204 No Content` |
+| **3xx** Redirection | Va voir ailleurs | `301 Moved Permanently`, `302 Found`, `304 Not Modified` |
+| **4xx** Erreur client | Tu as fait une bêtise | `400`, `401`, `403`, `404`, `409`, `422`, `429` |
+| **5xx** Erreur serveur | C'est nous, désolé | `500`, `502`, `503`, `504` |
+
+### Les 15 codes à connaître par cœur
+
+| Code | Nom | Quand l'utiliser |
+|------|-----|------------------|
+| **200** | OK | Réussite générale |
+| **201** | Created | Création réussie (POST/PUT) |
+| **204** | No Content | Succès sans corps de réponse (DELETE typique) |
+| **301** | Moved Permanently | Redirection définitive (SEO friendly) |
+| **302** | Found | Redirection temporaire |
+| **304** | Not Modified | Cache valide, le client peut réutiliser |
+| **400** | Bad Request | Requête mal formée |
+| **401** | Unauthorized | Non authentifié (token absent ou invalide) |
+| **403** | Forbidden | Authentifié mais pas autorisé |
+| **404** | Not Found | Ressource inexistante |
+| **409** | Conflict | Conflit (ex. e-mail déjà utilisé) |
+| **422** | Unprocessable Entity | Validation a échoué (corps mal formé sémantiquement) |
+| **429** | Too Many Requests | Rate limit atteint |
+| **500** | Internal Server Error | Bug côté serveur |
+| **503** | Service Unavailable | Serveur indisponible (maintenance, surcharge) |
+
+<Aside type="caution" title="401 vs 403, le piège">
+- **401** = « je ne sais pas qui tu es ». Le client doit fournir des credentials.
+- **403** = « je sais qui tu es, mais tu n'as pas le droit ». Pas la peine de te re-connecter.
+
+Confondre les deux frustre les utilisateurs et les outils (un `401` déclenche un re-login, un `403` non).
+</Aside>
+
+## Les en-têtes essentiels
+
+### Côté requête
+
+| En-tête | Rôle |
+|---------|------|
+| `Host` | Le domaine visé (obligatoire en HTTP/1.1) |
+| `User-Agent` | Identification du client (navigateur, bot, lib) |
+| `Accept` | Formats acceptés en réponse (`application/json`) |
+| `Accept-Language` | Langues préférées (`fr-FR,fr;q=0.9,en;q=0.8`) |
+| `Accept-Encoding` | Compressions supportées (`gzip, br`) |
+| `Authorization` | Identification (`Bearer <token>`, `Basic ...`) |
+| `Cookie` | Cookies envoyés au serveur |
+| `Content-Type` | Type du corps envoyé (`application/json`) |
+| `Content-Length` | Taille du corps en octets |
+| `If-None-Match` | ETag, pour conditional GET (cache) |
+
+### Côté réponse
+
+| En-tête | Rôle |
+|---------|------|
+| `Content-Type` | Type du corps (`text/html; charset=utf-8`) |
+| `Content-Length` | Taille du corps |
+| `Cache-Control` | Directives de cache (`max-age=3600`, `no-store`) |
+| `ETag` | Empreinte de la ressource (cache) |
+| `Set-Cookie` | Pose un cookie |
+| `Location` | URL de redirection (avec un 3xx) |
+| `Strict-Transport-Security` | HSTS (axe 2.3) |
+| `Content-Security-Policy` | CSP (axe 12) |
+| `Access-Control-Allow-Origin` | CORS (voir plus bas) |
+
+## Cookies, sessions et stockage
+
+### Anatomie d'un cookie
+
+```http
+Set-Cookie: session=abc123; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400
+```
+
+**Attributs cruciaux** :
+
+| Attribut | Effet | Quand l'activer |
+|----------|-------|-----------------|
+| `HttpOnly` | Inaccessible en JS (`document.cookie`) | **Toujours** pour les cookies de session |
+| `Secure` | Envoyé uniquement en HTTPS | **Toujours** en production |
+| `SameSite=Strict` | Pas envoyé en cross-site | Cookies très sensibles |
+| `SameSite=Lax` | Envoyé sur navigation top-level uniquement | **Défaut moderne** |
+| `SameSite=None; Secure` | Envoyé en cross-site | Iframes tierces, SSO |
+| `Path=/admin` | Limite l'envoi à un sous-chemin | Compartimentage |
+| `Domain=.example.com` | Cookie partagé entre sous-domaines | SSO sur sous-domaines |
+| `Max-Age=3600` | Durée de vie en secondes | Toujours préciser |
+
+### Stockage navigateur — quel choix ?
+
+| Mécanisme | Capacité | Accessible en JS | Envoyé au serveur | Cas d'usage |
+|-----------|----------|------------------|-------------------|-------------|
+| **Cookie HttpOnly** | ~4 Ko | ❌ | ✅ à chaque requête | Session, JWT côté serveur |
+| **localStorage** | ~5 Mo | ✅ | ❌ | Préférences UI, cache |
+| **sessionStorage** | ~5 Mo | ✅ | ❌ | État éphémère d'un onglet |
+| **IndexedDB** | 50–80 % du disque | ✅ | ❌ | Données structurées offline |
+
+<Aside type="caution" title="Ne stocke pas un JWT en localStorage">
+Si une faille XSS est exploitée, l'attaquant accède à `localStorage` et vole le token. Préfère un cookie `HttpOnly Secure SameSite=Lax`. Le token est invisible au JS mais auto-envoyé au serveur.
+</Aside>
+
+## CORS — Cross-Origin Resource Sharing
+
+Par défaut, le navigateur **bloque** les requêtes JS vers une autre origine. Une **origine** = `(protocole, domaine, port)`.
+
+```
+https://app.example.com → https://api.example.com   ← cross-origin (sous-domaine différent)
+http://app.example.com  → https://app.example.com   ← cross-origin (protocole différent)
+http://app.example.com:3000 → http://app.example.com:8000 ← cross-origin (port différent)
+```
+
+### Le préflight
+
+Pour une requête « non simple » (méthode autre que GET/POST/HEAD, ou en-tête custom, ou `Content-Type` autre que `text/plain` / `application/x-www-form-urlencoded` / `multipart/form-data`), le navigateur envoie d'abord un **OPTIONS** :
+
+<Diagram
+  caption="Préflight CORS pour une requête PUT"
+  code={`
+    sequenceDiagram
+      participant N as Navigateur
+      participant S as Serveur api.example.com
+
+      N->>S: OPTIONS /users/42<br/>Origin: https://app.example.com<br/>Access-Control-Request-Method: PUT
+      S-->>N: 204<br/>Access-Control-Allow-Origin: https://app.example.com<br/>Access-Control-Allow-Methods: PUT<br/>Access-Control-Allow-Headers: Content-Type
+      N->>S: PUT /users/42<br/>(la vraie requête)
+      S-->>N: 200 OK
+  `}
+/>
+
+### Configuration côté serveur
+
+```js
+// Express
+import cors from 'cors';
+app.use(cors({
+  origin: ['https://app.example.com'],     // pas '*' avec credentials
+  credentials: true,                         // pour cookies
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+```
+
+<Aside type="tip" title="CORS n'est PAS de la sécurité">
+CORS protège **les utilisateurs** contre les sites malveillants qui voudraient lire des données d'autres sites depuis leur navigateur. Il **ne protège pas l'API** : un attaquant peut toujours appeler ton API depuis cURL ou un script Node. La sécurité se fait avec **authentification + autorisation**, pas CORS.
+</Aside>
+
+## Inspecter HTTP avec les DevTools
+
+Dans Chrome/Firefox, **F12 → Network**.
+
+Tu y vois :
+
+- **URL, méthode, statut, taille, durée** de chaque requête
+- **Onglet Headers** : tous les en-têtes envoyés/reçus
+- **Onglet Payload** : le corps envoyé
+- **Onglet Response** : le corps reçu
+- **Onglet Timing** : DNS, connect, TLS, TTFB, download
+
+C'est l'outil le plus important pour debug les problèmes web.
+
+## Faire des requêtes en ligne de commande
+
+```bash
+# GET simple
+curl https://api.example.com/users/42
+
+# Voir les en-têtes
+curl -i https://api.example.com/users/42
+
+# Tout le détail (verbose)
+curl -v https://api.example.com/users/42
+
+# POST avec JSON
+curl -X POST https://api.example.com/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice"}'
+
+# Avec authentification
+curl -H "Authorization: Bearer $TOKEN" https://api.example.com/me
+
+# Sauvegarder la réponse
+curl -o output.json https://api.example.com/data
+```
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu fais POST /api/orders et le serveur renvoie 201. Que signifie ce code ?"
+  options={[
+    'Erreur de validation',
+    'Création réussie, la ressource est créée',
+    'Redirection permanente',
+    'Le serveur est temporairement indisponible'
+  ]}
+  answerIndex={1}
+  explanation="201 Created indique que la ressource a été créée. Le serveur peut renvoyer un en-tête Location: pointant vers la nouvelle ressource."
+/>
+
+<Quiz
+  question="Quelle méthode HTTP n'est PAS idempotente ?"
+  options={[
+    'GET',
+    'PUT',
+    'POST',
+    'DELETE'
+  ]}
+  answerIndex={2}
+  explanation="POST n'est pas idempotente : appeler POST /orders deux fois crée deux commandes. Les autres (GET, PUT, DELETE) ont le même effet quel que soit le nombre d'appels."
+/>
+
+<Quiz
+  question="Pour stocker un JWT côté navigateur de façon sécurisée, tu choisis..."
+  options={[
+    'localStorage — facile et persistant',
+    'sessionStorage — éphémère, plus sûr',
+    'Un cookie HttpOnly Secure SameSite=Lax',
+    'window.JWT, c\'est la pratique moderne'
+  ]}
+  answerIndex={2}
+  explanation="HttpOnly empêche le JS d'y accéder (protection contre XSS) ; Secure exige HTTPS ; SameSite=Lax limite l'envoi en cross-site (protection CSRF). localStorage et sessionStorage sont accessibles au JS, donc vulnérables au vol par XSS."
+/>
+
+## Pour aller plus loin
+
+- *MDN — HTTP* : [developer.mozilla.org/fr/docs/Web/HTTP](https://developer.mozilla.org/fr/docs/Web/HTTP) — référence
+- *HTTP Status Codes — httpstatuses.com* : codes avec exemples
+- *RFC 9110* — la spec HTTP semantics moderne
+- *Inspecting HTTP traffic with Wireshark* (pour aller voir les paquets bruts)
+
+---
+
+**Suite** : [2.3 — Sécurité du transport (TLS)](/02-web/03-tls/) pour comprendre comment HTTPS chiffre tout ça.

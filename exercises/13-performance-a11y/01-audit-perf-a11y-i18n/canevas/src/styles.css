@@ -1,0 +1,179 @@
+/* ⚠️ A-007 : palette à contraste insuffisant + ⚠️ A-008 : focus invisible */
+
+:root {
+  --brand: #ff8c66;     /* contraste ~3.2:1 sur fond blanc — INSUFFISANT */
+  --text: #444;         /* contraste ~7.5:1 OK */
+  --muted: #aaa;        /* contraste ~2.6:1 sur blanc — INSUFFISANT */
+  --bg: #fff;
+  --card-bg: #f7f5f2;
+}
+
+* {
+  box-sizing: border-box;
+  /* ⚠️ A-008 : pas de focus visible */
+  outline: none;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+h1, h2, h3 {
+  font-family: 'Playfair Display', serif;
+}
+
+/* ⚠️ I-001 : marges physiques (cassent en RTL) */
+.topbar {
+  display: flex;
+  align-items: center;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid #eee;
+}
+.topbar .logo {
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--brand);
+  margin-right: auto;
+}
+.topbar .link {
+  margin-left: 2rem;     /* ← physique, à passer en logique */
+  cursor: pointer;
+  color: var(--text);
+}
+
+.hero {
+  text-align: center;
+  padding: 4rem 1rem;
+}
+.hero img {
+  max-width: 100%;
+  height: auto;
+}
+.hero p {
+  color: var(--muted);   /* ← contraste insuffisant */
+  margin-bottom: 2rem;
+}
+
+/* ⚠️ A-007 (suite) : CTA orange sur blanc, contraste insuffisant */
+.cta {
+  display: inline-block;
+  padding: 0.9rem 1.8rem;
+  background: var(--brand);
+  color: white;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.menu {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.5rem;
+  padding: 2rem;
+}
+
+.card {
+  background: var(--card-bg);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: relative;
+}
+.card img {
+  width: 100%;
+  display: block;
+}
+.card h3 {
+  margin: 1rem;
+}
+.card p {
+  margin: 0 1rem 1rem;
+  color: var(--brand);
+  font-weight: 600;
+}
+.card .add {
+  position: absolute;
+  /* ⚠️ I-001 (suite) : right physique */
+  right: 0.5rem;
+  bottom: 0.5rem;
+  width: 36px;
+  height: 36px;
+  background: var(--brand);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+#cookie-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #333;
+  color: white;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.contact {
+  padding: 3rem 2rem;
+  text-align: center;
+}
+.contact form {
+  display: inline-flex;
+  gap: 0.5rem;
+}
+.contact input {
+  padding: 0.7rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 0.4rem;
+}
+.contact input.error {
+  border-color: red;     /* ← uniquement la couleur */
+}
+
+#cart-status {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  background: white;
+  padding: 0.5rem 1rem;
+  border: 1px solid #eee;
+  border-radius: 0.5rem;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal.hidden {
+  display: none;
+}
+.modal-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 0.5rem;
+  max-width: 400px;
+}
+
+/* ⚠️ A-011 : animation infinie sans respect prefers-reduced-motion */
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+.cta {
+  animation: pulse 2s ease-in-out infinite;
+}

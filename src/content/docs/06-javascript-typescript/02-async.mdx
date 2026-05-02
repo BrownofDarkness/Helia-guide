@@ -1,0 +1,454 @@
+---
+title: 6.2 — Asynchronisme
+description: Event loop, Promises, async/await, AbortController — manier l'asynchrone sans pièges.
+sidebar:
+  order: 2
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import Pitfall from '../../../components/Pitfall.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<Level value="débutant" reading="35 min" prereq="axe 6.1 lu" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="3">
+Le formulaire de contact de Lina envoie un email. Quand un client clique « envoyer », **rien ne se passe pendant 3 secondes**, puis ça part. Pendant ces 3 secondes, l'utilisateur clique 5 fois et envoie 5 emails. Marie découvre qu'il faut **gérer le temps d'attente** : afficher un spinner, désactiver le bouton, gérer l'erreur réseau. Bienvenue dans le monde des <Term>Promise</Term> et de <Term>async</Term>/await.
+</Scenario>
+
+<Scenario parcours="B" episode="3">
+Hugo branche son formulaire de réservation de cours sur une vraie API. Premier essai : l'API met 800 ms à répondre, l'utilisateur voit l'écran figé. Pire : si Inès change un cours pendant ce temps, le formulaire envoie une réservation pour un cours qui n'existe plus. Hugo apprend `fetch` + `await`, l'**AbortController** pour annuler une requête, et Promise.all pour paralléliser.
+</Scenario>
+
+<Scenario parcours="C" episode="3">
+Sami implémente la **recherche tapante** dans le catalogue : à chaque lettre tapée, on appelle l'API. Premier test : il tape « tomate », il reçoit 5 réponses simultanées dans le désordre, l'UI saute. Il découvre qu'il faut **annuler la requête précédente** avant chaque nouvelle (AbortController) et **debounce** à 300 ms.
+</Scenario>
+
+<Scenario parcours="D" episode="3">
+Léa code la création d'une demande sur CoupDeMain : photo + titre + description. L'upload de la photo prend du temps, et son upload doit montrer une **barre de progression**. En parallèle, elle appelle un service de géocodage pour suggérer le quartier. Deux Promises en parallèle, une qui peut échouer sans casser l'autre — elle découvre `Promise.allSettled`.
+</Scenario>
+
+<Scenario parcours="E" episode="3">
+Yanis ajoute la sync entre onglets de Tasky : si tu ouvres deux onglets, créer une tâche dans l'un doit la faire apparaître dans l'autre **sans recharger**. Il découvre `BroadcastChannel`, mais aussi qu'il doit **enregistrer en backend** d'abord (await), puis broadcaster localement. La séquence importe.
+</Scenario>
+
+> 🎯 **Objectif** : maîtriser Promises et `async/await` au point que tu lis du code asynchrone aussi facilement que du synchrone.
+
+<ObjectiveList items={[
+  "Décrire l'event loop, microtasks vs macrotasks",
+  "Créer et chaîner des Promises",
+  "Utiliser async/await avec gestion d'erreur propre",
+  "Connaître Promise.all, allSettled, race, any",
+  "Annuler une requête fetch avec AbortController"
+]} />
+
+
+## Pourquoi async ?
+
+JavaScript dans le navigateur (et Node) est **mono-thread**. Si tu attends une réponse réseau pendant 500 ms en bloquant, **rien d'autre** ne se passe : pas de scroll, pas de clic, UI gelée.
+
+L'asynchrone permet de **dire "fais-le et préviens-moi"** sans bloquer le thread.
+
+## L'event loop — modèle mental
+
+<Diagram
+  caption="Event loop : tâches synchrones, microtasks, macrotasks"
+  code={`
+    flowchart TD
+      Start[Start] --> Sync[Pile d'appel<br/>code synchrone]
+      Sync -->|terminé| Micro[Vider toutes les microtasks<br/>then de Promises, queueMicrotask]
+      Micro --> Render{Rendu nécessaire ?}
+      Render -->|oui| Paint[requestAnimationFrame<br/>+ paint]
+      Render -->|non| Macro[Prendre 1 macrotask<br/>setTimeout, événement, fetch...]
+      Paint --> Macro
+      Macro --> Sync
+  `}
+/>
+
+**Règle d'exécution** :
+
+1. Le code synchrone tourne jusqu'à la fin de la pile d'appel.
+2. **Toutes les microtasks** sont exécutées (Promises résolues, `queueMicrotask`).
+3. **Une macrotask** est traitée (setTimeout callback, événement DOM, retour de `fetch`...).
+4. Retour à l'étape 1.
+
+```js
+console.log('1');
+setTimeout(() => console.log('2'), 0);
+Promise.resolve().then(() => console.log('3'));
+console.log('4');
+// 1, 4, 3, 2
+```
+
+- `1` et `4` : synchrone immédiat.
+- `3` : microtask, vidée avant la prochaine macrotask.
+- `2` : macrotask, au tour suivant.
+
+## Callbacks — l'ancien
+
+```js
+fs.readFile('data.json', 'utf-8', (err, data) => {
+  if (err) return console.error(err);
+  parseJson(data, (err, json) => {
+    if (err) return console.error(err);
+    saveDb(json, (err) => {
+      // callback hell — pyramide de la mort
+      if (err) return console.error(err);
+      console.log('OK');
+    });
+  });
+});
+```
+
+C'est la raison pour laquelle Promises ont été inventées.
+
+## Promises — la base
+
+Une **Promise** = un objet qui représente une opération asynchrone et son **futur résultat**. 3 états :
+
+- `pending` : en cours
+- `fulfilled` : succès, avec une valeur
+- `rejected` : échec, avec une raison
+
+### Créer une Promise
+
+```js
+const p = new Promise((resolve, reject) => {
+  setTimeout(() => {
+    if (Math.random() > 0.5) resolve('OK');
+    else reject(new Error('Échec'));
+  }, 1000);
+});
+```
+
+En vrai, **tu créeras rarement** une Promise toi-même. Tu en consommes : `fetch()`, `fs.promises.readFile`, etc. retournent déjà des Promises.
+
+### Consommer
+
+```js
+fetch('/api/users')
+  .then(response => response.json())
+  .then(users => console.log(users))
+  .catch(err => console.error(err))
+  .finally(() => console.log('Terminé'));
+```
+
+## async/await — le confort moderne
+
+```js
+async function loadUsers() {
+  try {
+    const response = await fetch('/api/users');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const users = await response.json();
+    return users;
+  } catch (err) {
+    console.error(err);
+    return [];
+  }
+}
+```
+
+**`async`** : la fonction renvoie automatiquement une Promise.
+**`await`** : pause l'exécution de la fonction jusqu'à ce que la Promise se résolve.
+
+### Top-level await
+
+```js
+// Fichier ESM (.mjs ou "type": "module")
+const data = await fetch('/api/data').then(r => r.json());
+console.log(data);
+```
+
+Marche dans Node, dans Vite, dans Astro… Pas dans un module CommonJS classique.
+
+## Patterns courants
+
+### Paralléliser — `Promise.all`
+
+```js
+// ❌ Sériel : 3 secondes au total si chaque requête en prend 1
+const a = await fetch('/a');
+const b = await fetch('/b');
+const c = await fetch('/c');
+
+// ✅ Parallèle : 1 seconde au total
+const [a, b, c] = await Promise.all([
+  fetch('/a'),
+  fetch('/b'),
+  fetch('/c'),
+]);
+```
+
+`Promise.all` rejette si **n'importe laquelle** rejette. Si tu veux savoir le résultat de chacune même en cas d'échec partiel : `Promise.allSettled`.
+
+```js
+const results = await Promise.allSettled([
+  fetch('/a'),
+  fetch('/b'),
+]);
+
+results.forEach(r => {
+  if (r.status === 'fulfilled') console.log(r.value);
+  else console.error(r.reason);
+});
+```
+
+### Course — `Promise.race` et `Promise.any`
+
+```js
+// race : la première qui se résout (ou rejette)
+const result = await Promise.race([
+  fetch('/api'),
+  new Promise((_, rej) => setTimeout(() => rej('timeout'), 5000)),
+]);
+
+// any : la première qui SUCCÈS (rejette si toutes échouent)
+const fastest = await Promise.any([
+  fetch('https://eu.api/data'),
+  fetch('https://us.api/data'),
+  fetch('https://asia.api/data'),
+]);
+```
+
+### Séquentiel mais propre — boucle async
+
+```js
+async function loadAllUsers(ids) {
+  const results = [];
+  for (const id of ids) {
+    results.push(await fetchUser(id));   // séquentiel
+  }
+  return results;
+}
+```
+
+**Attention** : `forEach` n'attend pas. Pour itérer en async, utilise `for…of`.
+
+```js
+// ❌ Ne fonctionne pas comme prévu
+ids.forEach(async (id) => {
+  await fetchUser(id);   // démarre tout, on ne sait pas quand ça finit
+});
+
+// ✅ Séquentiel
+for (const id of ids) {
+  await fetchUser(id);
+}
+
+// ✅ Parallèle
+await Promise.all(ids.map(id => fetchUser(id)));
+```
+
+<Pitfall title="`await` dans `forEach` ne fait rien" category="tests" axe="6.2">
+**🩹 Symptôme** :
+
+```ts
+items.forEach(async (item) => {
+  await db.execute({ sql: 'INSERT ...', args: [item] });
+});
+console.log('done');  // s'affiche AVANT la fin des inserts
+```
+
+**🔍 Cause** : `Array.prototype.forEach` **ignore** la valeur de retour du callback. Le `async` crée une Promise qui n'est pas attendue. Le code continue immédiatement.
+
+**🩺 Fix** : utiliser `for...of` (séquentiel) ou `Promise.all(.map(...))` (parallèle).
+
+```ts
+// ✅ Séquentiel
+for (const item of items) {
+  await db.execute({ sql: 'INSERT ...', args: [item] });
+}
+
+// ✅ Parallèle
+await Promise.all(items.map(item => db.execute(...)));
+```
+
+**🧠 Leçon** : `forEach` n'est jamais le bon choix avec `async`. Si tu vois `forEach(async ...)` dans une PR, c'est presque toujours un bug. Linter ESLint : règle `no-misleading-character-class` détecte certains cas.
+</Pitfall>
+
+## Gestion d'erreur
+
+### try/catch autour d'await
+
+```js
+async function load() {
+  try {
+    const data = await fetch('/api');
+    return data;
+  } catch (err) {
+    if (err instanceof TypeError) {
+      // erreur réseau
+    }
+    throw err;  // propager si on ne peut pas gérer
+  }
+}
+```
+
+### Erreurs non capturées
+
+```js
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Promise non capturée :', event.reason);
+});
+```
+
+Dans Node :
+
+```js
+process.on('unhandledRejection', (reason) => {
+  console.error('Promise non capturée :', reason);
+});
+```
+
+### Pattern "Result" pour éviter les try/catch
+
+```js
+async function safeRequest(url) {
+  try {
+    const r = await fetch(url);
+    return { ok: true, data: await r.json() };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+
+const result = await safeRequest('/api');
+if (result.ok) {
+  console.log(result.data);
+} else {
+  console.error(result.error);
+}
+```
+
+Ressemble à `Result<T, E>` en Rust. Pratique quand l'erreur est "normale" plutôt qu'exceptionnelle.
+
+## AbortController — annuler
+
+Quand l'utilisateur quitte une page, ferme un modal, ou tape une nouvelle recherche, **annule la requête en cours**.
+
+```js
+const controller = new AbortController();
+
+fetch('/api/slow', { signal: controller.signal })
+  .then(r => r.json())
+  .catch(err => {
+    if (err.name === 'AbortError') {
+      console.log('Annulé');
+    }
+  });
+
+// Plus tard
+controller.abort();
+```
+
+### Cas d'usage : recherche au fil de la frappe
+
+```js
+let currentController = null;
+
+input.addEventListener('input', async (e) => {
+  // annule la requête précédente
+  currentController?.abort();
+  currentController = new AbortController();
+
+  try {
+    const r = await fetch(`/search?q=${e.target.value}`, {
+      signal: currentController.signal,
+    });
+    showResults(await r.json());
+  } catch (err) {
+    if (err.name !== 'AbortError') console.error(err);
+  }
+});
+```
+
+Tu évites les **race conditions** où une vieille requête arrive après une nouvelle.
+
+### Timeout via AbortSignal
+
+```js
+// API moderne (depuis Node 17 / browsers récents)
+const r = await fetch('/api', { signal: AbortSignal.timeout(5000) });
+
+// Avant
+const c = new AbortController();
+setTimeout(() => c.abort(), 5000);
+fetch('/api', { signal: c.signal });
+```
+
+## Generators et async iterators (avancé, optionnel)
+
+```js
+async function* lirePagination(url) {
+  let next = url;
+  while (next) {
+    const r = await fetch(next);
+    const { items, nextPage } = await r.json();
+    yield* items;
+    next = nextPage;
+  }
+}
+
+for await (const item of lirePagination('/api/items')) {
+  console.log(item);
+}
+```
+
+Permet d'**itérer paresseusement** sur des données paginées, des streams, etc.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu lances 5 fetch en série avec await dans un for. Chacun prend 200 ms. Combien de temps au total ?"
+  options={[
+    '200 ms',
+    '400 ms',
+    '1000 ms (5 × 200 ms en séquence)',
+    'Imprévisible'
+  ]}
+  answerIndex={2}
+  explanation="for…of avec await exécute en série. Pour les paralléliser : Promise.all(arr.map(...)) → 200 ms total. Le choix entre série et parallèle dépend du cas (dépendances entre requêtes, charge serveur, etc.)."
+/>
+
+<Quiz
+  question="Quel ordre s'affiche ? `console.log('A'); setTimeout(() => console.log('B'), 0); Promise.resolve().then(() => console.log('C'));`"
+  options={[
+    'A B C',
+    'A C B',
+    'C A B',
+    'A B puis erreur'
+  ]}
+  answerIndex={1}
+  explanation="A est synchrone. C est une microtask, vidée AVANT la prochaine macrotask. B est une macrotask (setTimeout) qui passe au tour suivant. Connaître ce comportement aide à debugger les ordres d'exécution surprenants."
+/>
+
+<Quiz
+  question="Tu lances 3 fetch avec Promise.all. La 2e échoue. Que se passe-t-il ?"
+  options={[
+    'Promise.all renvoie un tableau partiel avec undefined pour la 2e',
+    'Promise.all rejette immédiatement avec l\'erreur de la 2e — utilise Promise.allSettled si tu veux les résultats partiels',
+    'Promise.all attend que les 3 soient terminées de toute façon',
+    'Cela dépend de la durée'
+  ]}
+  answerIndex={1}
+  explanation="all rejette à la première erreur. allSettled attend que toutes finissent et te donne un tableau de {status, value/reason}. Choisis selon ton besoin : all = tout-ou-rien, allSettled = état détaillé."
+/>
+
+## Pour aller plus loin
+
+- *MDN — Async JavaScript* : [developer.mozilla.org/en-US/docs/Learn/JavaScript/Asynchronous](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Asynchronous)
+- *Promise visualizer* — [bevacqua.github.io/promisees/](https://bevacqua.github.io/promisees/)
+- *JavaScript Visualized: Event Loop* — Lydia Hallie (vidéo)
+- *Loupe — Event Loop visualizer* — [latentflip.com/loupe](https://latentflip.com/loupe/)
+
+---
+
+**Suite** : [6.3 — APIs du navigateur](/06-javascript-typescript/03-apis-navigateur/) — DOM, fetch, storage, observers.

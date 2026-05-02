@@ -1,0 +1,352 @@
+---
+title: 7.6 — Design systems & UI kits
+description: Tailwind, shadcn/ui, Radix UI, Headless UI, Storybook — la productivité UI moderne.
+sidebar:
+  order: 6
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="11">
+Marie a copié-collé du CSS partout. Quand Lina lui demande « peux-tu changer la couleur principale en orange brulé ? », elle doit modifier 47 fichiers. Elle pose Tailwind v4 + 3 composants partagés (Button, Card, Input) avec tokens centralisés. Changement de couleur = 1 ligne dans `@theme`.
+</Scenario>
+
+<Scenario parcours="B" episode="10">
+Hugo a besoin de modales accessibles pour la confirmation de réservation, et de menus contextuels pour le profil. Il opte pour Radix UI (headless, a11y native) + Tailwind v4 pour le style. Tout est accessible clavier + lecteur d'écran sans qu'il ait à coder les patterns ARIA.
+</Scenario>
+
+<Scenario parcours="C" episode="11">
+Sami construit un mini-design system pour GreenBox : tokens (couleurs naturelles, espacement, typo), primitives (Button, Input, Card), composants métier (ProductCard, CartItem). Tailwind v4 + Radix UI. Storybook pour documenter — Sami peut bosser sur l'UI sans lancer l'app entière.
+</Scenario>
+
+<Scenario parcours="D" episode="11">
+Léa pose Tailwind v4 + Radix UI + dark mode par défaut. Pour les drawers (panneau de détail d'une demande), elle prend `<Dialog.Root>` Radix : focus trap, Escape, retour focus, tout est gratuit. Mode sombre via `prefers-color-scheme`.
+</Scenario>
+
+<Scenario parcours="E" episode="11">
+Yanis pose Tailwind v4 + Radix UI + shadcn/ui (les composants prêts à coller). Son board kanban est cohérent visuellement, accessible, et il code 3× plus vite qu'en partant de zéro.
+</Scenario>
+
+> 🎯 **Objectif** : ne pas réinventer chaque dropdown, chaque modal, chaque tooltip. Construire une UI cohérente avec Tailwind et des composants accessibles éprouvés.
+
+<ObjectiveList items={[
+  "Comprendre la philosophie utility-first de Tailwind CSS",
+  "Distinguer un UI kit (MUI, Chakra) d'un kit headless (Radix, Headless UI)",
+  "Utiliser shadcn/ui pour avoir des composants beaux et accessibles dans son projet",
+  "Documenter ses composants avec Storybook",
+  "Structurer un design system maison (tokens → primitives → composants)"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 6 lu" />
+
+
+## Pourquoi un design system ?
+
+Sans design system :
+
+- Bouton bleu A à 5 nuances différentes selon les pages.
+- Modale réinventée 4 fois, chacune avec son bug d'accessibilité.
+- 3 mois pour livrer une nouvelle feature parce que tout est custom.
+
+Avec un design system :
+
+- 1 token de couleur primary, 1 composant Button, 1 modale a11y.
+- Cohérence visuelle automatique.
+- Vélocité produit qui décolle.
+
+## Tailwind CSS — utility-first
+
+Au lieu d'écrire un fichier CSS, tu styles **directement dans la classe HTML** avec des utilities :
+
+```jsx
+<button className="bg-blue-500 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md transition">
+  Click me
+</button>
+```
+
+### Pourquoi ça marche
+
+| Argument | Explication |
+|----------|-------------|
+| **Pas de naming** | Plus de `.btn-primary` à inventer. Plus de `BEM`. |
+| **Pas de CSS séparé** | Tu vois le style en regardant le composant. |
+| **Cohérence par défaut** | `text-base`, `text-lg` etc. sont une **échelle**, pas des valeurs arbitraires. |
+| **Bundle minimaliste** | Tailwind purge ce qui n'est pas utilisé → CSS final ~10 Ko. |
+| **DX excellente** | Auto-completion via Tailwind IntelliSense (VS Code). |
+
+### Configuration
+
+```bash
+npm install -D tailwindcss @tailwindcss/vite postcss autoprefixer
+```
+
+```ts
+// vite.config.ts
+import tailwindcss from '@tailwindcss/vite';
+
+export default defineConfig({
+  plugins: [tailwindcss()],
+});
+```
+
+```css
+/* src/styles.css */
+@import 'tailwindcss';
+```
+
+### Échelles Tailwind
+
+```jsx
+<div className="
+  text-sm md:text-base lg:text-lg          /* responsive font */
+  p-2 sm:p-4 md:p-6                         /* padding responsive */
+  bg-gray-100 dark:bg-gray-800              /* mode sombre auto */
+  hover:bg-gray-200                         /* état hover */
+  transition-colors                         /* transition */
+">
+```
+
+| Catégorie | Exemple |
+|-----------|---------|
+| Spacing | `p-1` (4px), `p-2` (8px), `p-4` (16px), `p-8` (32px) |
+| Couleurs | `text-blue-500`, `bg-red-100`, `border-gray-200` |
+| Tailles texte | `text-xs`, `text-sm`, `text-base`, `text-lg`, `text-xl` |
+| Layout | `flex`, `grid`, `block`, `hidden` |
+| Responsive | préfixes `sm:`, `md:`, `lg:`, `xl:`, `2xl:` |
+| États | `hover:`, `focus:`, `active:`, `disabled:`, `group-hover:` |
+
+### Critique légitime
+
+❌ **HTML chargé** : `<button class="...10 classes...">`. Lisibilité affectée.
+❌ **Courbe d'apprentissage** : il faut mémoriser les noms (mais l'autocompletion aide énormément).
+
+→ Solutions :
+- **Composants encapsulés** : tu écris `<Button variant="primary">` une fois, l'utility-first est dans le composant.
+- **`@apply`** (à utiliser parcimonieusement) : créer une classe maison agrégeant des utilities.
+
+## UI kits classiques (Material UI, Chakra, Mantine, Bootstrap React)
+
+```jsx
+// MUI
+import { Button } from '@mui/material';
+<Button variant="contained" color="primary">Click</Button>
+```
+
+✅ Composants prêts à l'emploi, beaucoup d'options.
+❌ **Lock-in visuel** : tous les sites MUI se ressemblent.
+❌ **Customisation** vite pénible (overriding de styles).
+❌ **Bundle** souvent gros.
+
+**Verdict 2026** : MUI/Chakra restent valables pour des **dashboards internes** ou MVP rapides. Pour un produit avec design custom, on préfère les kits headless.
+
+## Headless UI kits — Radix, Headless UI, Ariakit
+
+Idée : **fournir le comportement** (focus trap, ARIA, clavier, animations) **sans imposer le style**.
+
+### Radix UI (le plus utilisé)
+
+```jsx
+import * as Dialog from '@radix-ui/react-dialog';
+
+<Dialog.Root>
+  <Dialog.Trigger className="btn-primary">Ouvrir</Dialog.Trigger>
+  <Dialog.Portal>
+    <Dialog.Overlay className="fixed inset-0 bg-black/50" />
+    <Dialog.Content className="fixed top-1/2 left-1/2 ...">
+      <Dialog.Title>Titre</Dialog.Title>
+      <Dialog.Description>Description.</Dialog.Description>
+      <Dialog.Close>Fermer</Dialog.Close>
+    </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>
+```
+
+✅ Accessibilité **béton** (focus trap, ESC pour fermer, ARIA).
+✅ **Aucun style** imposé — tu utilises Tailwind ou ce que tu veux.
+✅ Le composant **ne casse pas** quand tu changes la couleur.
+
+Composants couverts : Dialog, Dropdown, Select, Tabs, Tooltip, Popover, Accordion, Toast, etc.
+
+## shadcn/ui — la révolution 2024+
+
+shadcn/ui n'est **pas** une lib npm classique. C'est un **catalogue de composants** que tu **copies** dans ton projet.
+
+```bash
+npx shadcn@latest init
+npx shadcn@latest add button
+# ↓ ajoute components/ui/button.tsx dans TON projet
+```
+
+Le code est **dans ton repo**, tu peux le modifier librement. shadcn fournit :
+
+- **Tailwind CSS** pour le style.
+- **Radix UI** pour le comportement.
+- **TypeScript** strict.
+- Modules cohérents (Button, Card, Dialog, Form, Table…).
+
+### Pourquoi c'est génial
+
+✅ Tu **possèdes** le code (pas de breaking change forcé par une lib externe).
+✅ Customisation **illimitée**.
+✅ Accessible et beau **par défaut**.
+✅ Évolue avec ton projet.
+
+❌ Tu dois **maintenir** les composants quand shadcn met à jour (mais ce n'est pas obligatoire).
+
+### Exemple
+
+```tsx
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+
+<Dialog>
+  <DialogTrigger asChild>
+    <Button variant="outline">Ouvrir</Button>
+  </DialogTrigger>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Confirmation</DialogTitle>
+    </DialogHeader>
+    <p>Êtes-vous sûr ?</p>
+  </DialogContent>
+</Dialog>
+```
+
+C'est devenu le **standard de fait** pour démarrer un projet React/Next moderne en 2025-2026.
+
+## Construire son design system
+
+3 niveaux à structurer :
+
+### Niveau 1 — Tokens
+
+Variables de design (couleurs, espacements, rayons, typographie). Voir [3.6](/03-analyse-conception/06-ux-ui/) et [5.2](/05-frontend-html-css/02-css/).
+
+```css
+:root {
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --space-md: 1rem;
+  --radius-md: 0.5rem;
+}
+```
+
+Tailwind a son `tailwind.config.js` pour les exposer comme utilities.
+
+### Niveau 2 — Primitives
+
+Composants de base : `Button`, `Input`, `Select`, `Card`, `Dialog`. Souvent ce que shadcn/ui te fournit.
+
+### Niveau 3 — Patterns / composants métier
+
+Composants métier qui composent des primitives :
+
+- `ProductCard` (Card + Button + Image)
+- `LoginForm` (Form + Input + Button)
+- `CommentList` (Card multiple + état)
+
+C'est le plus **spécifique** à ton produit. Mais ça reste réutilisable dans toute l'app.
+
+## Storybook — documenter ses composants
+
+[Storybook](https://storybook.js.org/) génère un site qui montre **tous les états** de tous tes composants, isolés.
+
+```bash
+npx storybook@latest init
+```
+
+```tsx
+// Button.stories.tsx
+import type { Meta, StoryObj } from '@storybook/react';
+import { Button } from './Button';
+
+const meta: Meta<typeof Button> = {
+  component: Button,
+};
+export default meta;
+
+type Story = StoryObj<typeof Button>;
+
+export const Primary: Story = {
+  args: { variant: 'primary', children: 'Click me' },
+};
+
+export const Disabled: Story = {
+  args: { variant: 'primary', disabled: true, children: 'Disabled' },
+};
+```
+
+✅ Documentation toujours à jour (le code et la doc sont le même fichier).
+✅ Tester chaque variant en isolation.
+✅ Designers et devs partagent le même langage.
+
+❌ Maintenance non triviale sur gros projets.
+
+**Verdict** : très utile pour les design systems d'entreprise (équipes 10+ devs, designers dédiés). Surdimensionné pour un side-project ou un MVP.
+
+## Tableau de décision
+
+| Si tu... | Choisis |
+|----------|---------|
+| Veux livrer vite avec un design ok | shadcn/ui + Tailwind |
+| Construis un dashboard interne | Mantine, Chakra, ou MUI |
+| Bâtis un produit avec design custom | Tailwind + Radix |
+| As un designer dédié et budget temps | Tailwind + Radix + Storybook + tokens custom |
+| Veux du CSS classique sans framework | Pico CSS, classless CSS, ou CSS modules |
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu démarres un MVP en Next.js. Tu veux des composants beaux, accessibles, modifiables. Choix idéal ?"
+  options={[
+    'Material UI — c\'est complet',
+    'shadcn/ui — Tailwind + Radix, code dans ton repo, libre à modifier',
+    'CSS pur',
+    'Bootstrap 5'
+  ]}
+  answerIndex={1}
+  explanation="shadcn/ui est devenu le standard pour ce cas en 2025+. Tu copies les composants dans ton repo (pas de lib externe), tu utilises Tailwind pour le style et Radix pour le comportement a11y. Évolutif, sans lock-in."
+/>
+
+<Quiz
+  question="Critique fréquente de Tailwind : 'le HTML est illisible avec 15 classes'. Solution ?"
+  options={[
+    'Revenir au CSS classique',
+    'Encapsuler dans des composants (Button, Card) — l\'utility-first est dans la définition du composant, pas dans chaque usage',
+    'Utiliser !important partout',
+    'Le HTML chargé est inévitable'
+  ]}
+  answerIndex={1}
+  explanation="C'est la pratique standard. Tu écris une fois `<button className='bg-primary hover:bg-primary-dark px-4...' />` dans Button.tsx, ensuite tu utilises <Button> partout. L'utility-first est local, pas global."
+/>
+
+<Quiz
+  question="Différence majeure entre Radix UI et Material UI ?"
+  options={[
+    'Radix est plus rapide',
+    'Material UI fournit comportement ET style imposé (Material Design). Radix fournit uniquement le comportement et l\'a11y — tu styles toi-même',
+    'Radix est seulement pour Vue',
+    'Aucune différence majeure'
+  ]}
+  answerIndex={1}
+  explanation="C'est la distinction headless vs styled. Material UI te livre des composants fonctionnels et stylés Material Design. Radix livre des composants accessibles SANS style — tu décides du look. Idéal quand tu veux un design custom mais pas réinventer la complexité d'un menu accessible."
+/>
+
+## Pour aller plus loin
+
+- *Tailwind CSS Docs* — [tailwindcss.com](https://tailwindcss.com/)
+- *shadcn/ui* — [ui.shadcn.com](https://ui.shadcn.com/)
+- *Radix UI* — [radix-ui.com](https://www.radix-ui.com/)
+- *Storybook* — [storybook.js.org](https://storybook.js.org/)
+- *Refactoring UI* — Adam Wathan & Steve Schoger (le livre par les créateurs de Tailwind)
+
+---
+
+**Fin de l'axe 7.** Direction l'[axe 8 — Backend (multi-langages)](/08-backend/), ou attaque le projet « Dashboard Next.js » dans `exercises/07-frameworks-frontend/`.

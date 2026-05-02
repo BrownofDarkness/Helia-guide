@@ -1,0 +1,499 @@
+---
+title: 14.2 — Infrastructure as Code
+description: Terraform, OpenTofu, Pulumi, Ansible — versionner l'infra, gérer l'état distant, séparer les environnements, sécuriser les secrets.
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : ne plus jamais provisionner d'infra à la main. Une console cloud te trahit en six mois (qui a créé quoi ? quels droits ? quelle config ?). L'IaC met l'infra dans Git — versionnée, relue, reproductible.
+
+<ObjectiveList items={[
+  "Comprendre le rôle d'un état (state) et pourquoi il doit être distant",
+  "Écrire un module Terraform / OpenTofu réutilisable et le tester",
+  "Structurer un repo IaC pour gérer dev / staging / prod",
+  "Choisir entre Terraform, OpenTofu et Pulumi selon le contexte",
+  "Sécuriser secrets et accès cloud avec OIDC + Vault / SOPS"
+]} />
+
+<Level value="confirmé" reading="12 min" prereq="axes 4 et 8 lus" />
+
+
+## Pourquoi l'IaC
+
+Ton infra **est du code** : VPC, base de données, CDN, domaine, DNS, IAM. Sans IaC :
+
+- **Personne ne sait** ce qui tourne en prod (« qui a ouvert ce port 22 ? »).
+- **Reproduire l'env staging** prend 3 jours et reste différent de prod.
+- **Migrer de cloud** est un projet à 6 mois.
+- **Disaster recovery** : au revoir.
+
+Avec IaC :
+
+- `terraform plan` te dit **exactement** ce qui changera.
+- `git diff` montre la diff d'infra comme la diff de code.
+- **`destroy`** d'un environnement = 1 commande.
+- **Migration cloud** = nouveau provider, mêmes ressources logiques.
+
+---
+
+## Le paysage 2026 — qui choisir ?
+
+| Outil | Langage | Force | Quand l'utiliser |
+|-------|---------|-------|------------------|
+| **Terraform** | HCL (DSL) | Standard de fait, écosystème énorme | Projets multi-cloud, équipe ops |
+| **OpenTofu** | HCL — fork de Terraform | OSS, gouverné par la Linux Foundation | Préférer en 2026 si licence importe |
+| **Pulumi** | TS / Python / Go / .NET | Vrai code (boucles, types, tests) | Équipes dev qui veulent rester dans leur langage |
+| **AWS CDK** | TS / Python | Génère CloudFormation, AWS-only | Projet 100 % AWS |
+| **Ansible** | YAML | Configuration de serveurs (post-provisioning) | Bootstrapping VPS, configs OS |
+| **Crossplane** | YAML K8s | Gérer l'infra **depuis** Kubernetes | Plateformes internes |
+
+<Aside type="tip" title="Terraform vs OpenTofu en 2026">
+HashiCorp a passé Terraform sous Business Source License en août 2023, ce qui a freiné l'adoption en entreprise. **OpenTofu** est le fork OSS communautaire, géré par la Linux Foundation, **drop-in replacement** de Terraform 1.5+. En 2026, OpenTofu est l'option par défaut pour les nouveaux projets. La syntaxe HCL est identique.
+</Aside>
+
+---
+
+## Concepts Terraform / OpenTofu en 5 minutes
+
+### Provider
+
+Une intégration vers un cloud / service (AWS, GCP, Cloudflare, GitHub, Datadog, etc.).
+
+```hcl
+terraform {
+  required_version = ">= 1.7"
+  required_providers {
+    aws = { source = "hashicorp/aws", version = "~> 5.80" }
+  }
+  backend "s3" {
+    bucket         = "myorg-tfstate"
+    key            = "prod/terraform.tfstate"
+    region         = "eu-west-3"
+    use_lockfile   = true   # OpenTofu 1.10+ : verrou natif sans DynamoDB
+  }
+}
+
+provider "aws" {
+  region = "eu-west-3"
+}
+```
+
+### Resource
+
+Une ressource concrète à créer / gérer :
+
+```hcl
+resource "aws_s3_bucket" "uploads" {
+  bucket = "myapp-uploads-prod"
+  tags   = { Project = "myapp", Env = "prod" }
+}
+
+resource "aws_s3_bucket_public_access_block" "uploads" {
+  bucket                  = aws_s3_bucket.uploads.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+```
+
+### Variable
+
+Paramètre injecté à l'exécution :
+
+```hcl
+variable "env" {
+  type        = string
+  description = "dev | staging | prod"
+  validation {
+    condition     = contains(["dev", "staging", "prod"], var.env)
+    error_message = "env doit être dev, staging ou prod"
+  }
+}
+```
+
+```bash
+terraform apply -var="env=prod"
+# ou via fichier
+terraform apply -var-file="prod.tfvars"
+```
+
+### Output
+
+Valeur exposée vers d'autres modules / utilisateurs :
+
+```hcl
+output "uploads_bucket_arn" {
+  value = aws_s3_bucket.uploads.arn
+}
+```
+
+### Data source
+
+Lire un truc qui existe déjà :
+
+```hcl
+data "aws_route53_zone" "main" {
+  name = "example.com"
+}
+```
+
+### Module
+
+Du code réutilisable :
+
+```hcl
+module "uploads" {
+  source = "./modules/s3-bucket"
+  name   = "myapp-uploads-prod"
+  env    = var.env
+}
+```
+
+---
+
+## Workflow standard — `init`, `plan`, `apply`
+
+```
+                 ┌─────────────┐
+                 │ terraform   │
+                 │   init      │  télécharge providers + config backend
+                 └─────┬───────┘
+                       ▼
+                 ┌─────────────┐
+                 │ terraform   │
+                 │   plan      │  diff entre code et état réel
+                 └─────┬───────┘
+                       ▼
+                 ┌─────────────┐
+                 │ terraform   │
+                 │   apply     │  applique les changements
+                 └─────────────┘
+```
+
+| Commande | Quand l'utiliser |
+|----------|------------------|
+| `init` | À chaque clone, à chaque ajout de provider |
+| `plan` | Avant d'appliquer — toujours lire le diff |
+| `apply` | Une fois le plan validé |
+| `destroy` | Détruire toutes les ressources gérées par ce state |
+| `fmt` | Auto-formatter (en pre-commit) |
+| `validate` | Cohérence syntaxique |
+| `state` | Manipuler le state (avec précaution) |
+
+---
+
+## L'état (state) — le concept critique
+
+Terraform stocke l'**état** (`terraform.tfstate`) — un mapping entre ton code et les ressources réelles. Sans état, il ne peut pas savoir ce qu'il a déjà créé.
+
+### Local vs distant
+
+```hcl
+# ❌ Local (par défaut, pour un projet perso seul)
+# terraform.tfstate écrit dans le dossier courant.
+
+# ✅ Distant (équipe, CI)
+backend "s3" {
+  bucket       = "myorg-tfstate"
+  key          = "prod/terraform.tfstate"
+  region       = "eu-west-3"
+  use_lockfile = true
+}
+```
+
+**Toujours distant en équipe.** Sans backend distant :
+
+- Le state finit committé en clair (avec des secrets dedans !).
+- Deux dev qui appliquent en même temps corrompent l'état.
+
+### Verrou (lock)
+
+Le backend doit verrouiller l'état pendant un `apply` pour éviter les races. Backends qui supportent : S3 + lockfile (OpenTofu 1.10+), Terraform Cloud, Azure Storage, GCS, Postgres.
+
+### Le state contient des secrets
+
+Un mot de passe RDS apparaîtra **en clair** dans `terraform.tfstate`. Conséquences :
+
+- **Chiffrement at rest** sur le bucket (S3 SSE, GCS-managed key).
+- **Accès restreint** au bucket de state (un IAM role dédié).
+- **Jamais committé**.
+
+---
+
+## Structurer un repo IaC
+
+### Pattern « par environnement »
+
+```
+infra/
+├── modules/
+│   ├── s3-bucket/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   ├── postgres/
+│   └── ecs-service/
+├── envs/
+│   ├── dev/
+│   │   ├── main.tf
+│   │   ├── backend.tf      # state path: dev/terraform.tfstate
+│   │   └── terraform.tfvars
+│   ├── staging/
+│   └── prod/
+└── README.md
+```
+
+Chaque env a son propre **state isolé**. Tu n'écrases pas la prod en testant dev.
+
+### Pattern « workspaces »
+
+Un seul state, plusieurs environnements via `terraform workspace`. Plus simple à mettre en place, mais **plus risqué** : un bug dans le code peut affecter tous les envs.
+
+> En 2026, le pattern « par environnement » domine en entreprise. Workspaces réservés aux mini-projets perso.
+
+---
+
+## Modules réutilisables
+
+```hcl
+# modules/s3-bucket/main.tf
+resource "aws_s3_bucket" "this" {
+  bucket = var.name
+  tags   = merge(var.tags, { Module = "s3-bucket" })
+}
+
+resource "aws_s3_bucket_versioning" "this" {
+  bucket = aws_s3_bucket.this.id
+  versioning_configuration { status = var.versioning ? "Enabled" : "Disabled" }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
+  bucket = aws_s3_bucket.this.id
+  rule {
+    apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
+  }
+}
+```
+
+```hcl
+# modules/s3-bucket/variables.tf
+variable "name" { type = string }
+variable "tags" { type = map(string), default = {} }
+variable "versioning" { type = bool, default = true }
+```
+
+```hcl
+# Utilisation
+module "user_uploads" {
+  source     = "../../modules/s3-bucket"
+  name       = "myapp-uploads-${var.env}"
+  versioning = var.env == "prod"
+  tags       = { Env = var.env }
+}
+```
+
+**Bonnes pratiques modules** :
+
+| Règle | Pourquoi |
+|-------|----------|
+| Un module = un sous-système cohérent | S3+IAM ensemble OK ; S3+RDS+VPC = trop |
+| Pas plus de 5-6 ressources par module simple | Au-delà, splitter |
+| Versionner avec git tag (`source = "git::...?ref=v1.2.0"`) | Reproductibilité |
+| Documenter `inputs` / `outputs` dans `README.md` | `terraform-docs` génère ça automatiquement |
+| Tester avec `terratest` ou `tflint` | Régressions évitées |
+
+### Modules publics — Terraform Registry
+
+```hcl
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
+  # ...
+}
+```
+
+Utile pour les briques très standard. Pour le métier, écris tes propres modules — les modules publics deviennent vite des contraintes.
+
+---
+
+## Pulumi — quand le code est un avantage
+
+Pulumi te laisse écrire ton infra en **TypeScript / Python / Go / .NET** :
+
+```ts
+import * as aws from '@pulumi/aws';
+
+const bucket = new aws.s3.Bucket('uploads', {
+  versioning: { enabled: true },
+});
+
+// Boucle, condition, fonction — tout est possible.
+['fr', 'en', 'ar'].forEach((locale) => {
+  new aws.s3.Bucket(`assets-${locale}`, { /*...*/ });
+});
+
+export const bucketArn = bucket.arn;
+```
+
+Avantages :
+
+- **IDE complet** : autocomplete, refactor, types.
+- **Tests** : `vitest` / `pytest` sur la définition d'infra.
+- **Boucles natives** (vs `for_each` HCL parfois cryptique).
+
+Inconvénient : écosystème moins large que Terraform Registry, moins d'exemples copy-pastable.
+
+---
+
+## CI/CD pour l'IaC
+
+Pipeline standard :
+
+```yaml
+# .github/workflows/iac.yml
+on:
+  pull_request:
+    paths: ['infra/**']
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: opentofu/setup-opentofu@v1
+        with: { tofu_version: '1.10.x' }
+      - uses: aws-actions/configure-aws-credentials@v4   # OIDC
+        with:
+          role-to-assume: arn:aws:iam::123:role/tfplan
+          aws-region: eu-west-3
+      - run: tofu init && tofu plan -no-color | tee plan.txt
+      - uses: actions/upload-artifact@v4
+        with: { name: plan, path: plan.txt }
+      - name: Comment plan on PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with: { path: plan.txt }
+```
+
+L'`apply` se fait **après merge** sur main, dans un environnement protégé (required reviewers).
+
+---
+
+## Drift detection
+
+Quelqu'un a modifié l'infra à la main via la console AWS ? Le **drift** est l'écart entre ton code et la réalité.
+
+```bash
+tofu plan
+# Si tu vois des changements alors que tu n'as pas modifié le code → drift.
+```
+
+Outils dédiés : **driftctl**, **Spacelift**, **Atlantis**, **Terraform Cloud** — détection programmée et alerte.
+
+> Politique saine : **0 toléré sur la prod**. Les modifs manuelles sont autorisées en debug, mais doivent être **rapatriées dans le code** dans la journée.
+
+---
+
+## Sécurité IaC
+
+| Risque | Parade |
+|--------|--------|
+| Secrets dans `tfstate` | Backend chiffré + accès IAM restreint |
+| Secrets dans `tfvars` committés | Jamais. Utiliser `TF_VAR_*` env, Vault, SOPS, AWS Secrets Manager |
+| Provider cloud non pinned | `version = "~> 5.80"` (auto-update mineur, pas majeur) |
+| Apply non revu | Required reviewer sur l'env protégé |
+| Module tiers compromis | Pin sur SHA / tag, scan avec `tfsec` / `checkov` |
+| Élévation IAM accidentelle | Linting policy (`opa`, `conftest`, `checkov`) |
+
+Outils SAST IaC :
+
+- **tfsec** / **trivy config** — scan Terraform / OpenTofu.
+- **checkov** — multi-IaC (Terraform, K8s, CloudFormation).
+- **kics** — alternative Checkmarx.
+
+---
+
+## Anti-patterns
+
+- **Cliquer dans la console** « pour aller plus vite » → drift permanent.
+- **Un seul state pour tous les envs** → un bug en dev casse la prod.
+- **Modules à 200 ressources** → blast radius énorme à chaque modification.
+- **`terraform apply` direct sur main** sans review.
+- **Pas de tests** sur les modules réutilisés à 10 endroits.
+- **Hardcoder des IDs cloud** dans le code applicatif au lieu d'output IaC.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu es seul sur un projet, tu utilises Terraform avec backend local. Tu changes d'ordi et tu perds le terraform.tfstate. Que se passe-t-il ?"
+  options={[
+    'Rien, Terraform reconstruit l\'état automatiquement',
+    'Terraform ne sait plus quelles ressources il gère ; un `apply` recréera tout en doublon, le `destroy` ne fait rien',
+    'Cela invalide la base de données',
+    'Cela force une mise à jour majeure'
+  ]}
+  answerIndex={1}
+  explanation="Le state est la mémoire de Terraform. Sans lui, Terraform pense que rien n'existe, et un `apply` crée à nouveau toutes les ressources (double facturation, conflits de noms). Le state distant + chiffré + verrouillé est non-négociable dès qu'il y a de la valeur en jeu."
+/>
+
+<Quiz
+  question="Sur un projet en équipe, deux dev font `terraform apply` en même temps sans verrou. Conséquence ?"
+  options={[
+    'Le second attend automatiquement',
+    'Le state se corrompt — incohérence entre l\'état Terraform et l\'infra réelle, à corriger manuellement',
+    'Aucune, Terraform sait gérer',
+    'Une erreur claire bloque les deux'
+  ]}
+  answerIndex={1}
+  explanation="Sans verrou, deux applies en parallèle écrasent le state à tour de rôle. Résultat : l'état stocké ne reflète plus la réalité, et les prochains applies se basent sur un état faux. Backends modernes (S3 + use_lockfile en OpenTofu 1.10+, Terraform Cloud, Postgres) verrouillent automatiquement."
+/>
+
+<Quiz
+  question="Pour gérer dev / staging / prod en 2026 sur un nouveau projet d'équipe, lequel choisir ?"
+  options={[
+    'Un seul state avec terraform workspaces',
+    'Un dossier par env avec son propre backend / state — isole les blast radius et facilite les permissions différenciées',
+    'Tout en prod, on verra ensuite',
+    'Un fichier .tfvars partagé'
+  ]}
+  answerIndex={1}
+  explanation="Le pattern « un dossier par env » isole les states, permet de donner des droits différents (le rôle prod ne touche pas à dev), et limite l'impact d'un bug. Workspaces sont OK pour des cas simples, pas pour la prod en entreprise."
+/>
+
+<Quiz
+  question="Tu choisis entre Terraform et OpenTofu sur un nouveau projet 2026. Quelle est la bonne raison de préférer OpenTofu ?"
+  options={[
+    'Syntaxe différente plus moderne',
+    'Drop-in compatible HCL, sous Linux Foundation et licence OSS — évite le risque de licence BSL de Terraform sur certains usages commerciaux',
+    'Meilleures performances 10×',
+    'OpenTofu est plus stable que Terraform'
+  ]}
+  answerIndex={1}
+  explanation="La syntaxe HCL est identique entre Terraform 1.5 et OpenTofu — c'est un fork de compatibilité. La différence porte sur la licence (BSL pour Terraform depuis août 2023) et la gouvernance (LF pour OpenTofu, OSS-friendly). Pour les nouveaux projets en entreprise, OpenTofu réduit le risque juridique. La performance est très proche."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *OpenTofu* — [opentofu.org](https://opentofu.org/)
+- *Terraform docs* — [developer.hashicorp.com/terraform](https://developer.hashicorp.com/terraform)
+- *Pulumi* — [pulumi.com](https://www.pulumi.com/)
+- *Terraform Up & Running* — Yevgeniy Brikman (le livre référence)
+- *terraform-aws-modules* — [github.com/terraform-aws-modules](https://github.com/terraform-aws-modules)
+- *checkov / tfsec* — scan sécurité IaC
+
+---
+
+**Suite** : [14.3 — Hébergement](/14-devops/03-hebergement/) pour choisir entre PaaS, IaaS et VPS.

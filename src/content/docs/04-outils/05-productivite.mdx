@@ -1,0 +1,341 @@
+---
+title: 4.5 — Productivité
+description: Dotfiles, terminal moderne, outils Unix de nouvelle génération (ripgrep, fd, fzf, bat, tmux).
+sidebar:
+  order: 5
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : configurer un environnement terminal qui te fait gagner 10 minutes par jour. Cumulé sur une carrière, ça fait des semaines de travail récupérées.
+
+<ObjectiveList items={[
+  "Versionner ses dotfiles pour reproduire son environnement partout",
+  "Choisir un émulateur de terminal moderne",
+  "Maîtriser ripgrep, fd, fzf, bat, eza — les remplaçants modernes des outils Unix",
+  "Utiliser tmux pour organiser plusieurs sessions",
+  "Personnaliser son shell (zsh, bash, fish) avec un prompt utile"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 1 lu" />
+
+
+## Dotfiles — versionner sa configuration
+
+Les **dotfiles** (`.bashrc`, `.zshrc`, `.gitconfig`, `.vimrc`...) contiennent ta configuration. Sans gestion, tu perds tout en changeant de machine.
+
+### Approche par symlinks (la plus courante)
+
+```
+~/dotfiles/
+├── .bashrc
+├── .zshrc
+├── .gitconfig
+├── .tmux.conf
+├── .vimrc
+├── starship.toml
+└── install.sh    ← script qui crée les symlinks
+```
+
+`install.sh` minimal :
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+DOTFILES="$HOME/dotfiles"
+for file in .bashrc .zshrc .gitconfig .tmux.conf; do
+  ln -sfv "$DOTFILES/$file" "$HOME/$file"
+done
+
+mkdir -p "$HOME/.config"
+ln -sfv "$DOTFILES/starship.toml" "$HOME/.config/starship.toml"
+```
+
+Versionne tout dans un repo public ou privé. Sur une nouvelle machine :
+
+```bash
+git clone https://github.com/toi/dotfiles.git ~/dotfiles
+cd ~/dotfiles && ./install.sh
+```
+
+<Aside type="caution" title="Ne JAMAIS commit les secrets">
+Si tu utilises des SSH keys, des tokens, des mots de passe — ils n'ont **rien** à faire dans tes dotfiles. Crée des fichiers complémentaires non versionnés (`.zshrc.local`, `.gitconfig.local`) chargés depuis le `.zshrc` principal.
+</Aside>
+
+## Émulateurs de terminal
+
+Le terminal par défaut de macOS / Windows n'est pas terrible. Quelques alternatives modernes :
+
+| Émulateur | Plateformes | Forces |
+|-----------|-------------|--------|
+| **Wezterm** | Toutes | GPU-accéléré, Lua config, ligatures, multiplexage |
+| **Alacritty** | Toutes | Ultra rapide, minimaliste |
+| **iTerm2** | macOS | Mature, riche en features |
+| **Windows Terminal** | Windows | Très bon depuis 2020 |
+| **Ghostty** | macOS / Linux | Récent, GPU, expérience moderne |
+
+**Conseil** : prends Wezterm si tu veux un truc qui marche partout pareil avec une config Lua versionnable.
+
+## Shells modernes
+
+`bash` reste le défaut universel. Mais tu peux faire mieux pour ton interactif quotidien.
+
+### zsh + oh-my-zsh / prezto
+
+```bash
+# Installer zsh
+sudo apt install zsh        # ou brew install zsh
+
+# Le mettre par défaut
+chsh -s $(which zsh)
+
+# Oh My Zsh (framework de plugins)
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+```
+
+### Fish — l'ultra-friendly
+
+```bash
+brew install fish    # macOS
+sudo apt install fish
+
+# Auto-completions intelligentes par défaut, pas de config ésotérique
+```
+
+Limite : ce n'est pas POSIX-compatible. Certains scripts shell ne fonctionneront pas tels quels.
+
+### Starship — un prompt universel
+
+[starship.rs](https://starship.rs) — prompt rapide, riche, configurable, qui marche sur bash/zsh/fish/PowerShell.
+
+```bash
+curl -sS https://starship.rs/install.sh | sh
+
+# .zshrc ou .bashrc
+eval "$(starship init zsh)"
+```
+
+`~/.config/starship.toml` :
+
+```toml
+add_newline = true
+
+[character]
+success_symbol = "[➜](bold green)"
+error_symbol = "[✗](bold red)"
+
+[git_branch]
+symbol = "🌿 "
+
+[directory]
+truncation_length = 3
+truncate_to_repo = true
+```
+
+Tu obtiens un prompt qui montre branche Git, version Node/Python, statut, durée de la dernière commande, etc.
+
+## Les outils Unix nouvelle génération
+
+Les outils Unix classiques (`grep`, `find`, `ls`, `cat`) sont datés. Leurs remplaçants modernes sont **plus rapides, plus lisibles, et respectent `.gitignore`**.
+
+| Classique | Moderne | Apport |
+|-----------|---------|--------|
+| `grep` | **ripgrep** (`rg`) | 10× plus rapide, respecte .gitignore, regex moderne |
+| `find` | **fd** | Syntaxe humaine (`fd config` au lieu de `find . -name "*config*"`) |
+| `ls` | **eza** (ex-exa) | Couleurs, icônes, tri par date, `--git` |
+| `cat` | **bat** | Coloration syntaxique, git diff, line numbers |
+| `du` | **dust** | Visuel arborescent |
+| `ps` | **procs** | Affichage moderne |
+| `top` | **bottom** (`btm`), **htop** | Plus lisible |
+| (rien) | **fzf** | Recherche fuzzy partout (commandes, fichiers, git…) |
+| (rien) | **zoxide** | `cd` intelligent qui apprend |
+
+### Installation rapide
+
+```bash
+# Avec Homebrew (Mac/Linux)
+brew install ripgrep fd eza bat fzf zoxide
+
+# Avec apt (Linux)
+sudo apt install ripgrep fd-find bat fzf
+
+# Avec scoop (Windows)
+scoop install ripgrep fd eza bat fzf zoxide
+```
+
+### Quelques exemples
+
+```bash
+# ripgrep
+rg "TODO"                         # cherche "TODO" partout en ignorant node_modules etc.
+rg "TODO" -t js                   # juste les fichiers JS
+rg -n "useState"                  # avec numéros de ligne
+rg "user" --glob '!*.test.*'      # exclure les tests
+
+# fd
+fd config                         # tous les fichiers contenant "config"
+fd -e tsx                         # tous les .tsx
+fd -H .env                        # inclure les fichiers cachés
+
+# fzf
+ctrl+r dans le terminal           # historique de commandes recherchable
+ctrl+t                            # picker de fichiers
+cat $(fzf)                        # ouvrir un fichier choisi interactivement
+git checkout $(git branch | fzf)  # changer de branche en sélectionnant
+
+# zoxide (alias z)
+z dotfiles                        # cd vers ~/dotfiles (apprend de tes cd précédents)
+```
+
+### Aliases utiles
+
+Ajoute à ton `.zshrc` / `.bashrc` :
+
+```bash
+# Outils modernes en remplacement
+alias ls='eza --icons --git'
+alias ll='eza -l --icons --git'
+alias la='eza -la --icons --git'
+alias cat='bat --paging=never'
+alias find='fd'
+
+# Git
+alias gs='git status'
+alias gc='git commit'
+alias gd='git diff'
+alias gp='git push'
+alias gl='git log --oneline --graph --decorate -20'
+
+# Docker
+alias dc='docker compose'
+alias dps='docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
+
+# Sécurité
+alias rm='rm -i'           # demande confirmation
+```
+
+## tmux — multiplexer le terminal
+
+tmux te permet d'avoir **plusieurs sessions, fenêtres et panes** dans un seul terminal, et de **détacher / réattacher** une session (utile en SSH).
+
+```bash
+brew install tmux           # ou apt install tmux
+
+tmux                        # démarrer
+tmux new -s mon-projet      # session nommée
+tmux ls                     # lister
+tmux attach -t mon-projet   # réattacher
+```
+
+### Raccourcis essentiels (préfixe `Ctrl+B` par défaut)
+
+| Action | Raccourci |
+|--------|-----------|
+| Nouvelle fenêtre | `Ctrl+B` puis `c` |
+| Suivante / précédente | `Ctrl+B` puis `n` / `p` |
+| Renommer fenêtre | `Ctrl+B` puis `,` |
+| Split horizontal | `Ctrl+B` puis `"` |
+| Split vertical | `Ctrl+B` puis `%` |
+| Naviguer entre panes | `Ctrl+B` puis flèches |
+| Détacher | `Ctrl+B` puis `d` |
+
+`~/.tmux.conf` typique :
+
+```bash
+# Préfixe plus accessible
+unbind C-b
+set -g prefix C-a
+bind C-a send-prefix
+
+# Numérotation 1-based
+set -g base-index 1
+setw -g pane-base-index 1
+
+# Mode souris
+set -g mouse on
+
+# Couleurs
+set -g default-terminal "tmux-256color"
+
+# Plugins (tpm)
+set -g @plugin 'tmux-plugins/tpm'
+set -g @plugin 'tmux-plugins/tmux-resurrect'
+run '~/.tmux/plugins/tpm/tpm'
+```
+
+### Alternative légère — Zellij
+
+[zellij.dev](https://zellij.dev) : équivalent moderne de tmux, sans la courbe d'apprentissage. Raccourcis affichés en bas de l'écran. Plus accessible aux débutants.
+
+## Workflow type d'une journée de dev
+
+Voici à quoi ressemble une session productive :
+
+```
+1. ouvrir Wezterm
+2. tmux attach -t projet  (session sauvegardée)
+   - pane gauche : éditeur (nvim ou code .)
+   - pane droite haut : npm run dev
+   - pane droite bas : git, tests, etc.
+3. ctrl+r pour retrouver une commande dans l'historique
+4. z client-x pour cd ~/projects/clients/client-x
+5. fd Component pour trouver un fichier
+6. rg useUser pour chercher les usages d'un hook
+7. lazygit pour les opérations Git interactives
+```
+
+Tu touches très peu la souris. Ton terminal devient un cockpit.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu cherches le mot 'apiKey' dans tout ton projet React. Commande la plus efficace ?"
+  options={[
+    'grep -r "apiKey" .',
+    'rg "apiKey" — respecte .gitignore (pas de bruit node_modules), 10× plus rapide',
+    'find . | xargs grep apiKey',
+    'cat **/*.ts | grep apiKey'
+  ]}
+  answerIndex={1}
+  explanation="ripgrep est l'outil moderne. Il ignore node_modules par défaut (via .gitignore), est massivement plus rapide, et a une syntaxe plus simple. C'est le grep des années 2020+."
+/>
+
+<Quiz
+  question="Pourquoi versionner ses dotfiles ?"
+  options={[
+    'Pour la sécurité',
+    'Pour pouvoir reproduire son environnement de travail sur une nouvelle machine en quelques minutes, et garder l\'historique des changements',
+    'C\'est obligatoire en entreprise',
+    'Pour partager ses tokens API'
+  ]}
+  answerIndex={1}
+  explanation="Les dotfiles versionnés transforment 'je dois reconfigurer ma nouvelle machine pendant 2 heures' en 'git clone + ./install.sh + 5 minutes'. Et tu retrouves chaque ajout avec git log. ATTENTION : jamais de secrets dedans."
+/>
+
+<Quiz
+  question="Tu te connectes en SSH à un serveur, lances un script long, ta connexion tombe. Comment éviter ça ?"
+  options={[
+    'Lancer plus rapidement le script',
+    'Utiliser tmux ou screen sur le serveur — la session continue malgré la déconnexion, tu réattaches après',
+    'Acheter une meilleure connexion',
+    'Lancer le script en arrière-plan avec &'
+  ]}
+  answerIndex={1}
+  explanation="C'est l'usage canonique de tmux. Tu lances 'tmux new -s deploy', tu lances ton script, ta connexion tombe, tu te reconnectes, 'tmux attach -t deploy', tout est intact. Bien plus robuste que nohup ou & qui peuvent perdre la sortie."
+/>
+
+## Pour aller plus loin
+
+- *Modern Unix* — [github.com/ibraheemdev/modern-unix](https://github.com/ibraheemdev/modern-unix) — catalogue exhaustif
+- *MIT Missing Semester — Lecture 9 : Potpourri* — astuces avancées
+- *Awesome Dotfiles* — [github.com/webpro/awesome-dotfiles](https://github.com/webpro/awesome-dotfiles)
+- *Starship* — [starship.rs](https://starship.rs)
+- Ton propre repo `dotfiles` sur GitHub — c'est aussi un signal fort en candidature
+
+---
+
+**Fin de l'axe 4.** Direction l'[axe 5 — Frontend HTML & CSS](/05-frontend-html-css/), ou attaque le projet Docker Compose dans `exercises/04-outils/01-stack-conteneurisee/`.

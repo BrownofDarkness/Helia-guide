@@ -1,0 +1,339 @@
+---
+title: Django 6.0
+description: Le framework Python "batteries-included" — ORM, admin, auth, templates, DRF.
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../../../components/ObjectiveList.astro';
+import Quiz from '../../../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif** : maîtriser Django 6.0 au point de livrer un CRUD complet (modèles, vues, admin, API REST) en quelques jours.
+
+<ObjectiveList items={[
+  "Comprendre l'organisation projet/apps et le settings.py",
+  "Définir des modèles avec relations et migrations",
+  "Utiliser l'admin Django pour générer une interface CRUD gratuite",
+  "Construire une API REST avec Django REST Framework (DRF)",
+  "Authentifier avec sessions ou JWT (SimpleJWT)",
+  "Tester avec pytest-django"
+]} />
+
+## Pourquoi Django ?
+
+| Pour | Contre |
+|------|--------|
+| **Tout fourni** : ORM, migrations, admin auto, auth, templates, sessions, formulaires | Verbeux, beaucoup de magie implicite |
+| **Admin auto** = interface CRUD complète **gratuite** pour gérer les données | Convention « project + apps » à digérer |
+| **Mature** depuis 2005, écosystème riche | Async ajouté tardivement (mature en 6.0+) |
+| **Excellent pour un CRUD complet** d'app métier | Sur-dimensionné pour un microservice |
+
+**Verdict 2026** : Django reste l'arme absolue pour des **apps métier complètes** où l'admin et la productivité priment. Pour une API moderne async, FastAPI est plus adapté.
+
+## Django 6.0 — nouveautés clés
+
+Django 6.0 (sortie fin 2025, LTS) apporte :
+
+- **Async views matures** (depuis 4.1, stabilisées en 5.x, optimisées en 6.0).
+- **Async ORM amélioré** : `await Model.objects.aget(...)`, `async for obj in qs`.
+- Améliorations de **performances** sur le templating et le routage.
+- Drop du support Python 3.10 ; cible Python 3.12+.
+
+## Installation rapide
+
+```bash
+# Avec uv (recommandé en 2026)
+uv init taskly-django
+cd taskly-django
+uv add django djangorestframework
+
+# Créer un projet
+uv run django-admin startproject config .
+
+# Lancer
+uv run python manage.py migrate
+uv run python manage.py runserver
+# http://127.0.0.1:8000
+```
+
+## Structure d'un projet Django
+
+```
+taskly-django/
+├── manage.py                   ← CLI Django
+├── pyproject.toml
+├── config/                      ← « project » : settings, urls racine, ASGI/WSGI
+│   ├── __init__.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── asgi.py
+├── apps/                        ← convention : un dossier "apps" qui contient les apps
+│   ├── accounts/                ← une « app » Django (module isolé)
+│   │   ├── models.py
+│   │   ├── views.py
+│   │   ├── urls.py
+│   │   ├── serializers.py       ← DRF
+│   │   ├── admin.py
+│   │   └── migrations/
+│   └── tasks/
+└── tests/
+```
+
+**Concept clé** : un projet Django contient plusieurs **apps**. Une app est une **unité réutilisable** (modèles + vues + URLs + templates). Tu peux avoir 1 app pour `accounts`, 1 pour `tasks`, 1 pour `billing`.
+
+## Models — l'ORM Django
+
+```python
+# apps/tasks/models.py
+from django.db import models
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+class Task(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tasks')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    done = models.BooleanField(default=False)
+    due_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['owner', '-created_at']),
+        ]
+
+    def __str__(self) -> str:
+        return self.title
+```
+
+### Migrations
+
+```bash
+uv run python manage.py makemigrations
+uv run python manage.py migrate
+```
+
+Django génère automatiquement les migrations SQL à partir de tes modifs `models.py`. Le système est **mature** et gère bien les diffs.
+
+### Querysets
+
+```python
+# Filtrer
+tasks = Task.objects.filter(owner=user, done=False)
+
+# Joindre (évite N+1)
+tasks = Task.objects.select_related('owner').filter(done=False)
+
+# Many-to-many / reverse FK
+tasks = Task.objects.prefetch_related('comments').all()
+
+# Agréger
+from django.db.models import Count
+stats = Task.objects.aggregate(total=Count('id'))
+
+# Async (Django 4.1+)
+tasks = await Task.objects.filter(owner=user).acount()
+async for task in Task.objects.filter(owner=user):
+    print(task.title)
+```
+
+## Admin Django — la killer feature
+
+```python
+# apps/tasks/admin.py
+from django.contrib import admin
+from .models import Task
+
+@admin.register(Task)
+class TaskAdmin(admin.ModelAdmin):
+    list_display = ('title', 'owner', 'done', 'created_at')
+    list_filter = ('done', 'owner')
+    search_fields = ('title', 'description')
+    readonly_fields = ('created_at',)
+```
+
+Tu obtiens **gratuitement** une interface complète à `/admin/` :
+- Liste filtrable, recherchable, paginée.
+- Formulaires de création/édition générés depuis les modèles.
+- Permissions par utilisateur/groupe.
+- Historique des modifications.
+
+C'est ce qui rend Django **imbattable** quand tu as besoin d'un back-office sans coder.
+
+## Django REST Framework (DRF) — pour les APIs
+
+DRF est l'extension de référence pour exposer une API JSON. Bien que NestJS-niveau de productivité.
+
+```bash
+uv add djangorestframework djangorestframework-simplejwt
+```
+
+### Serializers
+
+```python
+# apps/tasks/serializers.py
+from rest_framework import serializers
+from .models import Task
+
+class TaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = ['id', 'title', 'description', 'done', 'due_at', 'created_at']
+        read_only_fields = ['id', 'created_at']
+```
+
+### ViewSets + Routers
+
+```python
+# apps/tasks/views.py
+from rest_framework import viewsets, permissions
+from .models import Task
+from .serializers import TaskSerializer
+
+class TaskViewSet(viewsets.ModelViewSet):
+    serializer_class = TaskSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Task.objects.filter(owner=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+```
+
+```python
+# apps/tasks/urls.py
+from rest_framework.routers import DefaultRouter
+from .views import TaskViewSet
+
+router = DefaultRouter()
+router.register(r'tasks', TaskViewSet, basename='task')
+urlpatterns = router.urls
+```
+
+→ **5 routes générées automatiquement** : `GET /tasks/`, `POST /tasks/`, `GET /tasks/:id/`, `PATCH /tasks/:id/`, `DELETE /tasks/:id/`.
+
+### Auth JWT avec SimpleJWT
+
+```python
+# config/settings.py
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}
+
+# config/urls.py
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
+urlpatterns += [
+    path('api/auth/login/', TokenObtainPairView.as_view()),
+    path('api/auth/refresh/', TokenRefreshView.as_view()),
+]
+```
+
+Tu obtiens `/api/auth/login/` qui prend `{ username, password }` et renvoie `{ access, refresh }` — JWT prêts à l'emploi.
+
+## Tests avec pytest-django
+
+```bash
+uv add --dev pytest pytest-django
+```
+
+```python
+# tests/test_tasks.py
+import pytest
+from django.contrib.auth import get_user_model
+from rest_framework.test import APIClient
+
+User = get_user_model()
+
+@pytest.fixture
+def client():
+    return APIClient()
+
+@pytest.fixture
+def user(db):
+    return User.objects.create_user(username='alice', password='password123')
+
+def test_list_tasks_requires_auth(client):
+    response = client.get('/api/tasks/')
+    assert response.status_code == 401
+
+def test_create_task(client, user):
+    client.force_authenticate(user=user)
+    response = client.post('/api/tasks/', {'title': 'Test'})
+    assert response.status_code == 201
+    assert response.data['title'] == 'Test'
+```
+
+## Déploiement
+
+| Composant | Recommandation |
+|-----------|----------------|
+| Serveur WSGI | **Gunicorn** (sync) ou Uvicorn (async via Daphne) |
+| Reverse proxy | Nginx ou Caddy |
+| Static files | **Whitenoise** pour les servir directement (simple) |
+| DB | PostgreSQL (le default Django) |
+| Cache | Redis |
+| Plateforme | Fly.io, Render, Railway |
+
+```bash
+# Démarrage prod typique
+uv run gunicorn config.wsgi:application --workers 4 --bind 0.0.0.0:8000
+```
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu construis une plateforme interne avec back-office complet (gestion utilisateurs, articles, commandes). Choix idéal en Python ?"
+  options={[
+    'FastAPI — c\'est le plus moderne',
+    'Django — tu auras un admin auto en 1 jour, ORM mature, sessions intégrées, ce qui te ferait perdre des semaines à recoder ailleurs',
+    'Flask + 30 extensions',
+    'Python brut'
+  ]}
+  answerIndex={1}
+  explanation="C'est exactement le sweet spot de Django : back-office complet où l'admin auto vaut son pesant d'or. FastAPI ne fournit pas d'admin (à coder à la main avec un Streamlit ou autre). Flask demanderait d'assembler ORM + admin + auth + sessions séparément. Django est la solution productiviste."
+/>
+
+<Quiz
+  question="Tu charges 100 tâches puis pour chacune tu accèdes à task.owner.email. Tu vois 101 requêtes SQL dans les logs. Pourquoi et comment fixer ?"
+  options={[
+    'Normal, Django fait toujours ça',
+    'Problème N+1 : 1 requête initiale + 1 requête par task pour charger owner. Fix avec Task.objects.select_related(\'owner\').all() qui fait une seule jointure',
+    'Augmenter le cache Redis',
+    'Désactiver le ORM'
+  ]}
+  answerIndex={1}
+  explanation="C'est LE bug ORM le plus classique. Sans select_related/prefetch_related, chaque accès à une relation déclenche une requête séparée. select_related fait un JOIN SQL pour les ForeignKey, prefetch_related fait des requêtes batchées pour les Many-to-Many."
+/>
+
+<Quiz
+  question="Tu ajoutes un champ `priority` dans models.py. Que faire ensuite ?"
+  options={[
+    'Recharger le serveur',
+    'makemigrations puis migrate — Django génère le SQL et l\'applique',
+    'Modifier la DB à la main avec ALTER TABLE',
+    'Supprimer la DB et recommencer'
+  ]}
+  answerIndex={1}
+  explanation="Le système de migrations de Django est l'un de ses gros plus. makemigrations détecte la différence avec le schéma précédent et génère un fichier Python de migration ; migrate l'applique en SQL. Versionné dans Git, reproductible en CI/prod, réversible."
+/>
+
+## Pour aller plus loin
+
+- *Django Documentation* — [docs.djangoproject.com](https://docs.djangoproject.com/)
+- *Two Scoops of Django* — Daniel & Audrey Roy Greenfeld (livre culte des bonnes pratiques)
+- *Django REST Framework Docs* — [django-rest-framework.org](https://www.django-rest-framework.org/)
+- *djangopackages.org* — annuaire des packages Django
+- *Awesome Django* — [github.com/wsvincent/awesome-django](https://github.com/wsvincent/awesome-django)
+
+---
+
+Le projet **`taskly-api`** sera implémenté en **FastAPI** (notre référence). Pour faire la même chose en Django, tu peux suivre la doc DRF avec les modèles ci-dessus comme point de départ.
+
+Suite : [Flask](/08-backend/02-python/flask/) ou [FastAPI](/08-backend/02-python/fastapi/).

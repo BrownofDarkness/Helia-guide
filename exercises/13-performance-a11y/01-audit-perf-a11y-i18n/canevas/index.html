@@ -1,0 +1,112 @@
+<!doctype html>
+<!-- ⚠️ A-001 : pas d'attribut lang -->
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FastBites — la livraison gourmande</title>
+
+    <!-- ⚠️ P-002 : police Google chargée sans preconnect ni font-display -->
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600&display=block" rel="stylesheet" />
+
+    <!-- ⚠️ P-003 : script bloquant, pas de defer -->
+    <script src="/src/main.ts" type="module"></script>
+
+    <!-- ⚠️ P-001 : CSS bloquant non optimisé -->
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <!-- ⚠️ A-002 : pas de <header>, pas de landmarks (nav, main) -->
+    <div class="topbar">
+      <div class="logo">FastBites</div>
+      <!-- ⚠️ A-003 : div onclick à la place de bouton/lien -->
+      <div class="link" onclick="window.location.hash='#menu'">Menu</div>
+      <div class="link" onclick="window.location.hash='#offres'">Offres</div>
+      <div class="link" onclick="window.location.hash='#contact'">Contact</div>
+    </div>
+
+    <!-- ⚠️ A-004 : hiérarchie de headings cassée (h2 avant h1) -->
+    <section class="hero">
+      <h2>La livraison gourmande, partout en ville</h2>
+      <p>Plats frais, livrés en moins de 30 minutes. Aujourd'hui : 0 frais de livraison.</p>
+
+      <!-- ⚠️ P-004 : image hero sans width/height/srcset/fetchpriority/loading -->
+      <!-- ⚠️ A-005 : pas de alt -->
+      <img src="https://picsum.photos/2000/1200?random=1" />
+
+      <!-- ⚠️ A-006 : div-bouton + ⚠️ A-007 : contraste insuffisant -->
+      <div class="cta" onclick="document.querySelector('#order-form input').focus()">Commander</div>
+    </section>
+
+    <h1>Notre menu de la semaine</h1>
+
+    <section id="menu" class="menu">
+      <!-- 6 cartes plat avec image lourde non optimisée -->
+      <div class="card">
+        <img src="https://picsum.photos/600/400?random=2" />
+        <h3>Bowl thaï</h3>
+        <p>14,90 €</p>
+        <div class="add" onclick="addToCart('thai')">+</div>
+      </div>
+      <div class="card">
+        <img src="https://picsum.photos/600/400?random=3" />
+        <h3>Pizza calzone</h3>
+        <p>11,50 €</p>
+        <div class="add" onclick="addToCart('calzone')">+</div>
+      </div>
+      <div class="card">
+        <img src="https://picsum.photos/600/400?random=4" />
+        <h3>Burger truffe</h3>
+        <p>16,00 €</p>
+        <div class="add" onclick="addToCart('truffe')">+</div>
+      </div>
+      <div class="card">
+        <img src="https://picsum.photos/600/400?random=5" />
+        <h3>Salade César</h3>
+        <p>9,90 €</p>
+        <div class="add" onclick="addToCart('cesar')">+</div>
+      </div>
+      <div class="card">
+        <img src="https://picsum.photos/600/400?random=6" />
+        <h3>Tarte aux pommes</h3>
+        <p>5,50 €</p>
+        <div class="add" onclick="addToCart('tarte')">+</div>
+      </div>
+      <div class="card">
+        <img src="https://picsum.photos/600/400?random=7" />
+        <h3>Smoothie mangue</h3>
+        <p>4,80 €</p>
+        <div class="add" onclick="addToCart('smoothie')">+</div>
+      </div>
+    </section>
+
+    <!-- ⚠️ P-005 : bannière injectée tardivement (CLS) -->
+    <div id="cookie-banner" style="display:none;">
+      <p>Ce site utilise des cookies pour améliorer votre expérience.</p>
+      <div class="link" onclick="document.getElementById('cookie-banner').style.display='none'">OK</div>
+    </div>
+
+    <section id="contact" class="contact">
+      <h3>Recevez nos offres</h3>
+      <!-- ⚠️ A-008 : input sans label -->
+      <!-- ⚠️ A-009 : erreur signalée uniquement par couleur -->
+      <form id="order-form" onsubmit="submitForm(event)">
+        <input type="text" id="email" placeholder="votre@email.fr" />
+        <span id="email-error"></span>
+        <div class="cta" onclick="document.getElementById('order-form').requestSubmit()">S'inscrire</div>
+      </form>
+    </section>
+
+    <!-- ⚠️ P-007 : panier (live region absente, pas de focus management) -->
+    <div id="cart-status">Panier : 0 article</div>
+
+    <!-- ⚠️ A-010 : modale custom sans focus trap, sans Escape, sans rôle -->
+    <div id="modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Commande confirmée</h3>
+        <p>Merci pour votre commande !</p>
+        <div class="cta" onclick="closeModal()">Fermer</div>
+      </div>
+    </div>
+  </body>
+</html>

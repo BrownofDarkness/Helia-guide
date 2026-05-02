@@ -1,0 +1,108 @@
+---
+/**
+ * Carte d'affichage d'un Piège dans la page /pieges/.
+ * Lit les champs string (Markdown simple) du data/pieges.ts.
+ * Pour des contenus très markdown (tables, etc.) préférer le composant
+ * <Pitfall> avec slot dans une page MDX.
+ */
+
+import type { Piege } from '../data/pieges';
+
+interface Props {
+  piege: Piege;
+}
+
+const { piege } = Astro.props;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  deps: 'Dépendances',
+  build: 'Build / Native',
+  auth: 'Auth',
+  security: 'Sécurité',
+  tests: 'Tests',
+  perf: 'Performance',
+  a11y: 'Accessibilité',
+  env: 'Env / config',
+  cors: 'CORS',
+  db: 'Base de données',
+};
+
+/** Convertit du markdown ultra-simple en HTML : code blocks + inline code + bold. */
+function md(text: string): string {
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  // Code blocks ```...```
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+    `<pre><code class="language-${lang}">${code.trim()}</code></pre>`);
+  // Inline code `...`
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // **bold**
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Lists - line-start
+  html = html.replace(/(^|\n)- (.+)/g, '$1<li>$2</li>');
+  html = html.replace(/(<li>[\s\S]*?<\/li>)(\n\n|$)/g, '<ul>$1</ul>$2');
+  // Paragraphs (double newline)
+  html = html
+    .split(/\n\n+/)
+    .map((p) => (p.startsWith('<') ? p : `<p>${p.replace(/\n/g, '<br/>')}</p>`))
+    .join('\n');
+  return html;
+}
+---
+
+<details
+  id={`piege-${piege.id}`}
+  class="pitfall pitfall-card"
+  data-axe={piege.axe}
+  data-category={piege.category}
+  data-search={`${piege.title} ${piege.symptom} ${piege.cause}`.toLowerCase()}
+>
+  <summary class="pitfall-summary">
+    <span class="pitfall-icon" aria-hidden="true">🪤</span>
+    <span class="pitfall-title">
+      <strong>{piege.title}</strong>
+    </span>
+    <span class="pitfall-tag">{CATEGORY_LABELS[piege.category] ?? piege.category}</span>
+    {piege.axe && <span class="pitfall-axe">axe {piege.axe}</span>}
+    <a
+      class="pitfall-permalink"
+      href={`#piege-${piege.id}`}
+      aria-label="Lien direct vers ce piège"
+      title="Lien direct"
+      onclick="event.stopPropagation();"
+    >🔗</a>
+  </summary>
+  <div class="pitfall-body">
+    <h4>🩹 Symptôme</h4>
+    <Fragment set:html={md(piege.symptom)} />
+    <h4>🔍 Cause</h4>
+    <Fragment set:html={md(piege.cause)} />
+    <h4>🩺 Fix</h4>
+    <Fragment set:html={md(piege.fix)} />
+    <h4>🧠 Leçon</h4>
+    <Fragment set:html={md(piege.lesson)} />
+  </div>
+</details>
+
+<style>
+.pitfall-axe {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  background: var(--sl-color-gray-5);
+  border-radius: 999px;
+}
+.pitfall-permalink {
+  margin-inline-start: 0.4rem;
+  font-size: 0.85rem;
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.pitfall-card:hover .pitfall-permalink,
+.pitfall-permalink:focus-visible { opacity: 0.7; }
+.pitfall-permalink:hover { opacity: 1; }
+.pitfall-card[hidden] { display: none; }
+.pitfall-cat-section[hidden] { display: none; }
+</style>

@@ -1,0 +1,53 @@
+---
+/**
+ * Composant Level — badge en haut de sous-section.
+ *
+ * Indique le niveau attendu, le temps de lecture et les prérequis pour
+ * permettre au lecteur de choisir s'il est prêt à attaquer la page.
+ *
+ * Usage :
+ *   <Level value="débutant" reading="25 min" prereq="axe 5 lu" />
+ *
+ * Niveaux :
+ *   débutant   🌱 — lisible avec uniquement les axes précédents
+ *   confirmé   🌿 — suppose un peu de pratique sur les bases
+ *   avancé     🌳 — suppose un projet déployé en production
+ */
+
+interface Props {
+  value: 'débutant' | 'confirmé' | 'avancé';
+  reading?: string;
+  prereq?: string;
+}
+
+const { value, reading, prereq } = Astro.props;
+
+const META: Record<string, { icon: string; label: string; tip: string }> = {
+  débutant: {
+    icon: '🌱',
+    label: 'Débutant',
+    tip: 'Lisible si tu as fait les axes précédents — pas de prérequis cachés.',
+  },
+  confirmé: {
+    icon: '🌿',
+    label: 'Confirmé',
+    tip: 'Suppose un peu de pratique sur les bases (axes 5 à 8).',
+  },
+  avancé: {
+    icon: '🌳',
+    label: 'Avancé',
+    tip: 'Suppose un projet déployé en production ou plusieurs années de pratique.',
+  },
+};
+
+const meta = META[value];
+---
+
+<p class="level-badge" data-level={value}>
+  <span class="level-pill" title={meta.tip}>
+    <span class="level-icon" aria-hidden="true">{meta.icon}</span>
+    <strong>{meta.label}</strong>
+  </span>
+  {reading && <span class="level-meta"><span aria-hidden="true">⏱</span> {reading}</span>}
+  {prereq && <span class="level-meta"><span aria-hidden="true">📚</span> prérequis : {prereq}</span>}
+</p>

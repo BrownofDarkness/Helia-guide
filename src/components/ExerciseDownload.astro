@@ -1,0 +1,82 @@
+---
+/**
+ * Composant ExerciseDownload — boutons de téléchargement canevas + correction.
+ *
+ * Les ZIP sont générés par `scripts/build-exercise-zips.mjs` à chaque build,
+ * dans `public/downloads/<axe>-<sub>-<name>-{canevas|correction}.zip`.
+ *
+ * Usage :
+ *   <ExerciseDownload
+ *     axe="08-backend"
+ *     slug="01-nodejs-typescript/taskly-api"
+ *     title="Taskly — API REST sécurisée"
+ *     description="Bâtir une API Hono (Node 24) avec auth JWT et tests d'intégration."
+ *   />
+ */
+
+interface Props {
+  /** Slug de l'axe, ex: "08-backend" */
+  axe: string;
+  /** Sous-chemin de l'exercice, ex: "01-nodejs-typescript/taskly-api" */
+  slug: string;
+  /** Titre court de l'exercice */
+  title?: string;
+  /** Phrase d'accroche (1-2 lignes) */
+  description?: string;
+  /** Si false : pas de bouton canevas (rare) */
+  hasCanevas?: boolean;
+  /** Si false : pas de bouton correction (rare) */
+  hasCorrection?: boolean;
+}
+
+const {
+  axe,
+  slug,
+  title,
+  description,
+  hasCanevas = true,
+  hasCorrection = true,
+} = Astro.props;
+
+const slugFlat = `${axe}-${slug}`.replace(/\//g, '-');
+const canevasZip = `/downloads/${slugFlat}-canevas.zip`;
+const correctionZip = `/downloads/${slugFlat}-correction.zip`;
+---
+
+<aside class="exercise-download">
+  <header class="exercise-header">
+    <span class="exercise-icon" aria-hidden="true">📁</span>
+    <h3>Exercice {title ? `· ${title}` : ''}</h3>
+  </header>
+
+  {description && <p class="exercise-pitch">{description}</p>}
+
+  <div class="exercise-actions">
+    {hasCanevas && (
+      <a class="exercise-btn primary" href={canevasZip} download>
+        <span aria-hidden="true">📥</span>
+        <span>
+          <strong>Télécharger le canevas</strong>
+          <small>squelette à compléter — commence ici</small>
+        </span>
+      </a>
+    )}
+    {hasCorrection && (
+      <a class="exercise-btn secondary" href={correctionZip} download>
+        <span aria-hidden="true">📦</span>
+        <span>
+          <strong>Télécharger la correction</strong>
+          <small>solution complète + walkthrough pédagogique</small>
+        </span>
+      </a>
+    )}
+  </div>
+
+  <p class="exercise-tip">
+    💡 <strong>Comment l'utiliser :</strong> dézippe le <strong>canevas</strong>,
+    suis son <code>README.md</code> pour démarrer et tente l'exercice.
+    Quand tu bloques (ou quand tu as fini pour comparer), télécharge la
+    <strong>correction</strong> — son <code>README.md</code> contient un
+    walkthrough détaillé qui t'explique chaque choix de la solution.
+  </p>
+</aside>

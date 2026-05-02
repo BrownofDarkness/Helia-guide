@@ -1,0 +1,356 @@
+---
+title: 4.1 — Éditeur / IDE
+description: VS Code à la maîtrise — extensions, raccourcis, snippets, debugger.
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : être à l'aise dans VS Code (ou équivalent) au point que la souris devient l'exception, pas la règle. Tu vas y passer **40+ heures par semaine** — chaque seconde gagnée à 100 fois par jour ajoute des heures de productivité.
+
+<ObjectiveList items={[
+  "Configurer VS Code avec les bonnes extensions et settings",
+  "Maîtriser 20 raccourcis clavier qui changent tout",
+  "Utiliser le multi-curseur pour des éditions massives",
+  "Debugger un programme JS/TS avec breakpoints et inspection",
+  "Écrire un snippet personnalisé"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 1 lu" />
+
+
+## Pourquoi VS Code (et pas un autre) ?
+
+| IDE | Quand le choisir |
+|-----|------------------|
+| **VS Code** | Le couteau suisse moderne, gratuit, 90 % du marché web. **Défaut recommandé.** |
+| **JetBrains** (WebStorm, PHPStorm) | Très puissant pour les gros projets ; payant ; refactoring inégalé |
+| **Neovim / Helix** | Productivité extrême au clavier ; courbe abrupte |
+| **Cursor / Windsurf** | Forks de VS Code avec IA intégrée ; intéressant si tu acceptes la dépendance |
+| **Zed** | Moderne et rapide ; écosystème en construction |
+
+**Tu peux changer plus tard.** Mais commence par VS Code et investis quelques heures à le maîtriser plutôt que de zapper d'éditeur en éditeur.
+
+## Configuration de base
+
+### Settings UI vs settings.json
+
+VS Code a une interface graphique pour les paramètres (`Ctrl+,`), mais le **fichier JSON** est la vraie source de vérité.
+
+`Ctrl+Maj+P` → *Preferences: Open User Settings (JSON)* :
+
+```json
+{
+  "editor.fontSize": 14,
+  "editor.fontFamily": "'JetBrains Mono', 'Fira Code', Consolas, monospace",
+  "editor.fontLigatures": true,
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.wordWrap": "on",
+  "editor.minimap.enabled": false,
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "explicit"
+  },
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": true,
+  "files.autoSave": "onFocusChange",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "terminal.integrated.fontSize": 13,
+  "git.confirmSync": false,
+  "git.autofetch": true,
+  "workbench.colorTheme": "Default Dark Modern",
+  "workbench.iconTheme": "vscode-icons",
+  "explorer.confirmDelete": false,
+  "explorer.confirmDragAndDrop": false
+}
+```
+
+<Aside type="tip" title="Versionne tes settings">
+Tes settings sont dans `~/.config/Code/User/settings.json` (Linux/Mac) ou `%APPDATA%\Code\User\settings.json` (Windows). Versionne-les dans tes [dotfiles](/04-outils/05-productivite/) ou utilise la **synchronisation paramètres** intégrée à VS Code (compte Microsoft / GitHub).
+</Aside>
+
+### Settings par projet
+
+Pour des paramètres spécifiques à un projet, crée `.vscode/settings.json` à la racine :
+
+```json
+{
+  "editor.tabSize": 4,
+  "typescript.tsdk": "node_modules/typescript/lib"
+}
+```
+
+À versionner dans le repo : tout le monde dans l'équipe a la même config.
+
+## Extensions essentielles
+
+### Indispensables (web)
+
+| Extension | Pourquoi |
+|-----------|----------|
+| **ESLint** (dbaeumer) | Lint JS/TS au fil de la frappe |
+| **Prettier** (esbenp) | Formate à la sauvegarde, tout le monde a le même style |
+| **EditorConfig** (editorconfig) | Standard cross-éditeur pour indentation et fin de ligne |
+| **GitLens** (eamodio) | Voir qui a écrit chaque ligne, historique inline |
+| **Error Lens** (usernamehw) | Affiche les erreurs/warnings inline, pas dans une fenêtre cachée |
+| **Path Intellisense** (christian-kohler) | Auto-complétion des chemins de fichiers |
+
+### Selon le langage
+
+| Stack | Extension |
+|-------|-----------|
+| React/JSX | **ES7+ React/Redux/React-Native snippets** |
+| Tailwind CSS | **Tailwind CSS IntelliSense** |
+| Astro | **Astro** (officielle) |
+| Vue | **Vue Official** (anciennement Volar) |
+| Python | **Python** (Microsoft) + **Pylance** |
+| Docker | **Docker** (Microsoft) |
+| MDX | **MDX** (unifiedjs) |
+
+### À éviter
+
+- Les *« thèmes »* qui s'imposent par défaut.
+- Les extensions qui scannent en permanence le projet (ralentissements).
+- Toute extension non maintenue depuis > 1 an.
+
+**Conseil** : 15 extensions max. Au-delà, VS Code rame et tu perds plus que tu ne gagnes.
+
+## Raccourcis qui changent tout
+
+### Le top 20
+
+<Tabs>
+  <TabItem label="Windows / Linux">
+    | Raccourci | Action |
+    |-----------|--------|
+    | `Ctrl+P` | Ouvrir un fichier par son nom (le plus utilisé !) |
+    | `Ctrl+Maj+P` | Palette de commandes (tout fait) |
+    | `Ctrl+B` | Toggle sidebar |
+    | `Ctrl+\`` | Toggle terminal intégré |
+    | `Ctrl+W` | Fermer l'onglet courant |
+    | `Ctrl+Tab` | Basculer entre onglets |
+    | `Ctrl+\` | Split l'éditeur en 2 |
+    | `Ctrl+D` | Sélectionner l'occurrence suivante du mot |
+    | `Ctrl+Maj+L` | Sélectionner toutes les occurrences |
+    | `Alt+↑` / `Alt+↓` | Déplacer une ligne |
+    | `Alt+Maj+↑` / `Alt+Maj+↓` | Dupliquer une ligne |
+    | `Ctrl+/` | Commenter / décommenter |
+    | `Ctrl+Maj+K` | Supprimer la ligne |
+    | `Ctrl+Maj+F` | Rechercher dans tout le projet |
+    | `Ctrl+Maj+H` | Remplacer dans tout le projet |
+    | `Ctrl+G` | Aller à une ligne |
+    | `F12` | Aller à la définition |
+    | `Maj+F12` | Voir les références |
+    | `F2` | Renommer (intelligent) |
+    | `Ctrl+.` | Quick fix / suggestion |
+  </TabItem>
+  <TabItem label="macOS">
+    | Raccourci | Action |
+    |-----------|--------|
+    | `Cmd+P` | Ouvrir un fichier par son nom |
+    | `Cmd+Maj+P` | Palette de commandes |
+    | `Cmd+B` | Toggle sidebar |
+    | `Ctrl+\`` | Toggle terminal |
+    | `Cmd+W` | Fermer l'onglet |
+    | `Cmd+D` | Sélectionner l'occurrence suivante |
+    | `Cmd+Maj+L` | Sélectionner toutes les occurrences |
+    | `Opt+↑` / `Opt+↓` | Déplacer une ligne |
+    | `Opt+Maj+↑` / `Opt+Maj+↓` | Dupliquer |
+    | `Cmd+/` | Commenter |
+    | `Cmd+Maj+K` | Supprimer la ligne |
+    | `Cmd+Maj+F` | Rechercher dans le projet |
+    | `F12` | Aller à la définition |
+    | `Maj+F12` | Voir les références |
+    | `F2` | Renommer |
+    | `Cmd+.` | Quick fix |
+  </TabItem>
+</Tabs>
+
+### Multi-curseur
+
+Le truc qui te fait gagner des minutes :
+
+- `Alt+Click` : ajouter un curseur où tu cliques
+- `Ctrl+Alt+↓` (Windows) / `Cmd+Opt+↓` (Mac) : ajouter un curseur sur la ligne en dessous
+- `Ctrl+D` : sélectionner l'occurrence suivante du mot sous le curseur
+- `Ctrl+Maj+L` : sélectionner **toutes** les occurrences
+
+**Cas d'usage classique** : renommer 12 occurrences d'une variable locale (sans `F2` car contexte limité). Sélectionne le mot, `Ctrl+D` jusqu'à 12 fois, tape le nouveau nom.
+
+### Renommage intelligent (F2)
+
+Pour les vraies variables/fonctions exportées, `F2` est **infiniment supérieur** au multi-curseur : il comprend le scope, met à jour les imports, ne touche pas les chaînes de caractères qui ressemblent.
+
+```ts
+// Cliquer sur "compteur", appuyer sur F2, taper "counter"
+function increment(compteur: number) { return compteur + 1; }
+//                  ↑ F2 ici met aussi à jour cet usage ↑
+```
+
+## Le terminal intégré
+
+`Ctrl+\`` ouvre/ferme le terminal dans la fenêtre. Avantages :
+
+- Toujours dans le bon dossier (root du projet).
+- Plusieurs terminaux côte à côte.
+- Liens cliquables vers les fichiers (les chemins dans la sortie deviennent cliquables).
+
+**Configurer le shell** par défaut :
+
+```json
+{
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  "terminal.integrated.defaultProfile.osx": "zsh",
+  "terminal.integrated.defaultProfile.linux": "bash"
+}
+```
+
+## Le debugger
+
+Beaucoup de juniors debuggent avec `console.log`. **Le debugger est plus puissant et plus rapide** une fois maîtrisé.
+
+### Configuration minimum (Node.js)
+
+`.vscode/launch.json` :
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug current file",
+      "skipFiles": ["<node_internals>/**"],
+      "program": "${file}",
+      "runtimeExecutable": "tsx",
+      "runtimeArgs": ["--no-warnings"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug npm script",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}
+```
+
+### Workflow
+
+1. **Pose un breakpoint** : clique à gauche du numéro de ligne.
+2. **F5** : démarre le debug avec la config par défaut.
+3. Quand le code atteint le breakpoint, l'exécution se met en pause.
+4. **Inspecte** dans le panneau gauche : Variables, Watch, Call Stack.
+5. **Avance** : `F10` (next), `F11` (step in), `Maj+F11` (step out), `F5` (continue).
+
+### Breakpoints conditionnels
+
+Clic droit sur un breakpoint → *Edit Breakpoint* → entrer une condition :
+
+```
+i === 42         // s'arrête uniquement quand i vaut 42
+user.role === "admin" && action === "delete"
+```
+
+Précieux dans une boucle de 10 000 itérations.
+
+### Logpoints
+
+Plutôt que `console.log`, **un logpoint** affiche un message sans modifier le code :
+
+> Clic droit sur un breakpoint → *Add Logpoint…* → entrer `valeur de x : {x}`
+
+Avantage : pas de `console.log` oublié dans un commit.
+
+## Snippets personnalisés
+
+Pour automatiser les boilerplates qui reviennent.
+
+`Ctrl+Maj+P` → *Snippets: Configure User Snippets* → choisir le langage :
+
+```json
+{
+  "Composant React fonctionnel": {
+    "prefix": "rfc",
+    "body": [
+      "interface ${1:Component}Props {",
+      "  $2",
+      "}",
+      "",
+      "export function ${1}({$3}: ${1}Props) {",
+      "  return (",
+      "    <div>$0</div>",
+      "  );",
+      "}"
+    ],
+    "description": "Composant React fonctionnel typé"
+  },
+  "Console log nommé": {
+    "prefix": "clg",
+    "body": "console.log('${1:label}:', $1);",
+    "description": "console.log avec label automatique"
+  }
+}
+```
+
+Tape `rfc` puis `Tab` → tu obtiens un composant React typé prêt à remplir.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu veux ouvrir un fichier dont tu connais le nom mais pas l'emplacement. Méthode la plus rapide ?"
+  options={[
+    'Naviguer dans la sidebar à la souris',
+    'Ctrl+P puis taper le début du nom',
+    'Ctrl+Maj+F puis chercher',
+    'Lancer `find` dans un terminal'
+  ]}
+  answerIndex={1}
+  explanation="Ctrl+P (Cmd+P sur Mac) est le raccourci de productivité le plus utilisé en VS Code. Tape les premières lettres, fuzzy match, Entrée. < 1 seconde."
+/>
+
+<Quiz
+  question="Tu veux renommer une fonction `getUser` exportée et utilisée dans 14 fichiers. Comment faire ?"
+  options={[
+    'Ctrl+Maj+F puis Replace',
+    'Ctrl+D 14 fois pour sélectionner les occurrences',
+    'F2 sur la fonction — renommage intelligent qui touche les imports/usages dans le scope',
+    'Modifier à la main pour ne rien casser'
+  ]}
+  answerIndex={2}
+  explanation="F2 utilise le langage server (TypeScript ici) qui comprend le scope, ne renomme pas les chaînes qui contiennent 'getUser', met à jour les imports. C'est le bon réflexe pour les exports."
+/>
+
+<Quiz
+  question="Comment afficher la valeur d'une variable pendant l'exécution sans toucher au code ?"
+  options={[
+    'Ajouter un console.log temporairement',
+    'Poser un logpoint dans VS Code',
+    'Modifier le fichier puis recompiler',
+    'Lancer le debugger Chrome'
+  ]}
+  answerIndex={1}
+  explanation="Un logpoint affiche un message sans modifier le code source. Idéal pour ne pas oublier des console.log dans un commit. Clic droit dans la marge → Add Logpoint."
+/>
+
+## Pour aller plus loin
+
+- *VS Code Tips and Tricks* (officiel) — [code.visualstudio.com/docs/getstarted/tips-and-tricks](https://code.visualstudio.com/docs/getstarted/tips-and-tricks)
+- *VS Code Can Do That?* — [vscodecandothat.com](https://vscodecandothat.com/) (vidéos courtes)
+- *VimMode for VS Code* — extension si tu veux apprendre le clavier vim sans quitter VS Code
+- *GitHub Copilot* — payant, mais transformatif si tu accepts le compromis sur la dépendance et la propriété
+
+---
+
+**Suite** : [4.2 — Git en profondeur](/04-outils/02-git/) — l'outil que tu utilises tous les jours et que peu de devs maîtrisent vraiment.

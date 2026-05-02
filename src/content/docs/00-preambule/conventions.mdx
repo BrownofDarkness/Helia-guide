@@ -1,0 +1,118 @@
+---
+title: Comment lire ce guide
+description: Conventions visuelles — badges de niveau, scénarios fil rouge, glossaire. À lire en 2 minutes avant d'attaquer les axes.
+sidebar:
+  order: 1
+  label: Comment lire ce guide
+---
+
+import Level from '../../../components/Level.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+Avant de plonger dans les axes, **2 minutes** pour comprendre les conventions du guide. Ce sont des outils pour t'aider à :
+- savoir si **tu es prêt** pour une page,
+- te projeter dans **une histoire concrète** plutôt qu'apprendre dans le vide,
+- comprendre **chaque mot technique** sans quitter la page.
+
+## 1. Le badge de niveau
+
+En haut de chaque sous-section, tu verras un badge comme celui-ci :
+
+<Level value="débutant" reading="25 min" prereq="aucun" />
+
+Trois niveaux possibles :
+
+| Badge | Sens |
+|-------|------|
+| 🌱 **Débutant** | Lisible si tu as fait les axes précédents — pas de prérequis cachés. |
+| 🌿 **Confirmé** | Suppose un peu de pratique sur les bases (axes 5 à 8 maîtrisés). |
+| 🌳 **Avancé** | Suppose un projet déployé en production ou plusieurs années de pratique. |
+
+Le badge t'indique aussi le **temps de lecture estimé** ⏱ et les **prérequis** 📚.
+
+> 💡 Si tu tombes sur un 🌳 et que tu n'as pas encore les bases, ce n'est pas un échec — c'est juste pas le moment. Reviens plus tard.
+
+## 2. Le fil rouge — choisis ton parcours
+
+Le guide propose **5 personnages** qui chacun construisent un vrai projet à travers les axes 5 à 8. Tu en choisis **un** et tu le suis. C'est ton repère narratif.
+
+Sur chaque page concernée, en haut :
+
+<ScenarioTabs />
+
+Clique sur un personnage pour basculer le contenu narratif. Ton choix est **mémorisé** (localStorage) et tu le retrouves d'une page à l'autre. Tu peux changer à tout moment.
+
+Le bloc d'épisode ressemble à ça :
+
+<Scenario parcours="A" episode="0">
+**Marie** vient de finir l'axe 5. Elle a une vitrine HTML/CSS qui marche, mais quand on clique sur « Ajouter au panier », **rien ne se passe**. Elle s'apprête à plonger dans JavaScript pour rendre la page vivante. C'est le moment où la « page » devient une « app ».
+</Scenario>
+
+<Scenario parcours="B" episode="0">
+**Hugo** a fini la vitrine de Studio Pulse. Le planning est joli, mais c'est juste de l'image. Inès lui demande : « comment les élèves réservent ? ». Il lui faut JavaScript pour rendre les créneaux cliquables et préparer le panier de réservation.
+</Scenario>
+
+<Scenario parcours="C" episode="0">
+**Sami** a son catalogue de 200 produits affiché. Mais le filtre par allergène, la recherche tapante, le panier qui se met à jour — rien n'existe encore. Il ouvre son éditeur JS pour tout faire vivre.
+</Scenario>
+
+<Scenario parcours="D" episode="0">
+**Léa** a publié la maquette HTML/CSS de CoupDeMain. Belle. Statique. Inutile en l'état : pas de feed live, pas de filtre, pas de chat. Elle attaque JavaScript pour donner une âme à l'app.
+</Scenario>
+
+<Scenario parcours="E" episode="0">
+**Yanis** a la page de connexion + le squelette du board kanban. Mais ses tâches ne se déplacent pas, ne se créent pas, ne se filtrent pas. Il faut JavaScript pour tout cela — même si il sait déjà qu'il refera tout en React après.
+</Scenario>
+
+Bascule entre les onglets ci-dessus pour voir comment l'épisode change selon le parcours.
+
+> 💡 Tu n'es **pas obligé** de choisir un parcours. Si tu n'en choisis pas, c'est **Marie** qui s'affiche par défaut. Tu lis pareil, juste avec son histoire.
+
+> 📁 **Découvre les 5 parcours** sur la page [/fil-rouge/](/fil-rouge/). Tu y trouveras le détail de chaque personnage, son projet, sa stack, et le tableau de couverture par axe.
+
+## 3. Le glossaire intégré
+
+Dans le texte, certains termes techniques sont <Term>soulignés</Term> comme ça. Survole-les avec ta souris : une définition courte apparaît. Clique-les : tu atterris sur la page glossaire à l'entrée correspondante.
+
+Exemple : *« Une <Term>closure</Term> en JavaScript est une fonction qui se souvient de son contexte »* → survole pour la définition, clique pour le détail dans `/glossaire/`.
+
+> 🔗 [Page glossaire complète](/glossaire/) — ~ 80 termes triés alphabétiquement. Tu peux la consulter à tout moment.
+
+## 4. Les autres conventions du guide
+
+### 🎯 Objectif au début
+
+Chaque sous-section commence par une phrase « Objectif » qui dit en clair ce que tu sauras faire après l'avoir lue. Si l'objectif ne te parle pas → tu peux passer.
+
+### ✅ ObjectiveList
+
+Liste détaillée des compétences acquises à la fin de la section. À cocher mentalement à la fin pour savoir si tu maîtrises.
+
+### 💡 Aside
+
+Encadrés de plusieurs couleurs :
+
+<Aside type="note" title="Note">À retenir, mais pas critique.</Aside>
+<Aside type="tip" title="Astuce">Un truc pratique qui fait gagner du temps.</Aside>
+<Aside type="caution" title="Attention">Un piège classique à éviter.</Aside>
+<Aside type="danger" title="Danger">Erreur grave qui peut tout casser.</Aside>
+
+### 🧪 Quiz
+
+À la fin de chaque sous-section, des quiz d'auto-évaluation. **Réponds avant de regarder l'explication** — c'est là que tu détectes si tu as vraiment compris.
+
+### 🛠 Exercice
+
+Les axes ont des exercices avec un dossier `canevas/` (squelette à compléter) et `correction/` (solution complète). Le code est dans le dossier `exercises/` du repo.
+
+## 5. Si tu es vraiment perdu
+
+- Tu ne comprends pas un mot ? → [Glossaire](/glossaire/) ou survole-le.
+- Tu ne te souviens plus de ton parcours fil rouge ? → [/fil-rouge/](/fil-rouge/).
+- Tu ne sais pas par où commencer ? → [Préambule](/00-preambule/) puis [Axe 1](/01-fondations/).
+- Tu sais déjà coder ? → Saute à l'axe qui te manque, le guide est modulaire après l'axe 4.
+
+Bonne lecture 🌱

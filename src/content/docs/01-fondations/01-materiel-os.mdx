@@ -1,0 +1,271 @@
+---
+title: 1.1 — Matériel et système d'exploitation
+description: Comprendre ce qu'il y a sous le capot avant d'écrire du code — CPU, RAM, disque, OS, processus, threads.
+sidebar:
+  order: 1
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif de la sous-section** : avoir un modèle mental clair de ce qui se passe quand un programme tourne — où sont les données, qui les déplace, qui décide ce qui s'exécute.
+
+<ObjectiveList items={[
+  "Distinguer CPU, RAM, stockage et leurs ordres de grandeur",
+  "Expliquer ce qu'est un système d'exploitation et à quoi il sert",
+  "Différencier processus, thread et tâche asynchrone",
+  "Choisir entre Windows, macOS et Linux pour développer",
+  "Comprendre WSL2 et savoir pourquoi/comment l'utiliser sous Windows"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="aucun" />
+
+
+## L'ordinateur, vu de haut
+
+Un ordinateur, c'est essentiellement quatre choses qui collaborent :
+
+<Diagram
+  caption="Architecture simplifiée d'un ordinateur"
+  code={`
+    flowchart LR
+      CPU[CPU<br/>cerveau, calcule] <-->|bus mémoire<br/>très rapide| RAM[RAM<br/>mémoire vive<br/>volatile]
+      CPU <-->|bus I/O<br/>plus lent| Disk[Disque<br/>SSD ou HDD<br/>persistant]
+      CPU <-->|réseau| Net[Carte réseau]
+      User[Clavier · Souris · Écran] <--> CPU
+  `}
+/>
+
+### Le CPU (processeur)
+
+C'est le **cerveau qui exécute les instructions**. Il fait essentiellement trois choses, des milliards de fois par seconde :
+
+1. Lire une instruction depuis la RAM
+2. L'exécuter (additionner, comparer, copier...)
+3. Passer à l'instruction suivante
+
+Un CPU moderne a plusieurs **cœurs** (4, 8, 16…) qui peuvent travailler en parallèle. Chaque cœur a ses propres petits caches (L1, L2) ultra-rapides, et partage un cache plus gros (L3) avec les autres.
+
+### La RAM (mémoire vive)
+
+C'est l'**espace de travail temporaire** du CPU. Quand tu lances un programme, il est chargé depuis le disque vers la RAM, puis le CPU travaille dessus.
+
+**Caractéristiques clés** :
+- **Volatile** : tout disparaît quand on coupe le courant.
+- **Rapide** : ~10–100 ns par accès.
+- **Limitée** : 8, 16, 32 Go typiquement sur un PC.
+
+### Le stockage
+
+**Persistant** : les données survivent à un arrêt. Deux familles :
+
+| Type | Vitesse | Capacité courante | Note |
+|------|---------|-------------------|------|
+| HDD (disque dur mécanique) | ~5–10 ms | 1–8 To | Pièces en mouvement, lent |
+| SSD (NVMe surtout) | ~0.05–0.5 ms | 0.5–4 To | Mémoire flash, ~100× plus rapide qu'un HDD |
+
+### Ordres de grandeur à mémoriser
+
+C'est plus marquant en convertissant le temps d'accès CPU en « unités humaines » :
+
+| Opération | Temps réel | Échelle humaine (×10⁹) |
+|-----------|-----------|------------------------|
+| Cycle CPU | 0.3 ns | 1 seconde |
+| Lecture cache L1 | 1 ns | 3 secondes |
+| Lecture cache L2 | 4 ns | 12 secondes |
+| Lecture RAM | 100 ns | 5 minutes |
+| Lecture SSD | 100 µs | 4 jours |
+| Lecture HDD | 10 ms | 12 mois |
+| Aller-retour réseau (datacenter) | 500 µs | 17 jours |
+| Aller-retour Internet (intercontinental) | 150 ms | 15 ans |
+
+**Conséquence pratique** : éviter les allers-retours réseau dans une boucle, garder les données chaudes en RAM, et ne pas confondre « rapide pour un humain » et « rapide pour un CPU ».
+
+## Le système d'exploitation
+
+Un OS (Linux, macOS, Windows…) est un **chef d'orchestre** entre tes programmes et le matériel. Sans lui, chaque programme devrait gérer lui-même la mémoire, les fichiers, la carte réseau, l'écran…
+
+Il fournit cinq grands services :
+
+<Diagram
+  caption="Les 5 grandes responsabilités d'un OS"
+  code={`
+    mindmap
+      root((OS))
+        Processus
+          Ordonnancement
+          Création / fin
+          Communication
+        Mémoire
+          Allocation
+          Mémoire virtuelle
+          Protection
+        Fichiers
+          Système de fichiers
+          Permissions
+          Cache disque
+        Périphériques
+          Pilotes
+          Réseau
+          USB / GPU
+        Sécurité
+          Utilisateurs
+          Permissions
+          Isolation
+  `}
+/>
+
+### Processus, threads, asynchrone
+
+Trois mots qui se confondent souvent.
+
+**Processus** : un programme en cours d'exécution. Il a sa propre mémoire, ses propres fichiers ouverts. Lancer Chrome 3 fois = 3 processus, isolés les uns des autres.
+
+**Thread** (fil d'exécution) : un « sous-processus » à l'intérieur d'un processus. Tous les threads d'un même processus **partagent la même mémoire**. C'est plus léger à créer mais plus dangereux (deux threads qui modifient la même variable = bugs subtils).
+
+**Asynchrone (event loop)** : un seul thread qui ne bloque pas. Quand il attend une réponse réseau, il s'occupe d'autre chose entre temps. C'est le modèle de Node.js, du navigateur, de Python `asyncio`.
+
+<Diagram
+  caption="Trois façons de gérer plusieurs choses en parallèle"
+  code={`
+    flowchart TB
+      subgraph Multi-Processus
+        P1[Processus 1<br/>mémoire isolée]
+        P2[Processus 2<br/>mémoire isolée]
+      end
+      subgraph Multi-Threads
+        T1[Thread 1] --- M[Mémoire partagée]
+        T2[Thread 2] --- M
+        T3[Thread 3] --- M
+      end
+      subgraph Asynchrone
+        EL[Event loop<br/>1 seul thread]
+        EL -->|à faire 1| Q1[Tâche A]
+        EL -->|à faire 2| Q2[Tâche B en attente I/O]
+        EL -->|à faire 3| Q3[Tâche C]
+      end
+  `}
+/>
+
+<Aside type="tip" title="Quand utiliser quoi ?">
+- **Multi-processus** : isolation forte, robustesse (crash d'un processus = les autres survivent). Exemple : un serveur web qui *fork* un worker par requête.
+- **Multi-threads** : calcul parallèle CPU-intensif partageant des données. Exemple : un encodeur vidéo.
+- **Asynchrone** : beaucoup de tâches I/O-bound (attente réseau, disque). Exemple : une API web.
+</Aside>
+
+### Mémoire virtuelle
+
+Chaque processus croit avoir toute la RAM pour lui. C'est un mensonge utile : l'OS lui présente un **espace d'adresses virtuel** qu'il traduit vers la mémoire physique réelle. Si la RAM est pleine, l'OS peut écrire des morceaux moins utilisés sur le disque (fichier d'échange / swap) — d'où les ralentissements quand on ouvre trop d'onglets.
+
+## Choisir son OS pour développer
+
+| OS | Forces | Faiblesses |
+|----|--------|------------|
+| **Linux** (Ubuntu, Fedora, Arch…) | Identique au serveur de prod, gratuit, terminal natif, gestionnaire de paquets | Courbe d'apprentissage, moins de logiciels grand public |
+| **macOS** | Unix-compatible (terminal proche de Linux), bien intégré, écosystème Apple | Cher, certaines apps proprio uniquement Mac |
+| **Windows** | Marché grand public, gaming, compatibilité .NET, **WSL2** | Terminal historiquement faible (résolu par WSL2/PowerShell moderne) |
+
+### WSL2 — la solution sous Windows
+
+**Windows Subsystem for Linux v2** = une vraie distribution Linux qui tourne dans une mini-VM optimisée, intégrée à Windows. Tu obtiens un terminal Ubuntu (ou autre) **avec accès aux fichiers Windows et Linux**.
+
+**Pourquoi c'est crucial** : la plupart des outils dev (Node, Python, Docker, bash) fonctionnent mieux ou exclusivement sous Linux. WSL2 te donne le meilleur des deux mondes sans dual-boot.
+
+**Installation rapide** (PowerShell admin) :
+
+```powershell
+wsl --install
+# redémarre, puis dans le menu Démarrer : Ubuntu
+```
+
+Une fois dans Ubuntu :
+
+```bash
+sudo apt update && sudo apt upgrade -y
+# puis installer Node, Git, etc.
+```
+
+<Aside type="caution" title="Piège classique">
+**Travaille toujours dans le système de fichiers Linux** (`~/projets/`), **pas dans `/mnt/c/Users/...`** : les accès cross-OS sont 10× plus lents et cassent les watchers (hot-reload).
+</Aside>
+
+## Le pont entre matériel et code
+
+Quand tu écris :
+
+```js
+const data = JSON.parse(input);
+console.log(data.name);
+```
+
+Voici (en très simplifié) ce qui se passe :
+
+<Diagram
+  caption="Du code source à l'exécution"
+  code={`
+    flowchart TD
+      Code[Code source<br/>.js, .py, .php] --> Lex[Lexer<br/>tokens]
+      Lex --> Parse[Parser<br/>AST]
+      Parse --> Run{Mode}
+      Run -->|interprété| VM[Machine virtuelle<br/>V8, CPython, PHP]
+      Run -->|compilé| Bin[Code machine]
+      VM --> CPU[Instructions CPU]
+      Bin --> CPU
+      CPU --> Mem[Lit / écrit RAM]
+      Mem --> OS[OS gère permissions,<br/>fichiers, réseau]
+  `}
+/>
+
+Tu n'as pas besoin de tout connaître à ce niveau, mais retiens : **ton code finit toujours en instructions CPU qui manipulent la RAM, sous le contrôle de l'OS**.
+
+## Auto-évaluation
+
+<Quiz
+  question="Une variable JavaScript que tu déclares dans une fonction se trouve où, physiquement ?"
+  options={[
+    'Sur le disque dur',
+    'Dans la RAM, dans l\'espace mémoire du processus Node ou du navigateur',
+    'Dans le cache CPU L1 en permanence',
+    'Dans le réseau'
+  ]}
+  answerIndex={1}
+  explanation="Les variables vivent en RAM dans l'espace alloué au processus. Le CPU les charge dans ses caches au moment de les utiliser, mais leur résidence principale est la RAM."
+/>
+
+<Quiz
+  question="Pourquoi un site web qui fait 50 requêtes API en série est-il lent ?"
+  options={[
+    'Parce que le CPU est trop lent pour parser le JSON',
+    'Parce que la RAM est saturée par 50 requêtes',
+    'Parce que chaque aller-retour réseau prend 50–200 ms et 50 × 100 ms = 5 secondes minimum',
+    'Parce que JavaScript est mono-thread'
+  ]}
+  answerIndex={2}
+  explanation="Un round-trip Internet est dans les 50–200 ms. C'est l'éternité à l'échelle CPU. La solution : paralléliser (Promise.all) ou regrouper les requêtes côté serveur."
+/>
+
+<Quiz
+  question="Tu lances Node.js. Combien de processus et de threads par défaut ?"
+  options={[
+    '1 processus, 1 thread',
+    '1 processus, plusieurs threads (event loop + pool I/O)',
+    'Plusieurs processus, 1 thread chacun',
+    'Aucun, Node tourne dans le navigateur'
+  ]}
+  answerIndex={1}
+  explanation="Node lance 1 processus avec 1 thread principal (l'event loop) plus un pool de threads (libuv) pour les I/O bloquantes. C'est pour ça qu'on dit Node est « single-threaded » côté JS, mais multi-threadé en interne."
+/>
+
+## Pour aller plus loin
+
+- *MIT Missing Semester* — Lecture 1 : *Course overview + the shell*.
+- *Jeff Dean — Numbers Everyone Should Know* (le tableau d'ordres de grandeur en plus complet).
+- *How a CPU Works in 100 Seconds* — Fireship (vidéo).
+- Vidéo *Operating Systems: Crash Course Computer Science #18*.
+
+---
+
+**Suite** : [1.2 — Ligne de commande](/01-fondations/02-ligne-de-commande/) pour mettre les mains dans le terminal.

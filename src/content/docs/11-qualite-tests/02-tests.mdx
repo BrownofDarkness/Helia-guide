@@ -1,0 +1,590 @@
+---
+title: 11.2 — Tests
+description: Pyramide de tests, TDD/BDD, Vitest, Pest, Playwright — tester pour aller plus vite, pas plus lentement.
+sidebar:
+  order: 2
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="17">
+Marie a refactoré le calcul du panier — TVA, remises, livraison. Sans tests, elle ne sait pas si elle a cassé un cas (« commande à 15,40 € avec remise fidélité ? »). Avec Vitest sur sa fonction `computeTotal()`, elle valide les 8 cas critiques en 3 secondes et dort tranquille.
+</Scenario>
+
+<Scenario parcours="B" episode="16">
+Hugo refactore la logique de réservation. Tests d'intégration avec Testcontainers (Postgres réel) : il vérifie que **deux clients ne peuvent pas réserver la dernière place en même temps**. Sans ce test, l'overbooking serait revenu.
+</Scenario>
+
+<Scenario parcours="C" episode="17">
+Sami a une suite Vitest sur ses calculs de bilan carbone, Playwright sur le tunnel de checkout. Cible : tests unitaires < 5 sec, tests e2e < 2 min. La CI bloque la PR si la couverture des fichiers métier descend sous 80 %.
+</Scenario>
+
+<Scenario parcours="D" episode="17">
+Léa teste son moteur de filtre du feed (catégorie, distance, date) avec Vitest. Pour la modération IA, elle a un golden set de 30 messages avec verdict attendu — les régressions sont détectées immédiatement.
+</Scenario>
+
+<Scenario parcours="E" episode="17">
+Yanis teste Tasky : Vitest sur la logique RBAC (« un bénévole peut-il assigner une tâche au président ? »), Playwright sur le drag & drop kanban (clavier + souris). CI GitHub Actions bloque en cas de régression.
+</Scenario>
+
+> 🎯 **Objectif** : tester ce qui compte, sans transformer ta CI en marathon. La promesse — tu refactors en confiance, tu déploies sans angoisse.
+
+<ObjectiveList items={[
+  "Comprendre la pyramide de tests et ses anti-patterns (cône de glace)",
+  "Écrire des tests unitaires Vitest, Pest ou pytest",
+  "Mocker proprement, ou éviter les mocks quand c'est mieux",
+  "Tester une API avec Testcontainers ou DB en mémoire",
+  "Écrire des tests E2E avec Playwright sur les parcours critiques",
+  "Mesurer la couverture sans en faire une fin en soi"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 5-10 lus" />
+
+
+## Pourquoi tester ?
+
+3 bénéfices concrets :
+
+1. **Refactor sans peur** — tu changes 200 lignes, les tests confirment que tu n'as rien cassé.
+2. **Doc vivante** — un test bien nommé est un exemple d'usage à jour.
+3. **Design feedback** — du code dur à tester est souvent du code mal architecturé.
+
+Les tests ne sont **pas** une assurance contre tous les bugs. Ils sont un **filet** qui rattrape les régressions évidentes.
+
+## La pyramide de tests
+
+<Diagram
+  caption="Pyramide saine — beaucoup d'unitaires, moins d'intégration, peu d'E2E"
+  code={`
+    flowchart TD
+      E2E[E2E<br/>~5%<br/>Playwright/Cypress<br/>parcours critiques]
+      Int[Intégration<br/>~15-20%<br/>API + DB éphémère]
+      Unit[Unitaires<br/>~75-80%<br/>Vitest, Pest, pytest]
+      Unit --> Int --> E2E
+  `}
+/>
+
+### Pourquoi cette répartition
+
+| | Unitaires | Intégration | E2E |
+|---|-----------|-------------|-----|
+| Vitesse | < 1 ms | 50-500 ms | 1-10 s |
+| Coût d'écriture | Faible | Moyen | Élevé |
+| Coût de maintenance | Faible | Moyen | **Très élevé** |
+| Couvre quoi | Logique pure | Modules + DB | Parcours utilisateur |
+| Quand échoue | Bug logique | Bug d'intégration | Bug bout-en-bout |
+
+### L'anti-pattern : le cône de glace
+
+<Diagram
+  caption="Cône de glace — anti-pattern qui rend la CI insupportable"
+  code={`
+    flowchart TD
+      E2E[E2E<br/>50%<br/>SLOW]
+      Int[Intégration<br/>30%]
+      Unit[Unitaires<br/>20%]
+      Unit --> Int --> E2E
+  `}
+/>
+
+Beaucoup d'équipes y arrivent par dérive : "on teste partout en E2E parce que c'est plus rassurant". Résultat :
+
+- CI **30 min** au lieu de 3 min.
+- Tests **flaky** (qui échouent au hasard à cause de timeouts).
+- **Personne** ne lance les tests en local.
+
+## Tests unitaires — Vitest
+
+```bash
+npm install -D vitest @vitest/coverage-v8
+```
+
+```ts
+// tests/calculator.test.ts
+import { describe, it, expect } from 'vitest';
+import { add, divide } from '../src/calculator';
+
+describe('add', () => {
+  it('additionne deux entiers positifs', () => {
+    expect(add(2, 3)).toBe(5);
+  });
+
+  it('additionne avec zéro', () => {
+    expect(add(5, 0)).toBe(5);
+  });
+
+  it('additionne deux négatifs', () => {
+    expect(add(-1, -2)).toBe(-3);
+  });
+});
+
+describe('divide', () => {
+  it('lève une erreur si on divise par zéro', () => {
+    expect(() => divide(10, 0)).toThrow('Cannot divide by zero');
+  });
+});
+```
+
+```bash
+npx vitest run                   # une fois
+npx vitest                        # mode watch
+npx vitest --coverage             # avec couverture
+```
+
+### AAA — Arrange, Act, Assert
+
+```ts
+it('applique le discount sur le total', () => {
+  // Arrange
+  const items = [{ price: 100 }, { price: 50 }];
+  const code = 'SUMMER10';
+
+  // Act
+  const total = computeTotal(items, code);
+
+  // Assert
+  expect(total).toBe(135);   // 150 * 0.9
+});
+```
+
+Lisibilité maximale. Si une étape devient trop longue, c'est souvent qu'il faut **extraire** une helper ou **simplifier** l'API.
+
+### Tester un module qui dépend d'autres modules
+
+```ts
+// src/order.service.ts
+export class OrderService {
+  constructor(private db: OrderRepo, private mailer: Mailer) {}
+
+  async place(order: Order) {
+    const saved = await this.db.save(order);
+    await this.mailer.send('order-placed', saved);
+    return saved;
+  }
+}
+```
+
+```ts
+// Test
+import { describe, it, expect, vi } from 'vitest';
+import { OrderService } from '../src/order.service';
+
+it('appelle le mailer après avoir sauvegardé', async () => {
+  const fakeDb = { save: vi.fn().mockResolvedValue({ id: 1 }) };
+  const fakeMailer = { send: vi.fn() };
+
+  const service = new OrderService(fakeDb, fakeMailer);
+  await service.place({ amount: 100 });
+
+  expect(fakeDb.save).toHaveBeenCalledOnce();
+  expect(fakeMailer.send).toHaveBeenCalledWith('order-placed', { id: 1 });
+});
+```
+
+`vi.fn()` crée un mock dont tu peux vérifier les appels.
+
+## Mocks — utiliser avec parcimonie
+
+<Aside type="caution" title="Le mock excessif est un code smell">
+Si ton test mock 10 dépendances, c'est souvent que ton code a 10 dépendances → trop couplé. Pareil si tu testes que des `expect(mock).toHaveBeenCalled()` sans vérifier de vrais comportements.
+
+Préfère : **tests d'intégration** (avec vraie DB éphémère) qui exercent le vrai flow. Mocks pour les **bordures externes** uniquement (HTTP tiers, mailer, payment).
+</Aside>
+
+## MSW — mocker les appels HTTP au niveau réseau
+
+[**Mock Service Worker**](https://mswjs.io/) est devenu le **standard 2024+** pour tester un front qui consomme une API. Au lieu de mocker `fetch` à coups de `vi.mock()`, MSW intercepte les requêtes au niveau **Service Worker** (en navigateur) ou **request handler** (en Node) et renvoie tes réponses fixées.
+
+**Pourquoi c'est mieux que `vi.mock('axios')`** :
+
+| Approche | Problème | MSW |
+|----------|----------|-----|
+| `vi.mock('axios')` | Tu testes ton wrapper, pas le vrai chemin réseau | Tu testes le code **identique** à la prod |
+| `vi.spyOn(global, 'fetch')` | Boilerplate par test, fragile | Handlers déclarés une fois, réutilisables |
+| Tests E2E avec vraie API | Lents, instables | MSW reste rapide (millisecondes) |
+
+### Setup minimal (Vitest + jsdom)
+
+```ts
+// tests/mocks/handlers.ts
+import { http, HttpResponse } from 'msw';
+
+export const handlers = [
+  http.get('/api/users/:id', ({ params }) => {
+    return HttpResponse.json({
+      id: params.id,
+      name: 'Alice',
+      email: 'alice@example.com',
+    });
+  }),
+
+  http.post('/api/users', async ({ request }) => {
+    const body = await request.json();
+    return HttpResponse.json({ id: '42', ...body }, { status: 201 });
+  }),
+
+  http.get('/api/error', () => HttpResponse.error()),  // simule une erreur réseau
+];
+```
+
+```ts
+// tests/setup.ts
+import { setupServer } from 'msw/node';
+import { handlers } from './mocks/handlers';
+
+export const server = setupServer(...handlers);
+
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+```
+
+```ts
+// vitest.config.ts
+export default defineConfig({
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./tests/setup.ts'],
+  },
+});
+```
+
+### Override par test pour les cas spéciaux
+
+```ts
+import { http, HttpResponse } from 'msw';
+import { server } from './setup';
+
+it("affiche l'état d'erreur quand l'API retourne 500", async () => {
+  server.use(
+    http.get('/api/users/:id', () => {
+      return new HttpResponse(null, { status: 500 });
+    })
+  );
+
+  render(<UserCard id="42" />);
+  expect(await screen.findByText(/erreur/i)).toBeInTheDocument();
+});
+```
+
+`server.use()` ajoute un handler qui **prend le pas** sur celui par défaut, le temps du test. `resetHandlers()` après chaque test remet à zéro.
+
+### Bonus : MSW marche aussi en dev navigateur
+
+```ts
+// src/mocks/browser.ts
+import { setupWorker } from 'msw/browser';
+import { handlers } from './handlers';
+
+export const worker = setupWorker(...handlers);
+
+if (import.meta.env.DEV) await worker.start();
+```
+
+Tu lances ton front sans backend → MSW intercepte les fetch et renvoie tes mocks. Idéal pour développer une feature avant que l'API correspondante existe.
+
+<Aside type="tip" title="Quand utiliser MSW vs Testcontainers ?">
+- **MSW** : tester ton **front** isolé d'une vraie API (composant qui fait `fetch`).
+- **Testcontainers** : tester ton **back** avec vraie DB Postgres en CI.
+
+Les deux sont complémentaires, pas concurrents.
+</Aside>
+
+## Snapshot testing — figer un output complexe
+
+Quand tu testes un objet/string/composant qui a beaucoup de champs, écrire 30 `expect(x.foo).toBe(...)` est pénible. **Snapshot testing** capture l'output entier, le compare au prochain run.
+
+```ts
+import { expect, it } from 'vitest';
+import { renderToString } from 'react-dom/server';
+import { Button } from './Button';
+
+it('Button rendu HTML stable', () => {
+  const html = renderToString(<Button label="Click" />);
+  expect(html).toMatchInlineSnapshot();
+  // Au 1er run, Vitest insère le snapshot dans le test :
+  // expect(html).toMatchInlineSnapshot(`"<button class=\\"btn\\">Click</button>"`);
+  // Aux runs suivants, il compare l'output actuel à ce snapshot.
+});
+```
+
+### Inline vs fichier séparé
+
+```ts
+expect(value).toMatchSnapshot();           // → fichier `.snap` séparé (gros snapshots)
+expect(value).toMatchInlineSnapshot();     // → inscrit dans le test (petits snapshots)
+```
+
+### Quand c'est utile / quand c'est dangereux
+
+| ✅ Bon usage | ❌ Mauvais usage |
+|-------------|-------------------|
+| Output SQL compilé par un ORM (vérifier que tu produis la bonne query) | Composant React entier (snapshot vide de sens, casse à chaque refacto CSS) |
+| Sortie d'un parser, AST, IR | Réponse API instable (timestamps, IDs) |
+| Format de fichier généré (Markdown, YAML) | Output qui dépend de la locale système |
+
+**Anti-pattern** : commit aveuglément un nouveau snapshot quand le test casse (« vert = OK »). Tu perds toute la valeur — relire et **comprendre pourquoi** le diff est apparu avant de mettre à jour.
+
+Pour les tests visuels (composants UI), préfère **Playwright `toHaveScreenshot()`** (visual regression testing) qui prend une vraie capture pixel — plus fiable que comparer du HTML.
+
+## Tests d'intégration — DB éphémère
+
+### Avec SQLite en mémoire (Node, Python, PHP)
+
+```ts
+beforeAll(() => {
+  process.env.DATABASE_URL = ':memory:';
+  // init schéma
+});
+
+it('crée et lit un user', async () => {
+  await db.user.create({ email: 'a@a.com' });
+  const user = await db.user.findByEmail('a@a.com');
+  expect(user).toBeDefined();
+});
+```
+
+### Avec Testcontainers — la vraie DB de prod
+
+[Testcontainers](https://testcontainers.com/) lance un **vrai PostgreSQL** dans un Docker temporaire pendant les tests.
+
+```ts
+import { PostgreSqlContainer } from '@testcontainers/postgresql';
+
+let container: StartedPostgreSqlContainer;
+
+beforeAll(async () => {
+  container = await new PostgreSqlContainer().start();
+  process.env.DATABASE_URL = container.getConnectionUri();
+  await runMigrations();
+}, 60_000);
+
+afterAll(async () => {
+  await container.stop();
+});
+```
+
+✅ Tu testes contre le **vrai** Postgres, avec ses fonctionnalités spécifiques (JSONB, full-text search, RLS).
+❌ ~10 s de cold start au démarrage de la suite.
+
+**Verdict 2026** : Testcontainers pour les tests vraiment importants (queries SQL complexes), in-memory SQLite pour les tests rapides du quotidien.
+
+## TDD — Test-Driven Development
+
+Le cycle **Red → Green → Refactor** :
+
+1. **Red** : écris un test qui échoue (la feature n'existe pas).
+2. **Green** : écris le **minimum** de code pour passer le test.
+3. **Refactor** : améliore le code en gardant les tests verts.
+
+### Quand TDD est utile
+
+- **Logique métier complexe** avec règles précises.
+- **Bug fixing** — écris un test qui reproduit le bug AVANT de fixer.
+- **API publique** — tu écris l'usage idéal, puis l'implémentation.
+
+### Quand TDD est pénible
+
+- **UI très visuelle** — préfère Storybook + tests E2E ciblés.
+- **Code exploratoire** — tu prototypes, tu écris les tests après si la feature reste.
+- **Code glue / config** — tester du JSON-mapping est fastidieux et low-value.
+
+**Pragmatique 2026** : TDD strict sur le **domaine**, tests post-écriture sur le reste.
+
+## BDD — Behavior-Driven Development
+
+Au lieu de tester du code, tu décris des **comportements** en pseudo-langage naturel :
+
+```gherkin
+Feature: Login
+
+Scenario: Connexion réussie
+  Given je suis sur la page de login
+  When je saisis "alice@example.com" et "password123"
+  And je clique sur "Se connecter"
+  Then je suis redirigé vers /dashboard
+  And je vois "Bonjour Alice"
+```
+
+**Outils** : Cucumber (multi-langages), Behat (PHP), pytest-bdd (Python).
+
+**Verdict 2026** : utile dans des contextes **métier complexes** où le PO / QA écrit les scénarios. Souvent over-kill pour des MVPs et SaaS classiques où Vitest + Playwright suffisent.
+
+## Tests E2E — Playwright
+
+[Playwright](https://playwright.dev/) (par Microsoft) est le standard 2026 pour les tests bout-en-bout.
+
+```bash
+npm install -D @playwright/test
+npx playwright install   # télécharge les navigateurs
+```
+
+```ts
+// tests/e2e/login.spec.ts
+import { test, expect } from '@playwright/test';
+
+test('login → dashboard', async ({ page }) => {
+  await page.goto('http://localhost:3000');
+  await page.click('text=Se connecter');
+  await page.fill('input[name="email"]', 'alice@example.com');
+  await page.fill('input[name="password"]', 'password123');
+  await page.click('button[type="submit"]');
+
+  await expect(page).toHaveURL('/dashboard');
+  await expect(page.locator('h1')).toContainText('Bonjour Alice');
+});
+```
+
+```bash
+npx playwright test
+npx playwright test --ui   # mode interactif
+```
+
+### Bonnes pratiques E2E
+
+- **Garde-les peu nombreux** : 5-10 tests pour les **parcours critiques** (login, paiement, signup).
+- **Test contre une DB de test** : pas de pollution, données prévisibles via fixtures.
+- **Selectors stables** : préfère `data-testid="..."` à des sélecteurs CSS qui changent au refacto.
+- **Pas de `await page.waitForTimeout(2000)`** : utilise les auto-waits Playwright (`expect(...)`).
+
+### Cypress vs Playwright
+
+[Cypress](https://www.cypress.io/) reste très utilisé. Différences :
+
+| | Cypress | Playwright |
+|---|---------|------------|
+| Multi-tab | ❌ | ✅ |
+| Multi-navigateur | Limited (Chrome-based) | Chromium, Firefox, WebKit |
+| Vitesse | Moyen | Très rapide |
+| DX | Excellente UI | UI moderne aussi |
+| Mobile emulation | Limitée | Native |
+
+**Verdict 2026** : **Playwright** pour les nouveaux projets. Cypress reste valide si l'équipe est habituée.
+
+## Tests selon le langage
+
+### Node.js / TypeScript
+
+| Outil | Usage |
+|-------|-------|
+| **Vitest** | Standard 2026 — rapide, ESM-first, compatible Jest |
+| Jest | Encore très répandu mais moins rapide |
+| Node.js test runner | `node --test` natif depuis Node 20 |
+| Supertest | Tests d'intégration HTTP |
+| Testing Library | Tests composants React/Vue/Svelte |
+| Playwright | E2E |
+
+### Python
+
+| Outil | Usage |
+|-------|-------|
+| **pytest** | Standard absolu |
+| pytest-asyncio | Tests async |
+| httpx async | Tests d'API FastAPI |
+| Testcontainers Python | DB éphémères |
+
+### PHP
+
+| Outil | Usage |
+|-------|-------|
+| **Pest** | DSL moderne, lisible |
+| PHPUnit | Standard historique |
+| Laravel : `RefreshDatabase` | DB en mémoire SQLite par test |
+
+## Couverture — utile mais piège
+
+```bash
+npx vitest run --coverage
+# génère un rapport HTML détaillé
+```
+
+### Ce que la couverture mesure
+
+- **Lignes** exécutées au moins une fois.
+- **Branches** explorées (if/else, switch).
+- **Fonctions** appelées.
+
+### Ce qu'elle ne mesure PAS
+
+- **Si les assertions sont pertinentes** (un test sans `expect` peut passer la ligne sans rien vérifier).
+- **Les cas limites** non testés.
+- **La logique métier correcte**.
+
+### Cible raisonnable
+
+| Type de code | Couverture cible |
+|--------------|------------------|
+| Domaine métier | **80-95 %** (souvent atteignable) |
+| Couche infra (DB, HTTP) | 60-80 % |
+| UI / composants | 50-70 % (préférer Storybook + E2E) |
+| Glue / config | inutile de viser haut |
+
+**Globalement 70-80 %** est sain. Au-delà, le ROI décroît vite.
+
+<Aside type="tip" title="Couverture significative > couverture brute">
+Un test qui s'exécute sans assertions :
+```ts
+it('handles edge cases', () => {
+  myFunction();   // pas de expect ! 100 % de couverture, 0 % de valeur
+});
+```
+Toujours **un `expect` par cas**. Ou utilise `expect.assertions(N)` pour forcer au moins N assertions.
+</Aside>
+
+## Auto-évaluation
+
+<Quiz
+  question='Tu as 50 tests E2E Playwright et 5 tests unitaires Vitest. CI = 25 minutes. Avis ?'
+  options={[
+    'Excellent, beaucoup de tests',
+    'Cône de glace inversé. Refactor : monter la couverture unitaire (~75-80 %), garder ~5-10 E2E pour les parcours critiques. CI passera de 25 min à 3-5 min',
+    'Augmenter à 100 E2E',
+    'Désactiver les tests unitaires'
+  ]}
+  answerIndex={1}
+  explanation="C'est le piège classique. Les E2E sont précieux mais coûteux : lents, flaky, coûteux à maintenir. La pyramide saine = 75 % unitaires (rapides), 15-20 % intégration (DB), 5-10 % E2E (parcours critiques). Une CI rapide est utilisée ; une CI lente est ignorée."
+/>
+
+<Quiz
+  question='Ton test unitaire mock 8 dépendances pour tester une fonction. Smell ?'
+  options={[
+    'Excellent isolation',
+    'Couplage trop élevé du code testé. Soit le code est mal architecturé (à refactorer), soit ce test devrait être un test d\'INTÉGRATION (vraie DB éphémère) qui exerce le flow réel sans mocks',
+    'Trop de dépendances dans le code',
+    'Ajouter encore plus de mocks'
+  ]}
+  answerIndex={1}
+  explanation="Mocker beaucoup = code couplé. Solutions : (1) refactor pour réduire les dépendances, (2) ou écrire un test d'intégration qui utilise les vrais composants + DB éphémère/Testcontainers. Les tests qui n'assertent que sur des mock.toHaveBeenCalled() ne valident souvent rien d'utile."
+/>
+
+<Quiz
+  question='Tu vises 100 % de couverture. Conséquence pratique ?'
+  options={[
+    'Code de qualité maximale',
+    'Tu testes du code trivial (getters, JSON-mapping), tu écris des tests sans assertions pertinentes pour atteindre la métrique. Vise plutôt 70-80 % SIGNIFICATIF — la qualité prime sur le pourcentage',
+    'CI plus rapide',
+    'C\'est obligatoire en entreprise'
+  ]}
+  answerIndex={1}
+  explanation="100 % est un piège. Tu finis par tester des trucs sans valeur (getters, configs) et passer à côté des cas limites importants. Une couverture de 75 % avec assertions pertinentes vaut mieux qu'une couverture de 95 % avec des tests vides. Le ROI s'effondre passé 80 %."
+/>
+
+## Pour aller plus loin
+
+- *Vitest Docs* — [vitest.dev](https://vitest.dev/)
+- *Playwright Docs* — [playwright.dev](https://playwright.dev/)
+- *Pest PHP* — [pestphp.com](https://pestphp.com/)
+- *Testing JavaScript* — Kent C. Dodds (cours payant mais très bon)
+- *Working Effectively with Legacy Code* — Michael Feathers
+
+---
+
+**Suite** : [11.3 — Outils statiques](/11-qualite-tests/03-outils-statiques/) — ESLint, Prettier, TypeScript strict, PHPStan.

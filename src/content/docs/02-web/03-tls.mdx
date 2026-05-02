@@ -1,0 +1,284 @@
+---
+title: 2.3 — Sécurité du transport (TLS)
+description: HTTPS, certificats, Let's Encrypt, HSTS, mixed content — comprendre le cadenas vert.
+sidebar:
+  order: 3
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : comprendre ce qui se passe pendant le **TLS handshake**, ce qu'est un certificat, et comment configurer HTTPS proprement (HSTS, redirections, mixed content).
+
+<ObjectiveList items={[
+  "Expliquer ce qui se passe pendant un TLS handshake",
+  "Lire un certificat X.509 et identifier émetteur, sujet, validité",
+  "Mettre en place Let's Encrypt en 5 minutes avec Caddy ou Certbot",
+  "Configurer HSTS, redirection HTTP → HTTPS, mixed content",
+  "Comprendre les types de certificats (DV, OV, EV) et choisir"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 1 lu" />
+
+
+## Pourquoi HTTPS ?
+
+HTTP en clair signifie que **tout le monde sur le chemin** (Wi-Fi public, FAI, gouvernement) peut :
+
+1. **Lire** ton trafic (mots de passe, cookies, données).
+2. **Modifier** les pages reçues (injecter des pubs, du malware).
+3. **Usurper** l'identité de sites populaires.
+
+HTTPS = HTTP **encapsulé dans TLS**. Ça apporte :
+
+- **Confidentialité** (chiffrement) : personne ne peut lire.
+- **Intégrité** (HMAC) : personne ne peut modifier sans être détecté.
+- **Authentification** (certificat) : tu parles bien au vrai serveur.
+
+## TLS Handshake (la version simple)
+
+Avant d'envoyer la moindre requête HTTP, le client et le serveur négocient une connexion sécurisée.
+
+<Diagram
+  caption="TLS 1.3 handshake — 1 RTT seulement"
+  code={`
+    sequenceDiagram
+      participant C as Client
+      participant S as Serveur
+
+      C->>S: ClientHello<br/>(versions TLS supportées,<br/>cipher suites,<br/>clé publique éphémère)
+      S->>C: ServerHello + Certificat + Clé publique<br/>+ Finished
+      C->>C: Vérifie le certificat<br/>(chaîne, validité, nom)
+      C->>S: Finished<br/>(connexion établie)
+      Note over C,S: Données HTTP chiffrées circulent
+  `}
+/>
+
+**TLS 1.3** (2018) optimise tout :
+- 1 RTT seulement (TLS 1.2 en demandait 2)
+- Chiffres archaïques supprimés (RC4, 3DES, MD5…)
+- 0-RTT possible pour les reconnexions
+
+## Le certificat X.509
+
+Un certificat est un **fichier** signé par une autorité de certification (CA). Il dit :
+
+> « Moi, *Let's Encrypt*, je certifie que la clé publique ci-jointe appartient à `example.com`, et c'est valable jusqu'au 15 janvier 2026. »
+
+### Champs principaux
+
+```
+Subject:        CN=example.com, O=Example Corp
+Issuer:         CN=R3, O=Let's Encrypt
+Valid from:     2025-10-15
+Valid until:    2026-01-15
+Serial number:  04:5A:6B:...
+Public Key:     RSA 2048 bits
+Signature:      <signature de l'issuer>
+SAN:            example.com, www.example.com, api.example.com
+```
+
+**SAN** (Subject Alternative Names) liste tous les noms couverts par le certificat. C'est ainsi qu'un seul cert protège plusieurs sous-domaines.
+
+### Inspecter un certificat
+
+```bash
+# Avec OpenSSL
+openssl s_client -connect example.com:443 -servername example.com < /dev/null \
+  | openssl x509 -text -noout
+
+# Plus simple
+echo | openssl s_client -showcerts -connect example.com:443
+```
+
+Dans le navigateur : **clic sur le cadenas → Certificat**.
+
+### La chaîne de certificats
+
+Un cert n'est pas signé directement par une racine de confiance. Il y a une chaîne :
+
+<Diagram
+  caption="Chaîne de certificats — 3 niveaux typiques"
+  code={`
+    flowchart TD
+      Root[Root CA<br/>ex. ISRG Root X1<br/>installée dans l'OS/navigateur]
+      Inter[Certificat intermédiaire<br/>ex. Let's Encrypt R3<br/>signé par la Root]
+      Leaf[Certificat du serveur<br/>example.com<br/>signé par l'intermédiaire]
+      Root --> Inter --> Leaf
+  `}
+/>
+
+Le serveur **doit envoyer la chaîne** (sauf la racine, déjà connue du client). Une chaîne incomplète = warning navigateur.
+
+### Types de validation
+
+| Type | Validation | Coût | Cas |
+|------|-----------|------|-----|
+| **DV** (Domain Validated) | « Tu contrôles le domaine » (challenge HTTP/DNS) | Gratuit (Let's Encrypt) | 95 % des cas |
+| **OV** (Organization Validated) | DV + vérification de l'organisation | ~100 €/an | Sites pro qui veulent montrer le nom |
+| **EV** (Extended Validation) | OV + vérification approfondie | ~300 €/an | Banques (mais l'effet visuel a quasi disparu en 2020+) |
+
+**Pour 99 % des cas en 2026 : utilise Let's Encrypt (DV, gratuit, automatisé).**
+
+## Mettre en place HTTPS — 3 options
+
+### Option 1 — Caddy (le plus simple)
+
+Caddy obtient et renouvelle Let's Encrypt **automatiquement**.
+
+```caddy
+# Caddyfile
+example.com {
+  reverse_proxy localhost:3000
+}
+```
+
+```bash
+caddy run
+```
+
+C'est tout. HTTPS, redirection HTTP→HTTPS, renouvellement, HTTP/3 — gratuit.
+
+### Option 2 — Nginx + Certbot
+
+```bash
+# Installer Certbot
+sudo apt install certbot python3-certbot-nginx
+
+# Obtenir un certificat
+sudo certbot --nginx -d example.com -d www.example.com
+```
+
+Certbot modifie ta config Nginx automatiquement et installe un cron de renouvellement.
+
+### Option 3 — PaaS (Vercel, Netlify, Render…)
+
+HTTPS automatique, rien à configurer. Tu pousses ton code, le service gère cert + renouvellement.
+
+## Configurer HTTPS proprement
+
+### Forcer la redirection HTTP → HTTPS
+
+```nginx
+# Nginx
+server {
+  listen 80;
+  server_name example.com;
+  return 301 https://$host$request_uri;
+}
+```
+
+### HSTS — HTTP Strict Transport Security
+
+Annonce au navigateur : « *Pour ce domaine, n'utilise QUE HTTPS pendant N secondes, même si l'utilisateur tape http://* ».
+
+```http
+Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+```
+
+| Directive | Effet |
+|-----------|-------|
+| `max-age=31536000` | 1 an |
+| `includeSubDomains` | Applique aux sous-domaines |
+| `preload` | Hardcoded dans Chrome/Firefox/etc. (soumets sur [hstspreload.org](https://hstspreload.org)) |
+
+<Aside type="caution" title="HSTS est engageant">
+Une fois envoyé, le navigateur le mémorise. Si tu casses HTTPS plus tard, tu perds tes utilisateurs jusqu'à expiration. Commence par `max-age=600` (10 min), monte à 1 an quand tu es sûr.
+</Aside>
+
+### Mixed content
+
+Une page **HTTPS** qui charge des ressources **HTTP** (images, scripts) :
+
+```html
+<!-- ❌ MAUVAIS : mixed content -->
+<img src="http://cdn.example.com/logo.png">
+
+<!-- ✅ BON -->
+<img src="https://cdn.example.com/logo.png">
+<!-- ou URL relative au protocole (vieux) -->
+<img src="//cdn.example.com/logo.png">
+```
+
+Le navigateur **bloque** les scripts/iframes mixed content (active mixed content), affiche un warning pour les images (passive mixed content).
+
+**Header pour tout migrer d'un coup** :
+
+```http
+Content-Security-Policy: upgrade-insecure-requests
+```
+
+Réécrit automatiquement les `http:` en `https:` dans la page.
+
+## Limites et pièges
+
+### Ce que TLS ne protège pas
+
+- **Le nom du domaine** (visible via SNI dans le ClientHello — voir ECH/Encrypted ClientHello en cours d'adoption).
+- **Les métadonnées** : taille des paquets, timing.
+- **La machine compromise** : un keylogger sur le client voit tout.
+
+### Le bouton « j'accepte le certificat invalide »
+
+**Toujours rouge**. Même en dev. Si tu travailles en HTTPS local, utilise **mkcert** :
+
+```bash
+brew install mkcert     # ou choco install mkcert
+mkcert -install
+mkcert localhost 127.0.0.1
+# génère localhost.pem + localhost-key.pem
+```
+
+Ton navigateur fait confiance, pas de warning.
+
+## Auto-évaluation
+
+<Quiz
+  question="Que protège TLS ?"
+  options={[
+    'Uniquement les mots de passe',
+    'La confidentialité, l\'intégrité et l\'authentification du serveur',
+    'Le serveur contre les attaques DDoS',
+    'L\'utilisateur contre le phishing'
+  ]}
+  answerIndex={1}
+  explanation="TLS chiffre (confidentialité), détecte la modification (intégrité), et prouve que tu parles au bon serveur (authentification via certificat). Il ne protège pas du phishing — un cert valide pour 'banking-secure.com' ne dit rien sur l'honnêteté du site."
+/>
+
+<Quiz
+  question="Tu vois le message 'Mixed Content blocked' dans la console. Que se passe-t-il ?"
+  options={[
+    'Une page HTTPS charge un script depuis HTTP — le navigateur a bloqué le script',
+    'Le certificat est expiré',
+    'Le DNS a échoué',
+    'CORS a refusé la requête'
+  ]}
+  answerIndex={0}
+  explanation="Mixed content actif (script, iframe) est bloqué pour empêcher un attaquant d'injecter du code via la connexion HTTP non sécurisée. Solution : tout passer en HTTPS, ou utiliser le header CSP upgrade-insecure-requests."
+/>
+
+<Quiz
+  question="Tu mets en place HSTS avec max-age=31536000. Tu réalises que ton renouvellement de certificat échoue. Qu'arrive-t-il aux visiteurs déjà venus ?"
+  options={[
+    'Rien, ils continuent à accéder au site en HTTP',
+    'Ils voient un avertissement qu\'ils peuvent contourner',
+    'Ils se voient bloqués sans possibilité de bypass tant que HSTS est actif (~1 an)',
+    'Ils se reconnectent automatiquement à un site de secours'
+  ]}
+  answerIndex={2}
+  explanation="HSTS verrouille l'usage de HTTPS dans le navigateur. Si HTTPS casse (cert expiré, mauvais cert), le navigateur refuse l'accès et il n'y a pas de bouton 'continuer quand même'. C'est puissant, mais engageant — d'où l'importance de tester avec un max-age court d'abord."
+/>
+
+## Pour aller plus loin
+
+- *Bulletproof SSL/TLS and PKI* — Ivan Ristić (la bible)
+- *SSL Labs Server Test* — [ssllabs.com/ssltest](https://www.ssllabs.com/ssltest/) — note ta config
+- *Let's Encrypt — Getting Started* : [letsencrypt.org/getting-started](https://letsencrypt.org/getting-started/)
+- *Mozilla SSL Configuration Generator* — [ssl-config.mozilla.org](https://ssl-config.mozilla.org/) — génère une config Nginx/Apache/etc. solide
+
+---
+
+**Suite** : [2.4 — Anatomie d'un navigateur](/02-web/04-navigateur/) — comment le HTML reçu devient des pixels.

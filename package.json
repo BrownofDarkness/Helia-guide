@@ -1,0 +1,27 @@
+{
+  "name": "helia",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Helia — guide francophone du développeur web, de zéro à compétent",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "prebuild": "node scripts/build-exercise-zips.mjs",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "zips": "node scripts/build-exercise-zips.mjs"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@astrojs/starlight": "^0.38.4",
+    "astro": "^6.0.0",
+    "mermaid": "^11.14.0",
+    "sharp": "^0.33.5",
+    "typescript": "^5.7.2"
+  },
+  "devDependencies": {
+    "archiver": "^7.0.1"
+  }
+}

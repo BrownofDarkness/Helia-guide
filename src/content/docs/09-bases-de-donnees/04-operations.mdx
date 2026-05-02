@@ -1,0 +1,283 @@
+---
+title: 9.4 — Données opérationnelles
+description: Sauvegardes, PITR, réplication, sharding, partitionnement, monitoring — la prod, vraiment.
+sidebar:
+  order: 4
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : ne pas perdre de données, scaler quand le volume monte, monitorer ce qui se passe en prod.
+
+<ObjectiveList items={[
+  "Mettre en place des sauvegardes automatiques avec PITR (point-in-time recovery)",
+  "Comprendre la réplication maître-réplica vs multi-master",
+  "Distinguer partitionnement et sharding",
+  "Choisir entre PostgreSQL self-hosted vs managé (Supabase, Neon, RDS)",
+  "Monitorer les slow queries et la santé de la DB"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axe 8 lu" />
+
+
+## Règle 1 : sauvegardes — sinon ça n'existe pas
+
+> *« Une sauvegarde non-testée n'est pas une sauvegarde. »*
+
+3 niveaux de protection, dans l'ordre :
+
+| Niveau | Outil | Couvre |
+|--------|-------|--------|
+| **Snapshots quotidiens** | `pg_dump` ou snapshot du provider | Suppression accidentelle d'hier |
+| **PITR** (point-in-time recovery) | WAL archiving | Restauration à n'importe quel moment des derniers jours |
+| **Réplication off-site** | Replica sur autre datacenter / cloud | Datacenter qui brûle |
+
+### `pg_dump` — le minimum vital
+
+```bash
+# Backup
+pg_dump -U postgres -F c -d mydb -f backup.dump
+
+# Restore
+pg_restore -U postgres -d mydb backup.dump
+```
+
+`-F c` produit un format custom compressé. Lance-le en cron quotidien, **upload sur S3/B2 hors site**.
+
+### PITR — restauration au moment précis
+
+PostgreSQL log toutes les modifications dans le **WAL (Write-Ahead Log)**. En l'archivant, tu peux **rejouer** les opérations jusqu'à un instant précis.
+
+```ini
+# postgresql.conf
+archive_mode = on
+archive_command = 'aws s3 cp %p s3://mybucket/wal/%f'
+wal_level = replica
+```
+
+Tu peux ensuite :
+
+```bash
+# Restaurer la DB de hier 14h32
+pg_basebackup ...
+# + WAL archives appliqués jusqu'à 2026-04-28 14:32
+```
+
+**Outils complets** : [pgBackRest](https://pgbackrest.org/), [Barman](https://pgbarman.org/), ou un service managé qui fait ça pour toi.
+
+### RPO et RTO — la métrique
+
+| Métrique | Sens |
+|----------|------|
+| **RPO** (Recovery Point Objective) | Quelle perte de données est tolérable ? (ex. 1 heure max) |
+| **RTO** (Recovery Time Objective) | Combien de temps pour redémarrer ? (ex. 30 min max) |
+
+Un PITR avec WAL archivé toutes les 5 min → RPO = 5 min. RTO dépend de la taille de la DB et du process.
+
+## Réplication
+
+### Streaming replication (maître + réplicas)
+
+Une instance **primaire** accepte les écritures. Les **réplicas** suivent le WAL en quasi-temps réel.
+
+**Bénéfices** :
+
+- **Failover** : si le primaire meurt, un réplica prend la relève.
+- **Lecture distribuée** : tu envoies les SELECT aux réplicas (les UPDATE/INSERT vont au primaire).
+
+**Limites** :
+
+- **Lag** : un réplica peut avoir quelques secondes de retard.
+- **Conflits** : pas de réplication multi-master native dans Postgres.
+
+### Logical replication
+
+Réplique au niveau **table** (sélectif), pas binaire. Utile pour :
+
+- Migrer une DB sans downtime.
+- Synchroniser un datawarehouse.
+- Du multi-master limité (avec gestion de conflits applicative).
+
+### Outils HA pour Postgres
+
+- **Patroni** : orchestrateur HA (failover automatique).
+- **pgpool-II** : pool de connexions + load-balancer.
+- **PgBouncer** : pool de connexions léger (omniprésent).
+
+## Pooling de connexions — toujours
+
+Une connexion Postgres coûte ~10 Mo. Si ton app ouvre 1000 connexions, ta DB explose en mémoire.
+
+**Solution** : un **pooler** partage un petit nombre de connexions DB entre beaucoup de connexions clientes.
+
+```bash
+# PgBouncer en sidecar de ta DB
+[databases]
+mydb = host=localhost port=5432 dbname=mydb
+
+[pgbouncer]
+pool_mode = transaction          # un connexion DB par transaction (efficace)
+max_client_conn = 1000           # le client peut ouvrir 1000 connexions
+default_pool_size = 25           # mais seulement 25 vers Postgres
+```
+
+Sur **Supabase** ou **Neon**, le pooler (PgBouncer ou équivalent) est **inclus**. Tu te connectes au port pooler (souvent 6543) plutôt que au port direct (5432).
+
+## Partitionnement vs sharding
+
+| | Partitionnement | Sharding |
+|---|-----------------|----------|
+| **Niveau** | Une seule DB, plusieurs tables physiques | Plusieurs DB, données partagées |
+| **Transparence** | Le client voit une table normale | Le client doit savoir où aller |
+| **Cas d'usage** | Très grosse table (logs, time-series) | Volume / écritures qui dépasse une DB |
+| **Outil PostgreSQL** | `PARTITION BY RANGE/LIST/HASH` natif | Citus, Vitess, manuel |
+
+### Partitionnement Postgres
+
+```sql
+-- Partition par mois
+CREATE TABLE events (
+  id SERIAL,
+  occurred_at TIMESTAMPTZ NOT NULL,
+  data JSONB
+) PARTITION BY RANGE (occurred_at);
+
+CREATE TABLE events_2026_01 PARTITION OF events
+  FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
+
+CREATE TABLE events_2026_02 PARTITION OF events
+  FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
+```
+
+Postgres route automatiquement les INSERTs vers la bonne partition. Les SELECT avec `WHERE occurred_at = ...` ne scannent que les partitions concernées.
+
+**Lib utile** : `pg_partman` automatise la création/maintenance des partitions.
+
+### Sharding — quand la DB ne tient plus
+
+Quand une seule instance ne tient plus (volume, écritures), on **shardique** : on découpe par clé (user_id, region…) et on a N instances.
+
+**Outils** :
+
+- **Citus** (extension Postgres) : sharding transparent.
+- **Vitess** (MySQL) : utilisé par YouTube, Shopify.
+- **CockroachDB** : DB distribuée nativement, compatible Postgres wire protocol.
+
+**Verdict** : 99 % des projets web n'en ont jamais besoin. Postgres **vertical scale** (RAM, CPU, IOPS) tient des dizaines de milliers de req/s.
+
+## Hébergement managé — choix 2026
+
+| Service | Style | Avis |
+|---------|-------|------|
+| **Supabase** | Postgres + auth + storage + UI | **Sweet spot** indie/PME, free tier généreux |
+| **Neon** | Postgres serverless, scale-to-zero, branching | Excellent pour preview branches |
+| **Render Postgres** | Postgres managé classique | Simple, bon prix |
+| **AWS RDS** | Postgres managé enterprise | Cher, robuste |
+| **Crunchy Bridge** | Postgres-only premium | Performances et HA solides |
+| **Railway** | Postgres managé "indie" | Sympa pour démarrer |
+| **Fly Postgres** | Postgres en multi-régions | Pour des apps géo-distribuées |
+
+**Pour démarrer en 2026** : Supabase ou Neon. Tu obtiens une DB Postgres production-ready en 30 secondes, avec backups, réplication, pooling, monitoring inclus.
+
+## Monitoring
+
+### Slow queries
+
+```sql
+-- Activer pg_stat_statements
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
+-- Top 10 des requêtes les plus lentes
+SELECT
+  query,
+  calls,
+  mean_exec_time,
+  total_exec_time
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 10;
+```
+
+Outils visuels :
+- **PgHero** : dashboard simple
+- **pganalyze** : SaaS premium
+- **DataDog DB monitoring**
+
+### Métriques clés
+
+- **Connexions actives** vs max
+- **Temps moyen requête**
+- **Cache hit ratio** (`SELECT * FROM pg_stat_database`)
+- **Lag de réplication**
+- **Croissance disque**
+
+### Alertes essentielles
+
+| Alerte | Seuil typique |
+|--------|---------------|
+| Disque > 80 % | Critique |
+| Connexions > 80 % du max | Warning |
+| Replica lag > 5 s | Warning |
+| Temps moyen requête × 2 vs baseline | Investigation |
+| Backup quotidien manqué | Critique |
+
+## Sécurité opérationnelle
+
+- **Mot de passe DB** dans un secret manager, jamais en repo.
+- **TLS** entre app et DB (`sslmode=require`).
+- **Network ACL** : la DB n'est pas accessible depuis l'Internet.
+- **Rôles minimal** : l'app n'utilise pas le compte `postgres` (admin), mais un compte avec uniquement `SELECT/INSERT/UPDATE/DELETE` sur ses tables.
+- **Audit log** : `pgAudit` extension si compliance.
+
+## Auto-évaluation
+
+<Quiz
+  question="Ta DB Postgres a 200 Go. La machine plante. Tu as un pg_dump quotidien à 02h00 et il est 14h00. Combien de données perdues maximum ?"
+  options={[
+    'Aucune — pg_dump suffit',
+    'Jusqu\'à 12h de données — c\'est pourquoi PITR (WAL archiving) est essentiel : tu rejoues le WAL pour restaurer à un instant précis',
+    'Quelques minutes',
+    'Cela dépend du SSD'
+  ]}
+  answerIndex={1}
+  explanation="pg_dump capture un snapshot. Tout ce qui se passe APRÈS le dump est perdu en cas de crash. PITR (Point-In-Time Recovery) capte chaque modification dans le WAL et l'archive. Tu peux restaurer à n'importe quel moment de la dernière période d'archivage. RPO = quelques secondes/minutes au lieu de 12-24h."
+/>
+
+<Quiz
+  question="Tu es sur AWS Lambda + RDS. Chaque invocation ouvre une connexion Postgres. Tu es à 1000 invocations simultanées. Que se passe-t-il ?"
+  options={[
+    'Tout va bien, AWS scale automatiquement',
+    'Postgres explose : 1000 connexions × ~10 Mo = 10 Go de RAM. Solution : un POOLER (PgBouncer, RDS Proxy, Supabase pooler) entre Lambda et Postgres',
+    'Tu perds 50% des requêtes',
+    'Cela dépend de la taille de la base'
+  ]}
+  answerIndex={1}
+  explanation="C'est THE problème serverless + Postgres. Chaque connexion coûte ~10 Mo. Sans pooler, tu satures la DB en mémoire et en max_connections. RDS Proxy / PgBouncer en transaction pooling mode partage 25 connexions DB entre 1000 connexions Lambda. Sur Neon ou Supabase, le pooler est inclus."
+/>
+
+<Quiz
+  question="Tu démarres un nouveau projet en 2026. Choix d'hébergement DB recommandé pour aller vite ?"
+  options={[
+    'Installer Postgres sur ton VPS — moins cher long-terme',
+    'Supabase ou Neon — Postgres managé en 30 secondes, backups + pooling + monitoring inclus, free tier généreux',
+    'AWS RDS — référence enterprise',
+    'SQLite suffit'
+  ]}
+  answerIndex={1}
+  explanation="Pour démarrer rapidement en 2026, Supabase et Neon sont les choix indie/PME par excellence : free tier confortable, dashboard, backups auto, pooler intégré, replica branching. AWS RDS est plus pro mais plus cher et plus configurable. VPS avec Postgres self-hosted = tu fais le sysadmin (sauvegardes, sécurité, mise à jour) — réservé aux équipes avec ops dédiés."
+/>
+
+## Pour aller plus loin
+
+- *PostgreSQL — Backup and Recovery* — doc officielle
+- *pgBackRest* — [pgbackrest.org](https://pgbackrest.org/)
+- *Use The Index, Luke!* — [use-the-index-luke.com](https://use-the-index-luke.com/)
+- *Designing Data-Intensive Applications* — Martin Kleppmann (chap. 5 réplication, 6 partitionnement, 8 cohérence)
+- *Postgres Weekly* — newsletter
+
+---
+
+**Fin de l'axe 9.** Direction l'[axe 10 — BaaS & services managés](/10-baas/), ou le projet **Base e-commerce**.

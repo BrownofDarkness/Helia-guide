@@ -1,0 +1,469 @@
+---
+title: 16.6 — Web3 (si pertinent)
+description: "Wallets (MetaMask, WalletConnect, AppKit), signatures, EVM, ethers / viem, contrats, gas, anti-patterns. Et surtout : quand le Web3 est pertinent — et quand il ne l'est pas."
+sidebar:
+  order: 6
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : avoir une compréhension claire du Web3 web-side — connecter un wallet, signer, lire un contrat, déclencher une transaction — et savoir reconnaître les cas où le Web3 apporte vraiment, vs ceux où il ne fait que compliquer un produit qui marcherait mieux en Web2.
+
+<ObjectiveList items={[
+  "Comprendre les briques (wallet, signature, RPC, contrat, gas) sans buzzword",
+  "Connecter un wallet et signer un message (\"Sign-In With Ethereum\")",
+  "Lire et écrire dans un contrat avec viem ou ethers",
+  "Identifier les patterns frontend Web3 standards (wagmi, RainbowKit, AppKit)",
+  "Savoir dire NON quand Web3 n'apporte rien vs un Web2 mature"
+]} />
+
+<Level value="avancé" reading="13 min" prereq="axes 1-14 maîtrisés" />
+
+
+## Avant tout — quand Web3 est pertinent (vraiment)
+
+> *« Un trésor caché derrière chaque hype. La hype, c'est le mensonge. Le trésor, c'est ce qui reste après. »*
+
+Le Web3 a connu plusieurs **vagues de hype** (2017 ICOs, 2021 NFTs, 2024 RWA / restaking). Beaucoup de projets web3 auraient été **mieux servis** par une bonne base Web2 (Postgres + Stripe + auth classique).
+
+### Cas réellement pertinents
+
+| Cas | Pourquoi Web3 |
+|-----|---------------|
+| **Tokens transférables** entre utilisateurs (sans intermédiaire forcé) | Une DB classique nécessite un opérateur |
+| **Custody auto-souveraine** | L'utilisateur garde ses clés ; pas de captation par le service |
+| **Cross-platform composability** | Plusieurs apps lisent / écrivent la même donnée on-chain |
+| **Settlement** sans tiers de confiance | Échange peer-to-peer prouvable |
+| **Identité décentralisée** (DID, ENS) | Identité portable sans dépendre d'une plateforme |
+| **Programmes auto-exécutables** (vesting, escrow) | Garanties cryptographiques vs procédure légale |
+
+### Cas où ce n'est PAS pertinent
+
+| Pseudo-besoin Web3 | Solution Web2 plus adaptée |
+|--------------------|---------------------------|
+| « Stocker des photos sur la blockchain » | S3 / R2 + hashes vérifiables |
+| « Login sans mot de passe » | Passkeys (WebAuthn) |
+| « Programme de fidélité » | DB classique + Stripe |
+| « Authentifier l'origine d'un produit » | Hash + DB + signature serveur |
+| « Voter sans triche » | Service tiers de confiance vérifiable |
+| « Internationaliser sans conversion » | Stripe en multi-devise |
+
+> Avant tout projet Web3, **demande-toi** : *« Pourquoi pas une DB classique + signature serveur ? »*. Si la réponse n'est pas claire, reste en Web2.
+
+---
+
+## Briques de base
+
+### Wallet
+
+Un **wallet** est un **gestionnaire de clés cryptographiques** (privées + publiques). À partir de la clé privée, on dérive :
+
+- **Adresse Ethereum** (`0x...`) — l'identifiant public.
+- **Signature** — preuve cryptographique d'un message.
+- **Capacité d'envoyer des transactions** sur la blockchain.
+
+Wallets courants 2026 :
+
+| Wallet | Type |
+|--------|------|
+| **MetaMask** | Extension navigateur + mobile, le plus déployé |
+| **Rabby** | Extension orientée DeFi sécurisé |
+| **Coinbase Wallet** | Self-custody Coinbase |
+| **Phantom** | Multi-chaîne (EVM + Solana) |
+| **WalletConnect** | Protocole, pas un wallet |
+| **Embedded wallets** (Privy, Magic, Web3Auth, Dynamic) | Wallets « invisibles » créés via email/social pour onboarder grand public |
+
+### RPC
+
+Un **RPC node** (Remote Procedure Call) est un serveur qui expose la blockchain via JSON-RPC. Tu lis l'état (balance, contrat) ou pousses des transactions.
+
+| Provider | Force |
+|----------|-------|
+| **Alchemy** | Excellent SDK, dev tools |
+| **Infura** | Historique, fiable |
+| **QuickNode** | Multi-chaîne, perf |
+| **Ankr** | Decentralized, gratuit |
+| **Self-host** | Nécessaire si vraiment décentralisé |
+
+### Chain
+
+| Chain | Spécificité |
+|-------|-------------|
+| **Ethereum L1** | Le plus sûr, le plus cher en gas |
+| **L2 EVM** (Base, Arbitrum, Optimism, zkSync) | Moins cher, settle sur Ethereum |
+| **Polygon PoS** | EVM, frais très bas |
+| **Solana** | Non-EVM, ultra rapide, frais ~0,001 $ |
+| **Bitcoin** | Hors scope EVM, pas Smart contracts traditionnels |
+
+> En 2026, la majorité des apps Web3 « grand public » tournent sur **L2** (Base, Arbitrum) ou **Solana**. Pas L1 — trop cher pour les flux courants.
+
+### Gas
+
+Chaque transaction sur EVM coûte du **gas** (proportionnel au compute du contrat) × **gas price** (en gwei, varie selon la congestion).
+
+```
+Coût transaction = gas utilisé × gas price
+```
+
+Ordre de grandeur :
+
+- Transfer ETH : ~21 000 gas.
+- Transfer ERC-20 (USDC) : ~50 000 gas.
+- Mint NFT : ~80 000 - 200 000 gas.
+- Swap Uniswap : ~150 000 gas.
+
+Sur **Ethereum L1** (gas price 20-100 gwei) → 5-50 $ par transaction simple. Sur **Base** (~0,1 gwei) → 0,01-0,10 $.
+
+---
+
+## Sign-In With Ethereum (SIWE)
+
+Un pattern d'auth standard (EIP-4361) : l'utilisateur **signe un message** avec son wallet, et le serveur vérifie la signature.
+
+```
+1. Utilisateur clique "Connecter wallet"
+2. App génère un nonce aléatoire
+3. App demande au wallet de signer un message avec le nonce
+4. Wallet retourne la signature
+5. Serveur vérifie la signature, démarre la session
+```
+
+### Côté frontend (viem)
+
+```ts
+import { createWalletClient, custom } from 'viem';
+import { mainnet } from 'viem/chains';
+
+const wallet = createWalletClient({
+  chain: mainnet,
+  transport: custom(window.ethereum!),
+});
+
+const [address] = await wallet.requestAddresses();
+
+const signature = await wallet.signMessage({
+  account: address,
+  message: `Connectez-vous à monapp.com\n\nNonce: ${nonce}`,
+});
+```
+
+### Côté backend (viem)
+
+```ts
+import { verifyMessage } from 'viem';
+
+const valid = await verifyMessage({
+  address: claimedAddress,
+  message: messageWithNonce,
+  signature,
+});
+
+if (valid) {
+  // Crée la session, JWT, cookie HttpOnly
+}
+```
+
+> **SIWE** est devenu le « OAuth Web3 » : universellement supporté, simple à implémenter, tu te débarrasses de la gestion des mots de passe.
+
+---
+
+## viem vs ethers
+
+Deux libs JS dominent 2026 pour interagir avec EVM :
+
+| Lib | Force |
+|-----|-------|
+| **viem** | TS-first, tree-shakable, plus moderne (2023+), partout dans la stack 2026 |
+| **ethers** | Historique (2019), encore très utilisé, v6 propre |
+| **web3.js** | Le plus ancien, à éviter pour un nouveau projet |
+
+> En 2026 : **viem** par défaut. **ethers** reste correct si tu hérites d'un repo l'utilisant.
+
+### Exemple — lire le solde ETH
+
+```ts
+import { createPublicClient, http, formatEther } from 'viem';
+import { mainnet } from 'viem/chains';
+
+const client = createPublicClient({
+  chain: mainnet,
+  transport: http('https://eth-mainnet.g.alchemy.com/v2/KEY'),
+});
+
+const balance = await client.getBalance({ address: '0xabc...' });
+console.log(formatEther(balance), 'ETH');
+```
+
+### Exemple — appeler un contrat ERC-20
+
+```ts
+import { createPublicClient, http, erc20Abi } from 'viem';
+import { mainnet } from 'viem/chains';
+
+const client = createPublicClient({ chain: mainnet, transport: http() });
+
+const usdcBalance = await client.readContract({
+  address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // USDC
+  abi: erc20Abi,
+  functionName: 'balanceOf',
+  args: ['0xabc...'],
+});
+```
+
+### Exemple — envoyer une transaction
+
+```ts
+import { createWalletClient, custom, parseEther } from 'viem';
+import { mainnet } from 'viem/chains';
+
+const wallet = createWalletClient({
+  chain: mainnet,
+  transport: custom(window.ethereum!),
+});
+
+const [account] = await wallet.requestAddresses();
+
+const hash = await wallet.sendTransaction({
+  account,
+  to: '0xrecipient...',
+  value: parseEther('0.01'),
+});
+
+console.log('tx hash:', hash);
+```
+
+---
+
+## Frontend Web3 — l'écosystème wagmi / AppKit
+
+[wagmi](https://wagmi.sh/) est le **standard de facto** pour intégrer Web3 dans une app React.
+
+```tsx
+import { WagmiProvider, createConfig, http } from 'wagmi';
+import { mainnet, base } from 'wagmi/chains';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const config = createConfig({
+  chains: [mainnet, base],
+  transports: { [mainnet.id]: http(), [base.id]: http() },
+});
+
+export default function App({ children }) {
+  return (
+    <WagmiProvider config={config}>
+      <QueryClientProvider client={new QueryClient()}>
+        {children}
+      </QueryClientProvider>
+    </WagmiProvider>
+  );
+}
+```
+
+```tsx
+import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi';
+
+function Profile() {
+  const { address, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
+  const { data: balance } = useBalance({ address });
+
+  if (!isConnected) {
+    return connectors.map((c) => (
+      <button key={c.id} onClick={() => connect({ connector: c })}>
+        {c.name}
+      </button>
+    ));
+  }
+
+  return (
+    <div>
+      <p>{address}</p>
+      <p>{balance?.formatted} {balance?.symbol}</p>
+      <button onClick={() => disconnect()}>Déconnecter</button>
+    </div>
+  );
+}
+```
+
+### Connect kits
+
+Pour ne pas réécrire l'UI de connexion :
+
+| Kit | Force |
+|-----|-------|
+| **RainbowKit** | UX excellente, intégré wagmi |
+| **AppKit** (ex-Web3Modal) | Multi-chain, multi-wallet, riche |
+| **ConnectKit** | Minimaliste, propre |
+| **Privy / Dynamic** | Embedded wallets + email login |
+
+---
+
+## Contrats intelligents — l'angle dev
+
+Tu n'as pas besoin de **maîtriser Solidity** pour faire du dev frontend Web3. Mais tu dois comprendre :
+
+| Concept | À quoi ça sert |
+|---------|----------------|
+| **ABI** (Application Binary Interface) | Schéma JSON du contrat — les fonctions et events |
+| **Read** vs **Write** | Read = gratuit (lit l'état). Write = transaction = gas |
+| **Events** | Le contrat émet des logs queryables (équivalent webhooks) |
+| **Multicall** | Grouper plusieurs reads en 1 RPC |
+| **Permit** (EIP-2612) | Approve via signature, pas de tx séparée |
+| **EIP-1271** | Vérifier signature d'un smart-account (ERC-4337) |
+
+### ABI typique ERC-20
+
+```json
+[
+  { "name": "balanceOf", "type": "function", "stateMutability": "view",
+    "inputs": [{ "name": "owner", "type": "address" }],
+    "outputs": [{ "type": "uint256" }] },
+  { "name": "transfer", "type": "function", "stateMutability": "nonpayable",
+    "inputs": [{ "name": "to", "type": "address" }, { "name": "amount", "type": "uint256" }],
+    "outputs": [{ "type": "bool" }] },
+  { "name": "Transfer", "type": "event",
+    "inputs": [
+      { "indexed": true, "name": "from", "type": "address" },
+      { "indexed": true, "name": "to", "type": "address" },
+      { "indexed": false, "name": "value", "type": "uint256" }
+    ] }
+]
+```
+
+### Lecture indexée — éviter le polling
+
+Pour suivre les transactions historiques d'une adresse, **ne pollute pas** ton RPC node. Utilise un **indexer** :
+
+| Indexer | Force |
+|---------|-------|
+| **The Graph** | OSS, GraphQL, le plus mature |
+| **Subgraph Studio** | Hébergement gratuit / payant |
+| **Goldsky** | Subgraphs + streaming |
+| **Envio HyperIndex** | Plus rapide à indexer |
+| **Alchemy Subgraphs** | Managed |
+| **Ponder** | Self-host TS-first |
+
+---
+
+## Account Abstraction (ERC-4337) — la promesse 2026
+
+Les **smart accounts** (ERC-4337, EIP-7702) permettent :
+
+- **Pay gas in token** (l'utilisateur paie en USDC, pas en ETH).
+- **Sponsoring** (l'app paie le gas pour l'utilisateur — UX magique).
+- **Multi-sig embarqué**.
+- **Session keys** (auto-approuver pendant 1 h sans repop le wallet).
+- **Recovery social** (pas perdre ses fonds si on perd le seed phrase).
+
+### Outils
+
+| Outil | Quoi |
+|-------|------|
+| **Pimlico, Stackup, Biconomy** | Bundlers ERC-4337 + paymasters |
+| **Privy embedded wallets** | Auth email + smart account natif |
+| **Safe (Gnosis)** | Multi-sig le plus déployé |
+
+> 2026 : l'AA devient le **défaut grand public**. Demander à un user de comprendre « gas en ETH » est obsolète quand on peut sponsoriser.
+
+---
+
+## Anti-patterns Web3
+
+| Symptôme | Réalité |
+|----------|---------|
+| Stocker une donnée volumineuse on-chain | Catastrophique (cher, lent). Stocke en S3, hash on-chain |
+| Mainnet L1 pour des micro-transactions | Frais > valeur. L2 obligatoire |
+| Pas de protection slippage sur swap | L'utilisateur perd 5-50 % |
+| Approuver `MaxUint256` à un contrat inconnu | Drain risk — toujours approver le minimum nécessaire |
+| Affichage user-friendly (« 1 ETH ») mais signer en wei sans préciser | Erreurs de × 1e18 — afficher la décimale exacte signée |
+| Polling l'API RPC tous les 1s | Tue ta facture Alchemy. Utilise WebSocket ou un indexer |
+| Pas de gestion offline / wallet absent | Page blanche si MetaMask pas installé |
+| Demander une signature au boot | Surprend l'user. Demander uniquement à la connexion explicite |
+
+---
+
+## L'angle légal — quelques mots
+
+| Aspect | À savoir |
+|--------|----------|
+| **MiCA** (UE, en vigueur 2024-2026) | Encadre crypto-assets et stablecoins. Audit pour CASP. |
+| **AML / KYC** | Si tu manipules de la valeur monétaire pour des tiers, ça s'applique |
+| **TVA** | Sur les NFT, position varie selon pays |
+| **Sanctions** | Bloquer les adresses sanctionnées (OFAC) — checks comme Chainalysis |
+| **Data RGPD** | Une adresse Ethereum est une **donnée personnelle** (pseudonymisée mais identifiable) |
+
+> Le légal Web3 est un domaine à part entière. **Ne lance pas un produit qui manipule de la valeur sans avis juridique**.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Un client te demande une « blockchain interne pour tracer les commandes ». L'app n'aura pas de tokens, pas d'utilisateurs externes, juste un audit trail. Que proposes-tu ?"
+  options={[
+    'Hyperledger Fabric',
+    'Une DB Postgres + signature HMAC ou cryptographique côté serveur, hash chaîné comme Git. Pas de blockchain — c\'est un audit log, pas un consensus distribué',
+    'Mainnet Ethereum',
+    'Solana'
+  ]}
+  answerIndex={1}
+  explanation="C'est un faux besoin Web3. Un audit log immutable se construit avec une DB classique + hash chaînés (Merkle tree style) + signatures. Un consortium blockchain (Hyperledger) ajoute consensus distribué, mais sans plusieurs parties tierces de confiance, ça n'apporte rien. Ethereum / Solana sont absurdes pour un audit trail privé interne."
+/>
+
+<Quiz
+  question="Tu veux ajouter une auth Web3 simple. Quel pattern en 2026 ?"
+  options={[
+    'Stocker la clé publique en DB et OAuth dessus',
+    'SIWE (Sign-In With Ethereum) + viem côté front + verifyMessage côté back, JWT dans cookie HttpOnly. Standard, simple, pas de mot de passe à gérer',
+    'Login Magic Link uniquement',
+    'Faire un wallet maison'
+  ]}
+  answerIndex={1}
+  explanation="SIWE est le « OAuth du Web3 » — standard EIP-4361, déployé partout en 2026, libs viem/ethers le supportent en quelques lignes. L'utilisateur signe un message avec un nonce, le serveur vérifie la signature. Pas de mot de passe, pas de gestion de récupération. Sécurité : nonce one-shot et expiration courte côté serveur."
+/>
+
+<Quiz
+  question="Tu intègres une fonctionnalité d'achat NFT pour 1000 utilisateurs / mois sur Ethereum Mainnet. Coût attendu ?"
+  options={[
+    'Quelques centimes',
+    'Beaucoup trop cher : un mint ERC-721 sur L1 coûte 10-50 $ en pic. Sur 1000 mints : 10-50 k$. Migrer sur un L2 (Base, Arbitrum) divise par 50-200',
+    'Stable à 1 $',
+    'Gratuit pour les utilisateurs'
+  ]}
+  answerIndex={1}
+  explanation="L1 Ethereum est inadapté pour des mints volume modéré. Les L2 (Base, Arbitrum, Optimism) règlent à un coût ~0,01-0,10 $ par mint, avec settlement sur L1. C'est le pattern 2026 standard pour le grand public. Solana est aussi une alternative non-EVM avec frais ultra-bas."
+/>
+
+<Quiz
+  question="Tu écoutes les events `Transfer` de un contrat ERC-20 en pollant `eth_getLogs` toutes les secondes. Ta facture RPC explose. Solution ?"
+  options={[
+    'Augmenter le cache local',
+    'Utiliser un indexer (The Graph, Goldsky, Envio, Ponder) qui ingest les events une fois et les expose en GraphQL/SQL — tu requêtes l\'indexer, pas le node, des centaines de fois moins cher et plus rapide',
+    'Polling toutes les 10 s',
+    'Migrer en Solana'
+  ]}
+  answerIndex={1}
+  explanation="Polling RPC pour des events historiques est l'anti-pattern le plus cher en Web3. Les indexers (The Graph, Goldsky, Envio HyperIndex, Ponder) suivent les events on-chain et les exposent via GraphQL ou SQL. Tu requêtes l'indexer (cache + format adapté), tu réserves le RPC pour les transactions live. Économie typique : ×10 à ×100 sur la facture RPC."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *viem docs* — [viem.sh](https://viem.sh/)
+- *wagmi docs* — [wagmi.sh](https://wagmi.sh/)
+- *RainbowKit* — [rainbowkit.com](https://www.rainbowkit.com/)
+- *AppKit (Reown)* — [reown.com/appkit](https://reown.com/appkit)
+- *EIP-4361 SIWE* — [eips.ethereum.org/EIPS/eip-4361](https://eips.ethereum.org/EIPS/eip-4361)
+- *The Graph* — [thegraph.com/docs](https://thegraph.com/docs/)
+- *Privy / Dynamic* — embedded wallets et social auth
+- *Pimlico (ERC-4337)* — [pimlico.io](https://www.pimlico.io/)
+- *Solidity by Example* — [solidity-by-example.org](https://solidity-by-example.org/) (si tu veux toucher aux contrats)
+
+---
+
+**Retour** : [Index axe 16](/16-specialisations/) — choisis ta spécialisation et applique-la sur le projet de l'axe.

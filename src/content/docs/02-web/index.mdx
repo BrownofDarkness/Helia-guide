@@ -1,0 +1,69 @@
+---
+title: Axe 2 — Comment fonctionne le Web
+description: Du nom de domaine au pixel affiché — le voyage complet d'une requête HTTP.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : pouvoir expliquer ce qui se passe quand on tape une URL et appuie sur Entrée.
+
+## Prérequis
+
+Axe 1 — Fondations informatiques.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Décrire les couches TCP/IP et le rôle du DNS",
+  "Lire les en-têtes d'une requête et d'une réponse HTTP",
+  "Comprendre HTTPS, certificats TLS, HSTS",
+  "Expliquer le pipeline de rendu d'un navigateur",
+  "Distinguer cookie, sessionStorage, localStorage, IndexedDB"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="2.1 — Réseaux"
+    href="/02-web/01-reseaux/"
+    description="DNS, TCP/IP, ports, TCP vs UDP, HTTP/1.1/2/3."
+  />
+  <LinkCard
+    title="2.2 — HTTP en détail"
+    href="/02-web/02-http/"
+    description="Méthodes, codes, en-têtes, cookies, sessions, CORS."
+  />
+  <LinkCard
+    title="2.3 — Sécurité du transport (TLS)"
+    href="/02-web/03-tls/"
+    description="HTTPS, certificats, Let's Encrypt, HSTS, mixed content."
+  />
+  <LinkCard
+    title="2.4 — Anatomie d'un navigateur"
+    href="/02-web/04-navigateur/"
+    description="Pipeline de rendu, event loop, cache, Service Workers, PWA."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Mini-curl en Node.js.**
+Un client HTTP en ligne de commande qui imite `curl -v` : suit les redirections, affiche les en-têtes envoyés et reçus, supporte POST avec corps, mesure les temps DNS / TCP / TLS / TTFB.
+
+<ExerciseDownload
+  axe="02-web"
+  slug="01-mini-curl"
+  title="mini-curl en Node.js + TypeScript"
+  description="Tu écris un client HTTP en CLI directement avec http/https natifs. Tu apprends à mesurer DNS / TCP / TLS / TTFB via les events de la socket, à suivre les 3xx, et à respecter la convention curl (stdout = corps, stderr = trace)."
+/>
+
+## Ressources clés
+
+- MDN Web Docs — section *HTTP* — [developer.mozilla.org](https://developer.mozilla.org/fr/docs/Web/HTTP)
+- *High Performance Browser Networking* — Ilya Grigorik (gratuit en ligne)
+- *How DNS Works* (illustré) — [howdns.works](https://howdns.works/)

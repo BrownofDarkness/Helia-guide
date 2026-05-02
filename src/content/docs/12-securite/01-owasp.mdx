@@ -1,0 +1,357 @@
+---
+title: 12.1 — OWASP Top 10
+description: Les 10 vulnérabilités web les plus répandues — savoir les nommer, les détecter, les corriger.
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Level from '../../../components/Level.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+<Level value="confirmé" reading="35 min" prereq="axes 8 (backend) et 11 (qualité) lus" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="9">
+**Marie** a déployé la première version commande de la Boulangerie de Lina. Une cliente lui envoie un mail : *« je crois qu'il y a un problème, j'ai vu un autre nom dans mon panier après refresh »*. Marie blêmit. Elle sait que c'est sérieux. Elle se plonge dans l'OWASP Top 10 — la liste mondiale de **toutes les façons dont un site se fait pirater**.
+</Scenario>
+
+<Scenario parcours="B" episode="9">
+Studio Pulse approche du go-live. Inès demande à Hugo : *« si quelqu'un essaie de me pirater, qu'est-ce qui peut arriver ? »*. Hugo n'a pas de réponse claire. Il découvre l'OWASP Top 10 et décide de relire son code en se demandant pour chaque endpoint : *« et si quelqu'un essayait ça ? »*.
+</Scenario>
+
+<Scenario parcours="C" episode="9">
+Sami se prépare au lancement de GreenBox. La Loi sur la Cybersécurité (CRA) entre en vigueur progressivement. Stocker des données de paiement = responsabilité énorme. Sami audite GreenBox avec l'OWASP Top 10 comme checklist — un manquement et c'est l'amende RGPD voire pire.
+</Scenario>
+
+<Scenario parcours="D" episode="9">
+Léa publie CoupDeMain en bêta. Un voisin malveillant teste les limites : il essaie d'accéder aux messages privés des autres en changeant un ID dans l'URL. Léa découvre IDOR. Elle réalise qu'elle a **dix vecteurs d'attaque** à connaître au minimum — l'OWASP Top 10.
+</Scenario>
+
+<Scenario parcours="E" episode="9">
+Yanis voit son tech lead lui dire : *« avant de mettre Tasky en prod pour l'asso, fais-moi un audit OWASP Top 10 — tu vas l'apprendre par cœur en pro de toute façon »*. Yanis ouvre la liste. Dix catégories. Une par jour pendant deux semaines.
+</Scenario>
+
+> 🎯 **Objectif** : connaître les 10 catégories de vulnérabilités OWASP. Si tu peux les **nommer**, tu peux les **chercher** dans ton code.
+
+<ObjectiveList items={[
+  "Connaître les 10 catégories OWASP édition 2021 (toujours référence en 2026)",
+  "Pour chacune : exemple concret, impact, prévention",
+  "Reconnaître les vulnérabilités dans du code existant",
+  "Choisir les bons outils pour scanner automatiquement"
+]} />
+
+> 💡 **Termes glossaire** rencontrés dans cette section : <Term>xss</Term>, <Term>csrf</Term>, <Term>sqli</Term>, <Term>cors</Term>, <Term>jwt</Term>, <Term>argon2id</Term>, <Term>rgpd</Term>.
+
+## Pourquoi OWASP ?
+
+L'**OWASP Foundation** (Open Web Application Security Project) publie tous les ~3 ans un **classement** des vulnérabilités web les plus critiques. C'est **la référence mondiale**.
+
+Le Top 10 actuel date de **2021** ; la 2025/2026 est en préparation mais les catégories restent largement valables.
+
+> **La règle d'or** : tu ne dois pas mémoriser tous les détails. Tu dois pouvoir **dire le nom** d'une vulnérabilité en lisant du code suspect, et savoir **où chercher** la solution.
+
+## A01 — Broken Access Control
+
+**Problème** : un utilisateur accède à des ressources qui ne lui appartiennent pas.
+
+### Exemples
+
+```ts
+// ❌ IDOR (Insecure Direct Object Reference)
+app.get('/orders/:id', async (req, res) => {
+  const order = await db.order.findById(req.params.id);
+  res.json(order);   // PAS de vérif que c'est bien l'order du user connecté !
+});
+```
+
+→ Un user peut accéder à `/orders/42` même si ce n'est pas le sien.
+
+### Prévention
+
+- **Toujours vérifier** que la ressource appartient à l'utilisateur connecté.
+- Utiliser le **Row-Level Security** (Postgres / Supabase) pour défense en profondeur.
+- Logger les accès refusés pour détecter les tentatives.
+
+```ts
+// ✅
+app.get('/orders/:id', async (req, res) => {
+  const order = await db.order.findById(req.params.id);
+  if (!order || order.userId !== req.user.id) {
+    return res.status(404).json({ error: 'Not found' });   // 404, pas 403 (ne révèle pas l'existence)
+  }
+  res.json(order);
+});
+```
+
+## A02 — Cryptographic Failures
+
+**Problème** : données sensibles non chiffrées ou mal chiffrées.
+
+### Exemples
+- Mots de passe stockés en clair ou en MD5/SHA-256.
+- Données sensibles transmises en HTTP.
+- Clés API hardcodées dans le code source.
+- TLS désactivé en prod.
+
+### Prévention
+- **HTTPS partout** (HSTS, redirect HTTP → HTTPS).
+- **Hash mots de passe** : argon2id ou bcrypt — JAMAIS MD5 ou SHA-256.
+- **Secrets** dans un secret manager, pas en repo.
+- **TLS 1.3** minimum.
+- Données sensibles **chiffrées au repos** (DB, backups).
+
+## A03 — Injection
+
+**Problème** : input utilisateur interprété comme du code/commande.
+
+### SQL Injection
+
+```ts
+// ❌
+const sql = `SELECT * FROM users WHERE email = '${email}'`;
+db.query(sql);
+// Si email = "alice' OR 1=1 --" → tous les users !
+```
+
+### NoSQL Injection (MongoDB)
+
+```js
+// ❌
+db.users.find({ email: req.body.email, password: req.body.password });
+// Si body = { email: "...", password: { $ne: null } } → bypass auth !
+```
+
+### Command Injection
+
+```ts
+// ❌
+exec(`convert ${req.body.filename} output.png`);
+// Si filename = "input.jpg; rm -rf /" → catastrophe
+```
+
+### Prévention
+
+- **Requêtes paramétrées** : `db.query('... WHERE email = $1', [email])`.
+- **ORMs** (Prisma, Drizzle, Eloquent, Doctrine) qui paramétrisent automatiquement.
+- **Validation stricte** côté serveur (Zod, Pydantic).
+- **Whitelist** plutôt que blacklist.
+- Pour les commandes shell : utiliser des libs spécifiques (`execFile`, `spawn` avec args array, **jamais** `exec` avec string concaténée).
+
+## A04 — Insecure Design
+
+**Problème** : faille architecturale, pas un bug d'implémentation.
+
+### Exemples
+- Un endpoint `/reset-password` qui **n'a pas de rate-limit** → brute-force.
+- Un système de récupération de mot de passe basé sur la **question secrète**.
+- Une fonctionnalité « inviter par email » qui **envoie sans modération** → spam abuse.
+- Un panier dont le **prix est calculé côté client** et envoyé au serveur.
+
+### Prévention
+- **Threat modeling** au moment de la conception (axe 3).
+- **Zero trust** : ne fais confiance à aucune valeur venant du client.
+- **Rate-limit** systématique sur les endpoints sensibles.
+- Penser **abuse cases**, pas juste use cases.
+
+## A05 — Security Misconfiguration
+
+**Problème** : config par défaut non sécurisée, headers manquants, debug mode en prod.
+
+### Exemples
+- `DEBUG=true` en prod → stack traces exposées.
+- Page d'admin accessible sans mot de passe.
+- En-têtes de sécurité absents (`X-Frame-Options`, `Content-Security-Policy`).
+- CORS `*` en prod sur API privée.
+- Bucket S3 public.
+
+### Prévention
+- **Audit régulier** de la config de prod.
+- Outils : [securityheaders.com](https://securityheaders.com/), [Mozilla Observatory](https://observatory.mozilla.org/).
+- Désactiver les fonctionnalités non utilisées.
+- Différencier strictement **dev / staging / prod**.
+
+## A06 — Vulnerable and Outdated Components
+
+**Problème** : tu utilises une lib avec une CVE connue.
+
+### Exemple
+
+```json
+"dependencies": {
+  "lodash": "4.17.10"   // CVE-2019-10744 — prototype pollution
+}
+```
+
+Tu n'as rien fait de mal **toi**, mais un attaquant exploite la lib.
+
+### Prévention
+
+- **Dependabot** (GitHub) ou **Renovate** : PR automatiques pour les mises à jour de sécurité.
+- `npm audit` / `pnpm audit` régulier.
+- **Snyk** ou **socket.dev** : scan plus poussé que npm audit.
+- Lock-file commit : versions exactes en prod.
+- **Supprimer** les deps non utilisées (chaque dep est une surface d'attaque).
+
+## A07 — Identification and Authentication Failures
+
+**Problème** : auth mal implémentée.
+
+### Exemples
+- Mot de passe `12345` accepté.
+- Pas de protection brute-force sur `/login`.
+- Session token prévisible (incrémental, basé sur timestamp).
+- Token JWT sans expiration.
+- Pas de logout serveur (cookie non révoqué).
+
+### Prévention
+- **Politique de mots de passe** : minimum 12 caractères, vérifier contre [HaveIBeenPwned](https://haveibeenpwned.com/Passwords).
+- **MFA** ou **Passkeys** disponibles.
+- **Rate-limit** + lockout après N tentatives.
+- **Tokens cryptographiquement aléatoires** (UUID v4, jamais incrémental).
+- **Expiration** + **rotation** des tokens.
+- Utiliser des **librairies éprouvées** : Auth.js, Clerk, Auth0, Supabase Auth — pas une auth maison.
+
+## A08 — Software and Data Integrity Failures
+
+**Problème** : code ou données chargés sans vérification d'intégrité.
+
+### Exemples
+- CDN externe sans **Subresource Integrity (SRI)**.
+- Pipeline CI qui télécharge des binaires sans vérifier le hash.
+- Updates auto sans signature.
+- Désérialisation non sûre (PHP `unserialize`, Java `ObjectInputStream`).
+
+### Prévention
+
+```html
+<!-- SRI -->
+<script
+  src="https://cdn.example.com/lib.js"
+  integrity="sha384-Xxx..."
+  crossorigin="anonymous">
+</script>
+```
+
+- Vérifier les **hashs** des fichiers téléchargés en CI.
+- **Signer** les artefacts (Sigstore, cosign).
+- **Pinner** les versions des actions GitHub par SHA, pas par tag.
+
+## A09 — Security Logging and Monitoring Failures
+
+**Problème** : tu ne sais pas qu'on t'attaque.
+
+### Exemples
+- Pas de log des login échoués → tu ne vois pas le brute-force.
+- Logs non centralisés → impossible de corréler.
+- Logs **avec mots de passe en clair** ou tokens.
+- Aucune alerte automatique sur événement anormal.
+
+### Prévention
+- Logs **structurés** (JSON) centralisés (ELK, Loki, Datadog, Sentry).
+- Logger : login OK/KO, accès admin, modif de droits, exports massifs.
+- **Pas** de données sensibles dans les logs (caviarder mot de passe, token, CB).
+- Alerting sur patterns : 100 logins KO depuis une IP → bloquer.
+
+## A10 — Server-Side Request Forgery (SSRF)
+
+**Problème** : ton serveur fait des requêtes à des URLs **fournies par l'utilisateur**, qui peuvent être internes.
+
+### Exemple
+
+```ts
+// ❌ Génération de PDF depuis une URL fournie
+app.get('/pdf', async (req, res) => {
+  const html = await fetch(req.query.url).then(r => r.text());
+  // Si url = http://169.254.169.254/latest/meta-data → fuites credentials AWS !
+  // Si url = http://localhost:5432 → exfiltration DB locale
+});
+```
+
+### Prévention
+- **Whitelist** des domaines autorisés.
+- **Bloquer les IP privées** (10.x, 192.168.x, 172.16-31.x, 127.x, 169.254.x).
+- Lib dédiée : `ssrf-req-filter` (Node), équivalents par langage.
+- Ne pas suivre les redirects automatiquement vers des IPs internes.
+
+## Mémo synthétique
+
+| # | Catégorie | Mot-clé | Outil principal |
+|---|-----------|---------|-----------------|
+| A01 | Broken Access Control | « Cet user ne devrait pas voir ça » | Tests E2E + RLS |
+| A02 | Cryptographic Failures | « Stocker en clair, MD5 » | argon2id, HTTPS, secret manager |
+| A03 | Injection | « Input concaténé en SQL/shell » | ORM, parameterized queries |
+| A04 | Insecure Design | « Faille architecturale » | Threat modeling |
+| A05 | Misconfiguration | « DEBUG=true en prod » | Security headers, audit |
+| A06 | Vulnerable Components | « lodash 4.17.10 » | Dependabot, Snyk |
+| A07 | Auth Failures | « Brute-force ouvert » | Rate-limit, MFA, libs éprouvées |
+| A08 | Integrity Failures | « SRI absent » | Hashs, signatures |
+| A09 | Logging Failures | « Pas d'alerte sur attaque » | Logs structurés, Sentry |
+| A10 | SSRF | « URL utilisateur fetchée » | Whitelist, bloquer IPs internes |
+
+## Outils 2026
+
+| Outil | Rôle |
+|-------|------|
+| **Snyk** | Scan dépendances + IaC + code (commercial, free tier) |
+| **Dependabot** | PR auto pour deps vulnérables (GitHub) |
+| **Semgrep** | Analyse statique de patterns dangereux |
+| **OWASP ZAP** | Pentest automatique |
+| **Burp Suite** | Pentest manuel pro |
+| **gitleaks / trufflehog** | Détection secrets dans le code |
+| **Trivy** | Scan de containers et IaC |
+
+## Auto-évaluation
+
+<Quiz
+  question='Tu vois `db.query(\`SELECT * FROM orders WHERE id = ${req.params.id}\`)`. Quelle catégorie OWASP ?'
+  options={[
+    'A01 Broken Access Control',
+    'A03 Injection (SQL Injection) — fix : utiliser une requête paramétrée db.query("... WHERE id = $1", [req.params.id])',
+    'A07 Authentication',
+    'Aucune'
+  ]}
+  answerIndex={1}
+  explanation="C'est le bug A03 le plus classique. Une requête construite par concaténation permet à l'attaquant d'envoyer id = 1 OR 1=1 (récupère tout) ou id = 1; DROP TABLE orders. Fix : TOUJOURS paramétrer (PostgreSQL : $1, $2 ; MySQL : ?). Les ORMs (Prisma, Drizzle, Eloquent) le font automatiquement — c'est pour ça qu'on les recommande."
+/>
+
+<Quiz
+  question="Tu envoies un email de reset de password mais tu n'as PAS de rate-limit sur le endpoint. Quelle catégorie OWASP ?"
+  options={[
+    'A03 Injection',
+    'A04 Insecure Design — la conception elle-même est faillible. Fix : rate-limit (3 essais / 15 min / IP) + audit log + captcha si abus détecté',
+    'A09 Logging',
+    'Pas une vulnérabilité'
+  ]}
+  answerIndex={1}
+  explanation="Sans rate-limit, un attaquant peut envoyer des emails à des milliers d'adresses (spam) ou tenter d'énumérer les emails valides (réponse différente si l'email existe). C'est de l'insecure design car le problème est dans l'absence de contrôle au niveau architecture, pas dans l'implémentation d'une feature."
+/>
+
+<Quiz
+  question="Tu utilises une lib `lodash@4.17.10` qui a la CVE-2019-10744 (prototype pollution). Quelle catégorie ?"
+  options={[
+    'A03 Injection',
+    'A06 Vulnerable and Outdated Components — fix : npm audit fix, ou bumper manuellement, ou activer Dependabot pour ne plus louper les patches sécu',
+    'A09 Logging',
+    'Ce n\'est pas ton problème, c\'est la lib'
+  ]}
+  answerIndex={1}
+  explanation="Tu portes la responsabilité des libs que tu utilises. A06 couvre exactement ça. Dependabot ouvre automatiquement des PR quand une CVE apparaît sur une de tes deps. Snyk fait pareil avec plus de profondeur (incluant deps transitives). Indispensable en 2026."
+/>
+
+## Pour aller plus loin
+
+- *OWASP Top 10 (2021)* — [owasp.org/www-project-top-ten](https://owasp.org/www-project-top-ten/)
+- *OWASP Cheat Sheet Series* — [cheatsheetseries.owasp.org](https://cheatsheetseries.owasp.org/) (cheatsheets par techno)
+- *PortSwigger Web Security Academy* — [portswigger.net/web-security](https://portswigger.net/web-security) — exercices gratuits
+- *HackTricks* — [book.hacktricks.xyz](https://book.hacktricks.xyz/) — wiki côté offensif
+- *Snyk Vulnerability DB* — [security.snyk.io](https://security.snyk.io/)
+
+---
+
+**Suite** : [12.2 — Sécurité frontend](/12-securite/02-frontend/) — XSS, CSRF, CSP.

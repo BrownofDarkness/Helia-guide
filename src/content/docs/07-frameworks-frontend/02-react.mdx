@@ -1,0 +1,648 @@
+---
+title: 7.2 — React
+description: Hooks, Server Components, Suspense, état global, data fetching, formulaires, tests — l'écosystème React en 2026.
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import Pitfall from '../../../components/Pitfall.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="7">
+Marie attaque le panier en React : composants `<ProductCard>`, `<Cart>`, `<CartItem>`. Premier piège : son état panier est dupliqué dans 2 endroits, les compteurs divergent. Elle découvre le **lift state up** (l'état remonte au plus proche ancêtre commun) — l'un des concepts fondateurs de React.
+</Scenario>
+
+<Scenario parcours="B" episode="6">
+Hugo réécrit son planning Studio Pulse en React. Il maîtrise rapidement `useState`, `useEffect`. Mais quand il veut afficher le **nombre de places restantes en temps réel** dans 5 endroits, il découvre que React re-rend tout à chaque changement d'état — il lui faut un store global (Zustand). Il apprend aussi `useOptimistic` pour la réservation instantanée.
+</Scenario>
+
+<Scenario parcours="C" episode="7">
+Sami choisit React 19 + RSC pour le SEO de ses pages produit. Premier insight : ses Server Components ne shippent **aucun JS** au client → bundle initial 80 KB pour 200 produits. Côté client, il utilise TanStack Query pour le panier qui se synchronise serveur, et React Hook Form + Zod pour les formulaires de checkout.
+</Scenario>
+
+<Scenario parcours="D" episode="7">
+Léa migre CoupDeMain en React. Le feed devient un composant qui consomme un hook `useFeed()` (Zustand + WebSocket). Les modales, drawers, menus passent en Radix UI (a11y native). Elle découvre `useSyncExternalStore` pour synchroniser avec son store Yjs CRDT plus tard.
+</Scenario>
+
+<Scenario parcours="E" episode="7">
+Yanis monte le board kanban en React. Composants : `<Column>`, `<Card>`, `<TaskDrawer>`. Il pose `dnd-kit` pour le drag & drop accessible (clavier + tactile). État via Zustand, sync onglets via BroadcastChannel + Zustand subscribe.
+</Scenario>
+
+> 🎯 **Objectif** : écrire des composants React en confiance, choisir entre Server Components et Client Components, et connaître l'écosystème (Zustand, TanStack Query, React Hook Form, Zod, Vitest, Playwright).
+
+<ObjectiveList items={[
+  "Maîtriser les hooks essentiels et savoir écrire un hook custom",
+  "Distinguer Server Components et Client Components",
+  "Utiliser Suspense pour gérer le chargement",
+  "Manier les hooks de React 19 : useActionState, useOptimistic, useFormStatus",
+  "Choisir entre useState, useReducer, Zustand, Redux Toolkit, Jotai",
+  "Faire du data fetching avec TanStack Query",
+  "Construire un formulaire typé avec React Hook Form + Zod",
+  "Tester un composant avec Vitest + Testing Library"
+]} />
+
+<Level value="débutant" reading="11 min" prereq="axe 6 lu" />
+
+
+## Pourquoi React ?
+
+| Pour | Contre |
+|------|--------|
+| Écosystème énorme, talents disponibles partout | Modèle mental complexe (re-render, hooks rules) |
+| Server Components depuis 2023 — un saut générationnel | Souvent **plus lourd** que Svelte/Solid à perf égale |
+| Maintien actif (Meta + open source) | Beaucoup de churn (RSC, hooks, server actions…) |
+
+**En 2026, React reste le défaut industriel.** Pas le « meilleur » dans l'absolu, mais le plus sûr en termes de talents et écosystème.
+
+## JSX en 2 minutes
+
+```jsx
+function Card({ title, children }) {
+  return (
+    <article className="card">
+      <h2>{title}</h2>
+      {children}
+    </article>
+  );
+}
+```
+
+- Camel-case pour les attributs : `className` (pas `class`), `htmlFor` (pas `for`).
+- Les expressions JS dans `{...}`.
+- Conditionnel : `{cond && <X />}`, ternaire `{cond ? <A /> : <B />}`.
+- Listes : `arr.map(x => <li key={x.id}>...</li>)` — toujours une `key` stable.
+
+```jsx
+{users.map((u) => (
+  <UserCard key={u.id} user={u} />
+))}
+```
+
+**Erreur classique** : `key={index}` dans une liste qui peut se réordonner. Préfère un ID stable.
+
+## Les hooks essentiels
+
+### `useState` — état local
+
+```jsx
+const [count, setCount] = useState(0);
+
+setCount(5);                    // remplace
+setCount(prev => prev + 1);     // basé sur la valeur précédente — préfère ça
+```
+
+Si le nouveau state dépend de l'ancien, **utilise la forme fonctionnelle** : sinon en cas de mises à jour rapides, tu peux perdre des updates.
+
+### `useEffect` — effets de bord
+
+```jsx
+useEffect(() => {
+  // au montage et à chaque changement de userId
+  fetchUser(userId).then(setUser);
+
+  return () => {
+    // cleanup au démontage et avant chaque re-exécution
+  };
+}, [userId]);   // tableau de dépendances
+```
+
+| Dépendances | Quand l'effet tourne |
+|-------------|----------------------|
+| `[]` | Au montage uniquement |
+| `[a, b]` | Quand `a` ou `b` change |
+| (omis) | À **chaque** rendu (rarement souhaité) |
+
+**Règle d'or** : les valeurs **utilisées dans l'effet** doivent être **dans les dépendances** (le linter `react-hooks/exhaustive-deps` te le dit).
+
+<Aside type="caution" title="useEffect — souvent surutilisé">
+Beaucoup d'effets ne sont pas nécessaires. Si tu fetchs des données → utilise **TanStack Query**. Si tu calcules une valeur dérivée → fais-le dans le rendu directement, pas dans un effet.
+
+useEffect est pour les **effets de bord** : abonnement DOM, sync avec un système externe, timers.
+</Aside>
+
+### `useMemo` et `useCallback` — mémoïsation
+
+```jsx
+const expensive = useMemo(() => {
+  return computeExpensiveValue(data);
+}, [data]);   // recalcule uniquement si data change
+
+const handleClick = useCallback(() => {
+  setCount(c => c + 1);
+}, []);
+```
+
+**À utiliser uniquement si le profiler montre un goulot.** Mémoïser partout = code plus lourd, gain négligeable, dépendances qui s'accumulent.
+
+<Aside type="tip" title="React Compiler — la fin du `useMemo` partout">
+Depuis React 19 (stable mi-2025), le **React Compiler** (officiellement `babel-plugin-react-compiler`) **auto-mémoïse** ton code à la compilation. Tu peux supprimer 90 % de tes `useMemo` / `useCallback` / `React.memo`.
+
+```js
+// vite.config.ts ou next.config.ts
+import reactCompiler from 'babel-plugin-react-compiler';
+
+export default {
+  plugins: [
+    react({ babel: { plugins: [reactCompiler] } }),
+  ],
+};
+```
+
+**Ce que ça change** :
+
+```jsx
+// ❌ Avant : tu mémoïses à la main
+const filtered = useMemo(() => items.filter(matches), [items, matches]);
+const onClick = useCallback(() => doSomething(filtered), [filtered]);
+
+// ✅ Après React Compiler activé : tu écris naturellement, le compiler optimise
+const filtered = items.filter(matches);
+const onClick = () => doSomething(filtered);
+```
+
+Le compiler détecte les valeurs stables et insère la mémoïsation **uniquement où c'est utile** — souvent mieux placé qu'un humain.
+
+**Pré-requis** : ton code doit respecter les **règles de React** (pas de mutation, hooks au top-level, props/state immutables). Le compiler **refuse de compiler** un composant qui les casse — c'est aussi un linter de qualité.
+
+**État 2026** : stable, par défaut dans Next.js 16 et la plupart des templates Vite. Si tu démarres un projet React aujourd'hui, **active-le dès le départ**.
+</Aside>
+
+### `useRef` — accéder au DOM, conserver une valeur entre rendus
+
+```jsx
+// Référence DOM
+const inputRef = useRef(null);
+useEffect(() => inputRef.current?.focus(), []);
+return <input ref={inputRef} />;
+
+// Valeur persistante sans re-render
+const renderCount = useRef(0);
+renderCount.current++;        // muter ne déclenche PAS de rendu
+```
+
+### `useReducer` — état complexe
+
+Quand `useState` devient cumbersome (plusieurs sous-états interdépendants) :
+
+```jsx
+function reducer(state, action) {
+  switch (action.type) {
+    case 'add':    return { ...state, items: [...state.items, action.item] };
+    case 'clear':  return { ...state, items: [] };
+    default:       return state;
+  }
+}
+
+const [state, dispatch] = useReducer(reducer, { items: [] });
+dispatch({ type: 'add', item: { id: 1, name: 'Hello' } });
+```
+
+### `useContext` — partager sans drill
+
+```jsx
+const ThemeContext = createContext('light');
+
+// Provider en haut de l'arbre
+<ThemeContext.Provider value="dark">
+  <App />
+</ThemeContext.Provider>
+
+// Consommer n'importe où
+function Button() {
+  const theme = useContext(ThemeContext);
+  return <button className={theme}>...</button>;
+}
+```
+
+<Pitfall title="`key={index}` casse les listes réordonnables" category="perf" axe="7.2">
+**🩹 Symptôme** : input qui ne suit pas son item après réordonnement, state local mélangé entre items, animations buggées.
+
+```tsx
+{tasks.map((task, index) => (
+  <Task key={index} task={task} />
+))}
+```
+
+**🔍 Cause** : React utilise `key` pour identifier chaque élément entre 2 renders. Avec `index`, supprimer l'item 0 fait que l'item 1 hérite de la `key=0` — React croit que c'est le même composant et conserve son state.
+
+**🩺 Fix** : toujours utiliser un **id stable** (souvent `task.id` venant de la DB).
+
+```tsx
+{tasks.map(task => (
+  <Task key={task.id} task={task} />
+))}
+```
+
+**🧠 Leçon** : `key={index}` est un piège **qui ne se révèle pas immédiatement**. Tout marche jusqu'au jour où l'utilisateur réordonne sa liste, puis « bizarrement » l'input value se mélange. Préviens le bug en utilisant des IDs stables dès le départ.
+</Pitfall>
+
+<Pitfall title="useEffect avec dépendance manquante = stale closure" category="tests" axe="7.2">
+**🩹 Symptôme** :
+
+```tsx
+useEffect(() => {
+  const id = setInterval(() => {
+    console.log(count);  // affiche toujours 0 !
+  }, 1000);
+  return () => clearInterval(id);
+}, []);  // ← deps vides
+```
+
+**🔍 Cause** : le `useEffect` capture `count` au 1er render (valeur 0). Le `[]` empêche la ré-exécution. L'interval continue de logger 0 même quand `count` change.
+
+**🩺 Fix** : 3 options.
+
+1. **Mettre la dep** :
+   ```ts
+   useEffect(() => { ... }, [count]);
+   ```
+2. **Setter callback** (recommandé pour incrémenter) :
+   ```ts
+   setCount(c => c + 1);
+   ```
+3. **Ref** si tu veux la valeur courante sans re-render :
+   ```ts
+   const countRef = useRef(count);
+   useEffect(() => { countRef.current = count; });
+   ```
+
+**🧠 Leçon** : 99 % des bugs React du quotidien viennent de stale closures. Active `react-hooks/exhaustive-deps` en `error` (pas `warning`) dans ESLint. Si tu dois le désactiver, c'est presque toujours le signal d'un refacto nécessaire.
+</Pitfall>
+
+### `useOptimistic` — mises à jour optimistes (React 19)
+
+Affiche **immédiatement** l'état attendu, puis confirme (ou annule) quand le serveur répond :
+
+```jsx
+import { useOptimistic } from 'react';
+
+function Likes({ likes, addLike }) {
+  const [optimisticLikes, addOptimistic] = useOptimistic(
+    likes,
+    (current, increment) => current + increment
+  );
+
+  async function handleClick() {
+    addOptimistic(1);    // l'UI affiche likes + 1 immédiatement
+    await addLike();     // appel réseau (peut prendre 500 ms)
+    // À la fin, optimisticLikes revient à la "vraie" valeur de likes
+  }
+
+  return <button onClick={handleClick}>👍 {optimisticLikes}</button>;
+}
+```
+
+✅ UX bien plus snappy.
+✅ Si le serveur échoue, React revient automatiquement à l'état précédent.
+✅ Idéal en combinaison avec une **Server Action** (panier, like, follow…).
+
+### `useFormStatus` — état d'un form depuis ses descendants (React 19)
+
+```jsx
+import { useFormStatus } from 'react-dom';
+
+// Composant qui peut être profondément imbriqué dans un <form>
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return <button disabled={pending}>{pending ? 'Envoi…' : 'Envoyer'}</button>;
+}
+```
+
+Évite de prop-driller le `pending` jusqu'au bouton.
+
+### Hooks personnalisés
+
+Une fonction qui commence par `use` et qui appelle d'autres hooks. C'est la **réutilisation** la plus puissante en React.
+
+```jsx
+function useFetch(url) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(url)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(e => { if (!cancelled) setError(e); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [url]);
+
+  return { data, error, loading };
+}
+
+// Usage
+function Profile({ id }) {
+  const { data, loading } = useFetch(`/api/users/${id}`);
+  if (loading) return <Spinner />;
+  return <h1>{data.name}</h1>;
+}
+```
+
+(En vrai : utilise TanStack Query. C'est juste un exemple pédagogique.)
+
+### Règles d'or des hooks
+
+1. **Toujours au top-level** d'une fonction. **Pas** dans un `if`, une boucle, un callback.
+2. **Toujours dans un composant** (ou autre hook).
+3. **Toujours dans le même ordre** entre les rendus.
+
+Le linter `eslint-plugin-react-hooks` les vérifie automatiquement. Active-le.
+
+## Server Components (RSC) — le grand changement
+
+Depuis Next.js 13 + React 19, **par défaut**, les composants sont **Server Components** : ils s'exécutent sur le serveur, n'envoient **pas leur JS** au client.
+
+```tsx
+// app/products/page.tsx — Server Component par défaut
+export default async function ProductsPage() {
+  const products = await db.product.findMany();   // SQL direct côté serveur
+  return (
+    <ul>
+      {products.map(p => <li key={p.id}>{p.name}</li>)}
+    </ul>
+  );
+}
+```
+
+✅ Pas de JS bundle pour la liste.
+✅ Accès direct à la DB / fichiers / clés API.
+✅ HTML pré-rendu envoyé au client.
+
+### Client Components — quand on en a besoin
+
+Pour de **l'interactivité** (état, événements, hooks), il faut un Client Component :
+
+```tsx
+'use client';   // ← directive en haut du fichier
+
+import { useState } from 'react';
+
+export function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(c => c + 1)}>{count}</button>;
+}
+```
+
+### Combiner les deux
+
+```tsx
+// app/products/page.tsx (Server)
+import { ProductFilter } from './ProductFilter';   // Client
+
+export default async function Page() {
+  const products = await db.product.findMany();
+  return (
+    <>
+      <ProductFilter />                  {/* interactif */}
+      <ul>
+        {products.map(p => <li key={p.id}>{p.name}</li>)}   {/* statique */}
+      </ul>
+    </>
+  );
+}
+```
+
+**Règle pratique** : commence en Server Component, ajoute `'use client'` **uniquement quand tu as besoin** de hooks ou d'événements DOM.
+
+## Suspense et streaming
+
+Suspense permet d'afficher un **fallback** pendant qu'un composant async charge.
+
+```tsx
+import { Suspense } from 'react';
+
+<Suspense fallback={<Spinner />}>
+  <SlowAsyncComponent />
+</Suspense>
+```
+
+En **streaming SSR** (Next.js App Router), le serveur envoie d'abord le shell de la page + le fallback, puis remplace par le vrai contenu dès qu'il est prêt. L'utilisateur voit quelque chose **en moins d'une seconde** même si la DB met 3 secondes.
+
+## Server Actions — formulaires sans API explicite
+
+Next.js 13+ permet d'écrire des fonctions serveur appelées **directement** depuis un formulaire client :
+
+```tsx
+// app/feedback/page.tsx
+async function sendFeedback(formData: FormData) {
+  'use server';
+  const message = formData.get('message');
+  await db.feedback.create({ data: { message } });
+}
+
+export default function Page() {
+  return (
+    <form action={sendFeedback}>
+      <textarea name="message" required />
+      <button type="submit">Envoyer</button>
+    </form>
+  );
+}
+```
+
+✅ Pas d'endpoint API à écrire.
+✅ Validation côté serveur (toujours).
+✅ Marche sans JS si le formulaire est en HTML standard.
+
+## TanStack Query — le must pour les données serveur
+
+```bash
+npm install @tanstack/react-query
+```
+
+```tsx
+import { QueryClient, QueryClientProvider, useQuery, useMutation } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Users />
+    </QueryClientProvider>
+  );
+}
+
+function Users() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => fetch('/api/users').then(r => r.json()),
+    staleTime: 60_000,    // 1 minute avant refetch
+  });
+
+  const deleteUser = useMutation({
+    mutationFn: (id) => fetch(`/api/users/${id}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  });
+
+  if (isLoading) return <Spinner />;
+  if (error) return <p>{error.message}</p>;
+  return data.map(u => (
+    <div key={u.id}>
+      {u.name}
+      <button onClick={() => deleteUser.mutate(u.id)}>Supprimer</button>
+    </div>
+  ));
+}
+```
+
+Tu as gratuitement : cache, dedup des requêtes simultanées, refetch on focus/reconnect, retry, mutations optimistes, devtools graphiques.
+
+## Formulaires — React Hook Form + Zod
+
+```bash
+npm install react-hook-form @hookform/resolvers zod
+```
+
+```tsx
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+const Schema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+type FormData = z.infer<typeof Schema>;
+
+function LoginForm() {
+  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+    resolver: zodResolver(Schema),
+  });
+
+  const onSubmit = (data: FormData) => {
+    console.log(data);   // typé !
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <label htmlFor="email">E-mail</label>
+      <input id="email" {...register('email')} />
+      {errors.email && <p>{errors.email.message}</p>}
+
+      <label htmlFor="password">Mot de passe</label>
+      <input id="password" type="password" {...register('password')} />
+      {errors.password && <p>{errors.password.message}</p>}
+
+      <button type="submit">Se connecter</button>
+    </form>
+  );
+}
+```
+
+Validation schema-driven, types inférés, performances excellentes (pas de re-render à chaque keystroke).
+
+## État global — Zustand
+
+```tsx
+import { create } from 'zustand';
+
+const useStore = create<{ count: number; inc: () => void }>((set) => ({
+  count: 0,
+  inc: () => set((s) => ({ count: s.count + 1 })),
+}));
+
+// Usage — pas de provider
+function Counter() {
+  const { count, inc } = useStore();
+  return <button onClick={inc}>{count}</button>;
+}
+
+// Selector pour ne re-render que sur le morceau utilisé
+const count = useStore((s) => s.count);
+```
+
+Plus simple que Redux, suffisant dans 90 % des cas. Si tu hérites d'un projet Redux Toolkit, ça reste une option valide pour les très grosses équipes.
+
+## Tester un composant — Vitest + Testing Library
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+```tsx
+// Counter.test.tsx
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Counter } from './Counter';
+
+describe('Counter', () => {
+  it('démarre à 0', () => {
+    render(<Counter />);
+    expect(screen.getByRole('button')).toHaveTextContent('0');
+  });
+
+  it('incrémente au clic', async () => {
+    render(<Counter />);
+    await userEvent.click(screen.getByRole('button'));
+    expect(screen.getByRole('button')).toHaveTextContent('1');
+  });
+});
+```
+
+**Principe** : teste le **comportement** (ce que voit l'utilisateur), pas l'implémentation (state interne, méthodes privées). Si tu refactors le composant sans changer le comportement, le test ne devrait pas casser.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu as un useEffect qui dépend de userId mais tu mets `[]` comme dépendances. Que se passe-t-il ?"
+  options={[
+    'Rien, c\'est correct',
+    'L\'effet ne se ré-exécute jamais quand userId change — bug "stale" — le linter react-hooks/exhaustive-deps le détecte',
+    'L\'effet boucle à l\'infini',
+    'React lance une erreur'
+  ]}
+  answerIndex={1}
+  explanation="C'est l'erreur la plus fréquente. L'effet capture la valeur initiale de userId. Si userId change, l'effet ne tourne pas. Le linter t'avertit. Ne le désactive jamais sans bonne raison documentée."
+/>
+
+<Quiz
+  question="Tu écris `<input value={name}>` sans onChange. Que se passe-t-il ?"
+  options={[
+    'L\'input devient read-only en console (warning React)',
+    'L\'input fonctionne normalement',
+    'React lance une erreur',
+    'L\'input est invisible'
+  ]}
+  answerIndex={0}
+  explanation="React te warn : tu as un input contrôlé sans onChange — l'input ne réagit plus aux frappes. Ajoute `onChange={(e) => setName(e.target.value)}` ou utilise `defaultValue` pour un input non contrôlé."
+/>
+
+<Quiz
+  question="Pour fetcher les données utilisateur dans un dashboard React, qu'utilises-tu en 2026 ?"
+  options={[
+    'useState + useEffect + fetch — c\'est natif',
+    'TanStack Query (ou SWR) — gère cache, refetch, mutations, gratuitement',
+    'Redux + middleware redux-thunk',
+    'fetch() directement dans le rendu'
+  ]}
+  answerIndex={1}
+  explanation="useEffect+fetch est l'antipattern à éviter en 2026. TanStack Query résout cache, dedup, refetch on focus, retry, mutations, optimistic updates — tout ce qu'on réinvente mal soi-même. C'est un gain énorme en lisibilité et fiabilité."
+/>
+
+## Pour aller plus loin
+
+- *react.dev* — la nouvelle doc officielle, excellente
+- *Patterns.dev* — patterns React modernes
+- *Tanstack Query Docs* — [tanstack.com/query](https://tanstack.com/query)
+- *React Hook Form Docs* — [react-hook-form.com](https://react-hook-form.com/)
+- *Kent C. Dodds — Epic React* — formation payante mais réputée excellente
+- *Dan Abramov — Overreacting* (blog) — articles profonds sur React
+
+---
+
+**Suite** : [7.3 — Alternatives](/07-frameworks-frontend/03-alternatives/) — Vue, Svelte, Solid, Astro, Angular.

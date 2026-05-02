@@ -1,0 +1,380 @@
+---
+title: 4.3 — Gestion de paquets et environnements
+description: npm, pnpm, yarn, semver, lockfiles, monorepos, gestion des versions de Node.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : comprendre ce qui se passe quand tu fais `npm install`, gérer les conflits de versions, et savoir choisir entre npm, pnpm et yarn.
+
+<ObjectiveList items={[
+  "Lire et comprendre semver (^, ~, exacte)",
+  "Distinguer dependencies, devDependencies, peerDependencies",
+  "Expliquer le rôle du lockfile et savoir quand le commit / le supprimer",
+  "Choisir entre npm, pnpm, yarn classique, yarn berry",
+  "Mettre en place un monorepo avec workspaces"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 1 lu" />
+
+
+## Anatomie d'un `package.json`
+
+```json
+{
+  "name": "mon-app",
+  "version": "1.4.2",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "zod": "~4.3.6"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "vitest": "^2.1.0",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
+```
+
+### Les 3 types de dépendances
+
+| Type | Quand utiliser |
+|------|----------------|
+| `dependencies` | Code qui tourne en production (React, Express, lodash…) |
+| `devDependencies` | Outils de dev (Vite, ESLint, Vitest, TypeScript…) |
+| `peerDependencies` | « Mon paquet a besoin de ce paquet, mais tu dois l'installer toi-même » (libs/plugins) |
+
+**Erreur classique** : mettre TypeScript en `dependencies`. Il sert à compiler avant le déploiement, donc c'est `devDependencies`.
+
+## Semver — versionning sémantique
+
+Format : `MAJOR.MINOR.PATCH` (ex. `2.4.7`).
+
+| Niveau | Quand l'incrémenter |
+|--------|---------------------|
+| **MAJOR** (`2 → 3`) | Changement incompatible (breaking change) |
+| **MINOR** (`2.4 → 2.5`) | Nouvelle fonctionnalité, compatible |
+| **PATCH** (`2.4.7 → 2.4.8`) | Correction de bug, compatible |
+
+### Les opérateurs de plage
+
+| Spécificateur | Signifie | Exemple |
+|---------------|----------|---------|
+| `19.0.0` | Exactement cette version | Pin strict |
+| `^19.0.0` | `>= 19.0.0 < 20.0.0` (compatible majeure) | **Défaut npm** |
+| `~19.0.0` | `>= 19.0.0 < 19.1.0` (compatible mineure) | Plus prudent |
+| `*` ou `latest` | N'importe quoi | À éviter |
+| `>= 19.0.0` | Au moins cette version | Pour les peer deps |
+
+### Pré-releases
+
+```
+"version": "2.0.0-beta.3"
+"version": "5.0.0-rc.1"
+"version": "1.5.0-alpha.7"
+```
+
+Le caret n'inclut **pas** les pré-releases automatiquement : `^2.0.0` ne prendra pas `2.0.0-beta.3`.
+
+## Le lockfile — la cohérence inter-machines
+
+Quand tu fais `npm install zod`, npm ajoute `^4.3.6` au `package.json`. Mais quel sera **exactement** le numéro installé chez ton collègue dans 3 mois ?
+
+Le **lockfile** (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`) **fige les versions exactes** de tout l'arbre de dépendances :
+
+```json
+// package-lock.json
+{
+  "node_modules/zod": {
+    "version": "4.3.6",
+    "resolved": "https://registry.npmjs.org/zod/-/zod-4.3.6.tgz",
+    "integrity": "sha512-..."
+  }
+  // + toutes les transitives
+}
+```
+
+**Règle absolue** : **commit ton lockfile**. Sinon ton équipe et ton CI installent des versions différentes, et tu chasses des bugs fantômes.
+
+### `npm install` vs `npm ci`
+
+| Commande | Comportement |
+|----------|--------------|
+| `npm install` | Met à jour le lockfile si différent du `package.json` |
+| `npm ci` | **Installe exactement** ce qui est dans le lockfile, jamais ne le modifie |
+
+**En CI/CD : toujours `npm ci`.** En local pour ajouter une dep : `npm install`.
+
+## npm vs pnpm vs yarn
+
+| | npm | pnpm | yarn classic | yarn berry (v4+) |
+|---|---|---|---|---|
+| Vitesse install | 🟡 | 🟢🟢🟢 | 🟢 | 🟢🟢 |
+| Espace disque (node_modules) | 🔴 dupliqué | 🟢 lien dur | 🔴 dupliqué | 🟢 PnP |
+| Lockfile | `package-lock.json` | `pnpm-lock.yaml` | `yarn.lock` | `yarn.lock` |
+| Workspaces | ✅ | ✅ excellent | ✅ | ✅ |
+| Compatibilité écosystème | 🟢 totale | 🟢 totale | 🟢 totale | 🟡 PnP peut casser certains outils |
+| Maturité 2026 | 🟢 | 🟢 | 🟢 | 🟢 |
+
+**Recommandation 2026** :
+
+- **pnpm** : meilleur défaut moderne. Rapide, économe en disque, bonne gestion des monorepos.
+- **npm** : si tu veux le strict minimum officiel et zéro outil supplémentaire.
+- **yarn berry** : si l'équipe le maîtrise — l'écosystème PnP peut surprendre.
+
+```bash
+# Installer pnpm
+npm install -g pnpm
+
+# Migrer un projet npm → pnpm
+rm -rf node_modules package-lock.json
+pnpm install
+```
+
+## Node.js 24 et TypeScript natif
+
+Depuis **Node.js 24** (LTS depuis octobre 2025, courant en 2026), une nouveauté change la donne pour les projets TypeScript : **le type stripping natif**.
+
+```bash
+# Avec Node 24+
+node hello.ts                 # ça marche directement, sans tsx ni ts-node
+```
+
+Sous le capot, Node fait du **type stripping** : il enlève types, interfaces et autres constructions TS, et exécute le JS résultant. C'est activé par défaut pour les `.ts` (auparavant via `--experimental-strip-types`).
+
+**Ce que ça apporte** :
+
+- Plus besoin de `tsx`/`ts-node` pour les **scripts simples** et les outils maison.
+- Démarrage plus rapide qu'un transpileur en watch.
+- TypeScript devient une « surcouche zéro-coût » à l'exécution.
+
+**Limites importantes** :
+
+- **Pas de type-checking** au runtime (Node strip les types, ne les valide pas) → garde `tsc --noEmit` ou `astro check` en CI.
+- **Subset autorisé** : pour un strip purement syntaxique, certaines constructions TS sont interdites (enum traditionnels, namespaces, casts spécifiques). TypeScript 5.8 a introduit l'option `--erasableSyntaxOnly` qui te dit d'avance si ton code est compatible.
+- En **production**, on recommande toujours un build TS avec optimisations (sourcemaps, tree-shaking, target précis).
+
+```json
+// tsconfig.json — pour vérifier la compatibilité Node-strip
+{
+  "compilerOptions": {
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "target": "ES2023"
+  }
+}
+```
+
+## Gérer plusieurs versions de Node.js
+
+Tu travailleras sur des projets en Node 20, 22, 24… Solution : un **gestionnaire de versions**.
+
+### nvm (Linux/Mac/WSL)
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
+
+nvm install 24       # installer Node 24 (LTS courant)
+nvm install 22       # installer Node 22 aussi
+nvm use 24           # basculer
+nvm alias default 22 # version par défaut
+```
+
+### nvm-windows (Windows pur, hors WSL)
+
+Différent projet : [github.com/coreybutler/nvm-windows](https://github.com/coreybutler/nvm-windows)
+
+### fnm — la version moderne et rapide
+
+```bash
+# Installer
+curl -fsSL https://fnm.vercel.app/install | bash
+# ou : winget install Schniz.fnm
+
+fnm install 22
+fnm use 22
+```
+
+### `.nvmrc` ou `.node-version`
+
+Fichier à la racine du projet qui dit quelle version utiliser :
+
+```
+22.10.0
+```
+
+`nvm use` le lit automatiquement. Les CI le respectent aussi (GitHub Actions a `actions/setup-node` qui le détecte).
+
+## Scripts npm
+
+Les scripts sont des commandes shell exécutables via `npm run` (ou `pnpm`/`yarn`).
+
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "ci": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  }
+}
+```
+
+### Hooks pré/post
+
+```json
+{
+  "scripts": {
+    "prebuild": "pnpm typecheck",
+    "build": "vite build",
+    "postbuild": "pnpm test:e2e"
+  }
+}
+```
+
+`pnpm build` exécute alors `prebuild` → `build` → `postbuild` automatiquement.
+
+### Passer des arguments
+
+```bash
+npm run test -- --watch              # double tiret = arguments au script
+pnpm test --watch                    # pnpm n'a pas besoin du double tiret
+```
+
+## Monorepos avec workspaces
+
+Plusieurs paquets dans un seul repo, dépendances internes partagées.
+
+### Avec pnpm
+
+`pnpm-workspace.yaml` à la racine :
+
+```yaml
+packages:
+  - "apps/*"
+  - "packages/*"
+```
+
+Structure :
+
+```
+mon-monorepo/
+├── apps/
+│   ├── web/
+│   │   └── package.json    (Next.js)
+│   └── mobile/
+│       └── package.json    (React Native)
+├── packages/
+│   ├── ui/
+│   │   └── package.json    (composants partagés)
+│   └── config/
+│       └── package.json    (eslint config, tsconfig)
+├── pnpm-workspace.yaml
+└── package.json
+```
+
+```bash
+# Installer une dep dans un workspace spécifique
+pnpm add react --filter web
+
+# Lancer un script dans tous les workspaces
+pnpm -r build
+
+# Référencer un workspace interne dans un autre
+# Dans apps/web/package.json :
+"dependencies": {
+  "@mon-monorepo/ui": "workspace:*"
+}
+```
+
+### Outils complémentaires
+
+- **Turborepo** : cache et parallélisation des scripts (Vercel).
+- **Nx** : équivalent plus complet, orienté entreprise.
+
+## Paquets globaux — à utiliser avec parcimonie
+
+```bash
+npm install -g serve   # installe globalement
+```
+
+**Problème** : la version globale est partagée par tous tes projets — un conflit fait des ravages. Préfère :
+
+```bash
+npx serve              # exécute sans installer
+pnpm dlx serve         # équivalent pnpm
+```
+
+Ou installe-le en `devDependencies` du projet et accède via un script npm.
+
+## Auto-évaluation
+
+<Quiz
+  question='Tu vois "react": "^19.0.0" dans package.json. Quelle version sera installée si tu fais npm install demain ?'
+  options={[
+    'Toujours 19.0.0',
+    'La dernière version 19.x.y disponible (mineure et patch peuvent monter, pas la majeure)',
+    'La toute dernière version de React',
+    'Cela dépend du lockfile'
+  ]}
+  answerIndex={3}
+  explanation="Subtilité : si le lockfile existe et a fixé une version (ex. 19.0.5), npm install ou npm ci utilisera CETTE version. Sans lockfile, oui, ce serait la dernière 19.x.y compatible avec ^19.0.0. C'est pourquoi le lockfile est crucial pour la reproductibilité."
+/>
+
+<Quiz
+  question="Pourquoi `npm ci` est préféré à `npm install` en CI/CD ?"
+  options={[
+    'C\'est plus rapide à taper',
+    'npm ci installe strictement ce qui est dans le lockfile et échoue si package.json et lockfile divergent — résultat reproductible',
+    'npm ci télécharge depuis un autre registre',
+    'Aucune différence en pratique'
+  ]}
+  answerIndex={1}
+  explanation="npm ci garantit que l'environnement CI est identique au dev (et entre runs). Si quelqu'un a oublié de commit son lockfile mis à jour, le CI échoue immédiatement plutôt que de masquer un problème."
+/>
+
+<Quiz
+  question="TypeScript dans une app React. Où le mettre ?"
+  options={[
+    'dependencies — c\'est utilisé partout',
+    'devDependencies — il sert au build, pas à l\'exécution en prod',
+    'peerDependencies',
+    'optionalDependencies'
+  ]}
+  answerIndex={1}
+  explanation="TypeScript est compilé en JavaScript avant le déploiement. À l'exécution en prod, il n'y a plus de TypeScript. Donc devDependencies. Mêmes règles pour ESLint, Prettier, Vitest, Webpack/Vite, etc."
+/>
+
+## Pour aller plus loin
+
+- *npm Docs* — [docs.npmjs.com](https://docs.npmjs.com/)
+- *pnpm Docs* — [pnpm.io](https://pnpm.io/)
+- *Semver visualizer* — [semver.npmjs.com](https://semver.npmjs.com/) (joue avec les ranges)
+- *Turborepo Handbook* — [turbo.build/repo](https://turbo.build/repo)
+- *Why pnpm?* — [pnpm.io/motivation](https://pnpm.io/motivation)
+
+---
+
+**Suite** : [4.4 — Conteneurisation (Docker)](/04-outils/04-docker/) — l'environnement reproductible au niveau du système.

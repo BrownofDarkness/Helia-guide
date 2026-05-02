@@ -1,0 +1,398 @@
+---
+title: 11.3 — Outils statiques
+description: ESLint v9, Prettier, Biome, TypeScript strict, PHPStan, Ruff, mypy — détecter les bugs sans les exécuter.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : prévenir les bugs **avant** la prod en lisant le code statiquement. Linter, formatter, type-checker — la triade indispensable 2026.
+
+<ObjectiveList items={[
+  "Configurer ESLint v9 (flat config) avec Prettier",
+  "Choisir entre ESLint+Prettier et Biome",
+  "Activer TypeScript strict + noUncheckedIndexedAccess",
+  "Lancer PHPStan ou Psalm sur du PHP",
+  "Configurer Ruff + mypy sur Python",
+  "Mettre lint + typecheck en CI bloquante"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 5-10 lus" />
+
+
+## Linter, formatter, type-checker
+
+3 outils complémentaires qui analysent ton code **sans l'exécuter** :
+
+| Outil | Détecte |
+|-------|---------|
+| **Linter** | Bugs probables, mauvaises pratiques, code mort |
+| **Formatter** | Indentation, espaces, virgules — l'apparence |
+| **Type-checker** | Incohérences de types |
+
+Tu veux les **trois** dans tes projets sérieux. Lancés en pre-commit + CI.
+
+## Linter + formatter — l'écosystème JS/TS
+
+### Option 1 — ESLint v9 + Prettier (le standard)
+
+[ESLint v9](https://eslint.org/) (sortie 2024) introduit la **flat config** (`eslint.config.js`) qui remplace `.eslintrc`.
+
+```bash
+npm install -D eslint @eslint/js typescript-eslint prettier
+```
+
+```js
+// eslint.config.js
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  js.configs.recommended,
+  ...tseslint.configs.strict,
+  {
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+    },
+  }
+);
+```
+
+```json
+// .prettierrc.json
+{
+  "semi": true,
+  "singleQuote": true,
+  "trailingComma": "es5",
+  "printWidth": 100,
+  "arrowParens": "always"
+}
+```
+
+```json
+// package.json — scripts
+{
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm lint && pnpm format --check && pnpm typecheck"
+  }
+}
+```
+
+### Option 2 — Biome (l'outsider en 2026)
+
+[Biome](https://biomejs.dev/) = **un seul binaire Rust** qui fait linter + formatter + import organizer. **10-100× plus rapide** qu'ESLint + Prettier.
+
+```bash
+npm install -D @biomejs/biome
+npx biome init
+```
+
+```json
+// biome.json
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "linter": { "enabled": true, "rules": { "recommended": true } },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 }
+}
+```
+
+```bash
+npx biome check          # lint + format check
+npx biome check --write  # corrige
+```
+
+✅ **Ultra-rapide**, un seul outil.
+❌ Moins de règles que ESLint, certains plugins React/Vue/Astro pas encore au niveau.
+
+**Verdict 2026** : ESLint v9 + Prettier reste **le défaut** pour son écosystème. Biome **gagne du terrain** sur les projets qui priorisent la vitesse de feedback. Tu peux migrer plus tard.
+
+### Plugins essentiels (ESLint)
+
+| Plugin | Rôle |
+|--------|------|
+| `typescript-eslint` | Typescript-specific rules |
+| `eslint-plugin-react` | React |
+| `eslint-plugin-react-hooks` | Détecte les violations de règles des hooks |
+| `eslint-plugin-jsx-a11y` | Accessibilité JSX |
+| `eslint-plugin-import` | Imports propres |
+| `eslint-plugin-vitest` | Anti-patterns de tests |
+| `eslint-plugin-tailwindcss` | Conventions Tailwind |
+
+## TypeScript strict — le minimum 2026
+
+```json
+// tsconfig.json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  }
+}
+```
+
+`strict: true` active **8 vérifications** d'un coup :
+
+- `noImplicitAny`
+- `strictNullChecks` (le plus important — `null`/`undefined` explicites)
+- `strictFunctionTypes`
+- `strictBindCallApply`
+- `strictPropertyInitialization`
+- `noImplicitThis`
+- `useUnknownInCatchVariables`
+- `alwaysStrict`
+
+`noUncheckedIndexedAccess` ajoute `| undefined` quand tu accèdes à `arr[0]` ou `obj[key]`. Plus sûr.
+
+```ts
+// Avec noUncheckedIndexedAccess
+const arr = [1, 2, 3];
+const first = arr[0];   // type: number | undefined
+console.log(first.toFixed(2));   // ❌ erreur — peut être undefined
+
+// Tu DOIS gérer le undefined :
+if (first !== undefined) console.log(first.toFixed(2));
+```
+
+### `tsc --noEmit` en CI
+
+```yaml
+# .github/workflows/ci.yml
+- run: pnpm typecheck   # tsc --noEmit
+```
+
+**Bloque** le merge si une erreur TS apparaît.
+
+## Outils statiques par langage
+
+### Python — Ruff + mypy
+
+[Ruff](https://docs.astral.sh/ruff/) remplace **Black + isort + Flake8 + pyupgrade + plein d'autres** en un seul binaire Rust.
+
+```bash
+uv add --dev ruff mypy
+```
+
+```toml
+# pyproject.toml
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "W", "UP"]   # bug-prone, style, imports, etc.
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+```
+
+```bash
+uv run ruff check .         # lint
+uv run ruff format .         # format
+uv run mypy .                # type-check
+```
+
+### PHP — PHPStan ou Psalm
+
+[PHPStan](https://phpstan.org/) analyse statiquement le code PHP, détecte des bugs de types impossibles à exécuter.
+
+```bash
+composer require --dev phpstan/phpstan
+```
+
+```neon
+# phpstan.neon
+parameters:
+    level: 8           # 0 = laxiste, 9 = max strict
+    paths:
+        - src
+    excludePaths:
+        - tests
+```
+
+```bash
+vendor/bin/phpstan analyse
+```
+
+**Niveau 8-9** = équivalent TypeScript strict. Permet d'attraper :
+
+- Méthodes appelées sur `null`.
+- Types incohérents.
+- Code mort.
+- Mauvaises annotations docblock.
+
+### Laravel — Larastan + Pint
+
+```bash
+composer require --dev larastan/larastan laravel/pint
+```
+
+`Pint` est un formatter spécifique Laravel (basé PHP-CS-Fixer). `Larastan` étend PHPStan avec la connaissance Laravel (Eloquent, Facades).
+
+### Symfony — PHPStan + PHP-CS-Fixer
+
+Combo classique. Symfony fournit aussi `symfony/phpstan-extension` pour les helpers.
+
+## Pre-commit hooks — déléguer à la machine
+
+Pour **forcer** lint + format avant commit, sans dépendre de la discipline :
+
+### lint-staged + husky
+
+```bash
+npm install -D husky lint-staged
+npx husky init
+```
+
+```json
+// package.json
+{
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": ["eslint --fix", "prettier --write"],
+    "*.{json,md,css}": ["prettier --write"]
+  }
+}
+```
+
+```sh
+# .husky/pre-commit
+npx lint-staged
+```
+
+À chaque `git commit`, seuls les **fichiers stagés** sont lintés/formatés. Rapide même sur gros repo.
+
+### Pre-commit (Python, multi-langages)
+
+[pre-commit](https://pre-commit.com/) gère pareil pour Python :
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+```
+
+```bash
+uv run pre-commit install
+```
+
+## CI bloquante
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on: [push, pull_request]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test -- --coverage
+      - run: npm run build
+```
+
+Chaque PR doit passer **lint + typecheck + tests + build** avant merge. Configuré en **branch protection** sur GitHub : on **ne peut pas merger** si la CI échoue.
+
+## Outils additionnels utiles
+
+### `semgrep` — pattern-based static analysis
+
+[Semgrep](https://semgrep.dev/) scanne du code multi-langage avec des règles type "regex sémantique". Détecte des bugs de sécu et anti-patterns :
+
+```bash
+npx semgrep --config=auto .
+```
+
+### `gitleaks` / `trufflehog` — détecter les secrets
+
+```bash
+npx gitleaks detect --no-git
+```
+
+À mettre en pre-commit + CI pour empêcher de commit accidentellement une clé API.
+
+### `dependabot` / `renovate` — mises à jour des deps
+
+GitHub Dependabot ouvre automatiquement des PR quand une dépendance a une nouvelle version (sécurité ou minor). [Renovate](https://docs.renovatebot.com/) est l'alternative open source plus configurable.
+
+### `sonarqube` / `codeclimate` — scoring qualité globale
+
+Pour les projets enterprise, ces SaaS notent ton repo selon : couverture, duplication, complexité cyclomatique, tech debt.
+
+## Auto-évaluation
+
+<Quiz
+  question='Tu as `arr[0]` qui retourne `T | undefined` au lieu de `T`. Pourquoi ?'
+  options={[
+    'Bug TypeScript',
+    'Tu as activé noUncheckedIndexedAccess. C\'est plus sûr : arr peut être vide. Tu dois gérer le undefined explicitement (if, ?.)',
+    'TypeScript ne supporte pas les arrays',
+    'C\'est un problème de version'
+  ]}
+  answerIndex={1}
+  explanation="noUncheckedIndexedAccess ajoute | undefined sur les accès indexés. Sans cette option, TS te ment : arr[100] retournerait T alors qu'il est undefined au runtime. Avec, tu attrapes les bugs de NaN, .toString() sur undefined, etc. À activer dès le début d'un projet."
+/>
+
+<Quiz
+  question='Tu fais `npm run lint` et tu as 200 erreurs sur un projet récupéré. Stratégie ?'
+  options={[
+    'Désactiver ESLint',
+    'Désactiver les règles concernées globalement',
+    'npm run lint:fix pour auto-corriger ce qui peut l\'être, puis fixer les restantes par paquets de 10-20 dans des PR séparées. Bloquer la CI sur les nouvelles erreurs (max-warnings 0) tout en gérant le legacy progressivement',
+    'Ignorer'
+  ]}
+  answerIndex={2}
+  explanation="Approche pragmatique : auto-fix d'abord (souvent 60-80 % des problèmes), puis fix progressif par PR thématiques. ESLint a un mode 'baseline' (--max-warnings ou eslint-import-resolver-baseline) pour bloquer uniquement les NOUVELLES erreurs en attendant. Désactiver les règles est l'erreur du débutant qui revient mordre dans 6 mois."
+/>
+
+<Quiz
+  question='Tu es en équipe de 5 devs. Chacun configure son ESLint différemment. Conséquence ?'
+  options={[
+    'Pas grave, chacun ses goûts',
+    'Diffs de PR pollués par des changements de style. Solution : .eslintrc / eslint.config.js + .prettierrc DANS le repo, hooks pre-commit qui forcent l\'application, CI qui bloque',
+    'Tu dois changer d\'équipe',
+    'Plus rapide ainsi'
+  ]}
+  answerIndex={1}
+  explanation="C'est l'erreur classique. Sans config partagée + hook : chaque dev applique son style (semi-colons ou pas, single ou double quotes, etc.), les PR ont des diffs énormes pour rien, le code review devient pénible. Solution : config dans le repo, pre-commit qui force, CI qui bloque. Personne n'a à y penser."
+/>
+
+## Pour aller plus loin
+
+- *ESLint Documentation* — [eslint.org](https://eslint.org/)
+- *Biome* — [biomejs.dev](https://biomejs.dev/)
+- *Prettier* — [prettier.io](https://prettier.io/)
+- *typescript-eslint* — [typescript-eslint.io](https://typescript-eslint.io/)
+- *Ruff* — [docs.astral.sh/ruff](https://docs.astral.sh/ruff/)
+- *PHPStan* — [phpstan.org](https://phpstan.org/)
+- *pre-commit* — [pre-commit.com](https://pre-commit.com/)
+
+---
+
+**Suite** : [11.4 — Documentation](/11-qualite-tests/04-documentation/) — README, ADR, OpenAPI, Storybook.

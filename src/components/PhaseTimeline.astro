@@ -1,0 +1,153 @@
+---
+/**
+ * Frise visuelle des 5 phases du guide — vue d'ensemble en 5 secondes.
+ * Couleurs distinctives par phase, axes listés, détail court.
+ */
+const phases = [
+  {
+    id: 'A',
+    color: '#3b82f6',
+    title: 'Fondations',
+    axes: '1 → 4',
+    detail: 'Machine, réseau, analyse, outils',
+  },
+  {
+    id: 'B',
+    color: '#8b5cf6',
+    title: 'Frontend',
+    axes: '5 → 7',
+    detail: 'HTML/CSS, JS/TS, frameworks',
+  },
+  {
+    id: 'C',
+    color: '#ec4899',
+    title: 'Backend & données',
+    axes: '8 → 10',
+    detail: 'Node/Python/PHP, SQL/NoSQL, BaaS',
+  },
+  {
+    id: 'D',
+    color: '#f59e0b',
+    title: 'Industrialisation',
+    axes: '11 → 14',
+    detail: 'Tests, sécu, perf, A11y, DevOps',
+  },
+  {
+    id: 'E',
+    color: '#10b981',
+    title: 'Méta',
+    axes: '15 → 17',
+    detail: 'Méthodes, soft skills, spécialisations, carrière',
+  },
+];
+---
+
+<div class="phase-timeline" role="list" aria-label="Vue d'ensemble des 5 phases">
+  {phases.map((phase) => (
+    <article
+      class="phase-card"
+      data-phase={phase.id}
+      style={`--phase-color: ${phase.color}`}
+      role="listitem"
+    >
+      <div class="phase-header">
+        <span class="phase-id">Phase {phase.id}</span>
+        <h3 class="phase-title">{phase.title}</h3>
+      </div>
+      <div class="phase-axes" aria-label={`Axes ${phase.axes}`}>{phase.axes}</div>
+      <p class="phase-detail">{phase.detail}</p>
+    </article>
+  ))}
+</div>
+
+<aside class="phase-transverse">
+  <span class="phase-transverse-icon" aria-hidden="true">↻</span>
+  <span>
+    <strong>Axe 17 — Carrière</strong> est <em>transversal</em> : numéroté en dernier,
+    mais à amorcer dès l'axe 4 (mets ton code sur GitHub, écris ton premier ADR à l'axe 11).
+  </span>
+</aside>
+
+<style>
+  .phase-timeline {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 0.6rem;
+    align-items: stretch;
+    margin: 1.5rem 0 1rem;
+  }
+  .phase-card {
+    position: relative;
+    padding: 0.85rem 0.95rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.55rem;
+    background: var(--sl-color-bg);
+    border-left: 4px solid var(--phase-color);
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .phase-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--card-glow, 0 4px 12px rgba(0, 0, 0, 0.08));
+  }
+
+  .phase-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .phase-id {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--phase-color);
+    font-weight: 700;
+  }
+  .phase-title {
+    font-size: 0.95rem;
+    margin: 0;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .phase-axes {
+    display: inline-block;
+    align-self: flex-start;
+    padding: 0.18rem 0.5rem;
+    background: color-mix(in srgb, var(--phase-color) 14%, transparent);
+    color: var(--phase-color);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-family: var(--sl-font-mono);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .phase-detail {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--sl-color-gray-2);
+    line-height: 1.45;
+  }
+
+  .phase-transverse {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 0 1.5rem;
+    background: var(--sl-color-accent-low);
+    border-left: 3px dashed var(--sl-color-accent);
+    border-radius: 0.4rem;
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+  .phase-transverse-icon {
+    font-size: 1.4rem;
+    color: var(--sl-color-accent);
+    flex-shrink: 0;
+  }
+</style>

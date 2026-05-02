@@ -1,0 +1,157 @@
+---
+/**
+ * Composant Diagram — rendu Mermaid côté client.
+ *
+ * Usage :
+ *   <Diagram
+ *     caption="Architecture simplifiée d'un ordinateur"
+ *     code={`
+ *       flowchart LR
+ *         A --> B
+ *         B --> C
+ *     `}
+ *   />
+ *
+ * Mermaid est chargé via npm et s'initialise au mount.
+ */
+
+interface Props {
+  code: string;
+  caption?: string;
+}
+
+const { code, caption } = Astro.props;
+const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`;
+---
+
+<figure class="diagram">
+  <div class="mermaid" id={id} data-source={code.trim()}>
+    <pre class="diagram-loading">{code.trim()}</pre>
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<script>
+  import mermaid from 'mermaid';
+
+  function currentMermaidTheme(): 'default' | 'dark' {
+    return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default';
+  }
+
+  function initMermaid() {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: currentMermaidTheme(),
+      themeVariables: {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+      },
+      flowchart: { useMaxWidth: true, htmlLabels: true },
+      securityLevel: 'loose',
+    });
+  }
+
+  initMermaid();
+
+  // Mutex : sérialise tous les renders concurrents (initial load + astro:page-load
+  // + MutationObserver du theme peuvent se déclencher en parallèle).
+  // ID unique par appel pour éviter les collisions SVG dans mermaid.render().
+  let renderCounter = 0;
+  let renderQueue: Promise<void> = Promise.resolve();
+
+  function queueRender(fn: () => Promise<void>): Promise<void> {
+    renderQueue = renderQueue.then(fn).catch((err) => {
+      console.error('Mermaid queue error:', err);
+    });
+    return renderQueue;
+  }
+
+  async function renderAllInternal() {
+    const blocks = document.querySelectorAll<HTMLElement>(
+      '.mermaid[data-source]:not([data-rendered])'
+    );
+    for (const el of blocks) {
+      const source = el.getAttribute('data-source') ?? '';
+      const svgId = `${el.id}-svg-${++renderCounter}`;
+      try {
+        const { svg } = await mermaid.render(svgId, source);
+        el.innerHTML = svg;
+        el.setAttribute('data-rendered', 'true');
+      } catch (err) {
+        console.error('Mermaid render error:', err);
+        el.setAttribute('data-rendered', 'error');
+      }
+    }
+  }
+
+  function renderAll(): Promise<void> {
+    return queueRender(renderAllInternal);
+  }
+
+  function rerenderAll(): Promise<void> {
+    return queueRender(async () => {
+      document.querySelectorAll<HTMLElement>('.mermaid[data-rendered="true"]').forEach((el) => {
+        const source = el.getAttribute('data-source') ?? '';
+        el.removeAttribute('data-rendered');
+        el.innerHTML = `<pre class="diagram-loading">${source}</pre>`;
+      });
+      await renderAllInternal();
+    });
+  }
+
+  // Re-render quand le thème change (data-theme sur <html>)
+  const w = window as unknown as { __mermaidThemeWatcher?: boolean };
+  if (!w.__mermaidThemeWatcher) {
+    w.__mermaidThemeWatcher = true;
+    let lastTheme = document.documentElement.dataset.theme;
+    new MutationObserver(() => {
+      const next = document.documentElement.dataset.theme;
+      if (next !== lastTheme) {
+        lastTheme = next;
+        initMermaid();
+        rerenderAll();
+      }
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+
+  renderAll();
+  document.addEventListener('astro:page-load', renderAll);
+</script>
+
+<style>
+  .diagram {
+    margin: 1.5rem 0;
+    text-align: center;
+  }
+  .diagram .mermaid {
+    display: flex;
+    justify-content: center;
+    background: var(--sl-color-gray-7, #f6f6f6);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    overflow-x: auto;
+  }
+  .diagram .mermaid svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .diagram .diagram-loading {
+    font-family: ui-monospace, monospace;
+    font-size: 0.85em;
+    white-space: pre;
+    color: var(--sl-color-gray-3, #666);
+    margin: 0;
+  }
+  .diagram figcaption {
+    font-size: 0.85em;
+    color: var(--sl-color-gray-2, #555);
+    margin-top: 0.5rem;
+    font-style: italic;
+  }
+  :global(.diagram .mermaid[data-rendered='error']::before) {
+    content: '⚠️ Erreur de rendu Mermaid — code source ci-dessous';
+    display: block;
+    color: var(--sl-color-orange, orange);
+    margin-bottom: 0.5rem;
+  }
+</style>

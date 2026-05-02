@@ -1,0 +1,294 @@
+---
+title: 3.2 — Formalisation
+description: Cahier des charges, exigences fonctionnelles vs non fonctionnelles, priorisation MoSCoW / RICE / Kano.
+sidebar:
+  order: 2
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : transformer les notes d'entretien et les user stories en un document partageable qui aligne tout le monde — client, équipe, prestataire — sur ce qu'on va vraiment construire.
+
+<ObjectiveList items={[
+  "Distinguer exigences fonctionnelles et non fonctionnelles",
+  "Rédiger un cahier des charges minimal mais complet",
+  "Prioriser un backlog avec MoSCoW, RICE ou Kano",
+  "Identifier ce qui est dans le scope, et surtout ce qui n'y est pas",
+  "Estimer en story points, t-shirt sizes, ou jours-homme"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="aucun (parallélisable avec axe 1)" />
+
+
+## Le cahier des charges minimal
+
+Un cahier des charges utile **tient sur 5 à 15 pages**. Au-delà, personne ne le lit. Voici la structure qu'on retrouve sur 90 % des projets web :
+
+```
+1. Contexte et objectifs
+2. Utilisateurs cibles (personas)
+3. Périmètre (in / out)
+4. Exigences fonctionnelles
+5. Exigences non fonctionnelles
+6. Contraintes (techniques, légales, budgétaires)
+7. Livrables et planning
+8. Critères de succès
+```
+
+### 1 — Contexte et objectifs
+
+Quelques paragraphes :
+
+- **Pourquoi ce projet existe** (problème métier).
+- **Quels résultats** sont attendus (business outcomes).
+- **Pourquoi maintenant** (urgence, opportunité).
+
+```markdown
+Notre clinique reçoit 200 appels/jour pour des prises de RDV.
+Chaque appel coûte 4 minutes au secrétariat.
+Objectif : permettre 60 % des prises de RDV en ligne d'ici 6 mois,
+pour libérer ~40 h/semaine de temps secrétariat.
+```
+
+### 2 — Utilisateurs cibles
+
+Reprend les personas (axe 3.1) avec leurs besoins clés.
+
+### 3 — Périmètre — l'art du « out of scope »
+
+**Le périmètre, c'est aussi dire NON.** La section *« Hors périmètre »* évite 50 % des malentendus :
+
+```markdown
+✅ Dans le périmètre (V1)
+- Prise de RDV en ligne pour 4 motifs prédéfinis
+- Notification SMS de rappel 24 h avant
+- Annulation jusqu'à 12 h avant
+
+❌ Hors du périmètre (à voir en V2)
+- Téléconsultation
+- Paiement en ligne
+- Application mobile native (la web responsive suffit V1)
+- Intégration avec le logiciel métier Doctolib (sera ré-évalué)
+```
+
+## Exigences fonctionnelles vs non fonctionnelles
+
+C'est **la** distinction à maîtriser.
+
+### Exigences fonctionnelles
+
+Ce que le système **fait**. Visibles par l'utilisateur.
+
+> *« L'utilisateur peut réserver un créneau de 15 minutes parmi les disponibilités. »*
+
+S'expriment naturellement en user stories.
+
+### Exigences non fonctionnelles (NFR)
+
+**Comment** le système le fait. Souvent invisibles… jusqu'à ce qu'elles soient violées.
+
+| Catégorie | Exemple chiffré |
+|-----------|----------------|
+| **Performance** | LCP < 2.5 s sur 3G simulé |
+| **Charge** | 500 utilisateurs simultanés sans dégradation > 10 % |
+| **Disponibilité** | 99.5 % sur les heures ouvrées (« 4 nines » = 99.99 %) |
+| **Sécurité** | Conformité OWASP Top 10, audit annuel |
+| **Confidentialité** | Conformité RGPD, registre des traitements |
+| **Accessibilité** | WCAG 2.2 niveau AA |
+| **Support navigateurs** | Chrome, Firefox, Safari, Edge — 2 dernières versions majeures |
+| **Localisation** | FR, EN dès la V1 ; AR (RTL) à partir de V2 |
+| **Maintenabilité** | Tests > 70 % de couverture significative |
+
+<Aside type="caution" title="Une NFR sans chiffre est une NFR inutile">
+« L'application doit être rapide » est intestable. **Toujours** chiffrer une NFR :
+- ❌ « Le site doit être rapide »
+- ✅ « LCP médian < 2.5 s, p95 < 4 s, mesuré via PageSpeed Insights »
+</Aside>
+
+## Prioriser — vous ne ferez pas tout
+
+### Méthode 1 — MoSCoW
+
+Chaque exigence est classée :
+
+| Catégorie | Sens |
+|-----------|------|
+| **M**ust have | Bloquant, non négociable pour la livraison |
+| **S**hould have | Important mais pas bloquant |
+| **C**ould have | Nice-to-have, fait si on a le temps |
+| **W**on't have (cette fois) | Reporté à la prochaine version — explicitement rejeté |
+
+**Règle de répartition saine** : ~60 % Must, ~20 % Should, ~20 % Could.
+Si tout est Must, rien n'est prioritaire.
+
+### Méthode 2 — RICE
+
+Score numérique, plus rigoureux pour départager :
+
+```
+RICE = (Reach × Impact × Confidence) / Effort
+```
+
+| Facteur | Échelle |
+|---------|---------|
+| **Reach** | Combien d'utilisateurs touchés par trimestre |
+| **Impact** | Effet par utilisateur (3=massif, 2=élevé, 1=moyen, 0.5=faible) |
+| **Confidence** | Certitude de l'estimation (100 % / 80 % / 50 %) |
+| **Effort** | Personnes-mois |
+
+**Exemple** :
+
+| Feature | Reach | Impact | Confidence | Effort | RICE |
+|---------|-------|--------|------------|--------|------|
+| Notification SMS rappel | 5000 | 2 | 80 % | 1 | **8000** |
+| Mode sombre | 3000 | 0.5 | 100 % | 0.5 | 3000 |
+| Téléconsultation | 1000 | 3 | 50 % | 4 | **375** |
+
+Le SMS gagne, malgré l'attractivité de la téléconsultation.
+
+### Méthode 3 — Kano (perception utilisateur)
+
+Plus qualitative : classe les features selon la satisfaction qu'elles génèrent.
+
+<Diagram
+  caption="Modèle de Kano — 3 niveaux de feature"
+  code={`
+    flowchart LR
+      Basic[Basic / Must-be<br/>présentes = neutre,<br/>absentes = colère]
+      Perf[Performance<br/>plus c'est bon, plus c'est satisfaisant]
+      Excite[Excitement / Delighters<br/>absentes = neutre,<br/>présentes = surprise positive]
+      Basic --> Perf --> Excite
+  `}
+/>
+
+- **Basic** : panier, paiement, mot de passe oublié. Indispensables.
+- **Performance** : rapidité, ergonomie, options. Plus = mieux.
+- **Excitement** : un easter egg, une animation soignée, une fonctionnalité unique.
+
+Les *delighters* d'aujourd'hui deviennent les *basics* de demain (ex. recherche dans une app).
+
+## Découper et estimer
+
+### Story points vs jours-homme
+
+| | Avantage | Inconvénient |
+|---|----------|--------------|
+| **Jours-homme** | Direct, parlant pour les clients | Suggère une précision fausse, comparaisons inter-équipes pénibles |
+| **Story points** | Compare la complexité, indépendant du dev | Demande une calibration, mal compris hors équipe |
+
+**Conseil** : utilise **t-shirt sizes** (S, M, L, XL) avec les clients, **story points** dans l'équipe.
+
+### Suite de Fibonacci modifiée
+
+Les story points utilisent souvent **1, 2, 3, 5, 8, 13, 21**. La granularité décroît avec la taille — tu ne distingues pas un truc de 22 points d'un de 23.
+
+Si tu donnes 21 points, **redécoupe**. C'est trop gros pour un sprint.
+
+### Le découpage vertical
+
+Une story doit traverser **toutes les couches** (UI → API → DB) sur un petit périmètre, plutôt qu'une couche entière (toute la DB d'un coup, puis toute l'API…).
+
+**Mauvais découpage horizontal** :
+- Sprint 1 : modèle de données complet
+- Sprint 2 : API complète
+- Sprint 3 : UI complète
+
+→ Aucune valeur livrée avant la fin.
+
+**Bon découpage vertical** :
+- Sprint 1 : créer un compte (UI + API + DB minimale)
+- Sprint 2 : se connecter
+- Sprint 3 : ajouter une commande
+
+→ Chaque sprint livre un truc utilisable.
+
+## Document type — le « one-pager »
+
+Pour un projet petit ou un side-project, **un seul document** suffit souvent. Voici un template testé :
+
+```markdown
+# [Nom du projet]
+
+## Pourquoi
+[1-2 paragraphes — problème, ambition]
+
+## Pour qui
+[Personas en 2 lignes chacun]
+
+## Quoi (V1, ce trimestre)
+- [user story prioritaire]
+- [user story]
+- [user story]
+
+## Pas pour cette V1
+- [explicitement reporté]
+- [explicitement reporté]
+
+## Comment
+- Stack : Next.js + Postgres + Vercel
+- Hébergement : Vercel + Supabase
+- Authentification : Clerk
+- Estimation : ~40 jours-homme
+
+## Critères de succès
+- 100 RDV pris en ligne sur le 1er mois
+- < 5 % d'abandon dans le tunnel
+- Score Lighthouse > 90 sur les 4 axes
+
+## Risques
+- Adoption faible si UX pas excellente → tester avec 5 utilisateurs avant lancement
+- Pic de charge en septembre → load-test avant
+```
+
+## Auto-évaluation
+
+<Quiz
+  question="Lequel est une exigence non fonctionnelle ?"
+  options={[
+    'L\'utilisateur peut réinitialiser son mot de passe par e-mail',
+    'L\'application doit afficher la page d\'accueil en moins de 2 secondes sur 3G',
+    'Le panier s\'affiche en haut à droite',
+    'L\'admin peut bloquer un compte utilisateur'
+  ]}
+  answerIndex={1}
+  explanation="Les NFR concernent comment le système se comporte (perf, sécu, dispo, a11y). Les autres décrivent ce que le système fait fonctionnellement."
+/>
+
+<Quiz
+  question="Tu as un backlog de 50 features et 6 mois pour livrer. Comment prioriser ?"
+  options={[
+    'Tout doit être Must have, sinon ce n\'est pas important',
+    'Classer en MoSCoW avec ~60 % Must, ~20 % Should, ~20 % Could, et un W explicite',
+    'Trier alphabétiquement',
+    'Faire au feeling, ça se verra à l\'usage'
+  ]}
+  answerIndex={1}
+  explanation="MoSCoW force à dire NON et à prioriser. Si tout est Must, la priorisation n'a pas eu lieu. Le W (Won't) explicite est la partie la plus utile : il évite que ces features ne reviennent par la fenêtre."
+/>
+
+<Quiz
+  question="Un sprint a livré : modèle de données complet pour 3 entités, mais aucune UI ni API. Statut ?"
+  options={[
+    '🟢 Bon découpage, c\'est progressif',
+    '🔴 Découpage horizontal — rien n\'est démontrable, valeur livrée = 0',
+    '🟢 Permet de paralléliser ensuite',
+    'Cela dépend de la stack'
+  ]}
+  answerIndex={1}
+  explanation="Découpage horizontal classique. Le client ne peut rien tester. Le risque est différé jusqu'à la fin. Préfère un découpage vertical : une fonctionnalité complète mais réduite (UI minimale + API minimale + DB minimale) à chaque sprint."
+/>
+
+## Pour aller plus loin
+
+- *Inspired* — Marty Cagan (sur la gestion produit)
+- *Shape Up* — Ryan Singer (gratuit, méthode Basecamp)
+- *User Story Mapping* — Jeff Patton
+- Template *One-Pager Project Brief* sur Notion / GitHub
+
+---
+
+**Suite** : [3.3 — Modélisation](/03-analyse-conception/03-modelisation/) pour passer du texte aux diagrammes.

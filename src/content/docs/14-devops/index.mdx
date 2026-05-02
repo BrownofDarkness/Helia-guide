@@ -1,0 +1,84 @@
+---
+title: Axe 14 — DevOps & exploitation
+description: CI/CD, IaC, hébergement, conteneurs en prod, observabilité, fiabilité.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : construire une chaîne de livraison automatisée et savoir exploiter ce qu'on déploie — pipeline reproductible, infra versionnée, observabilité solide, et un plan quand ça part en vrille.
+
+## Prérequis
+
+Axes 4 (Docker), 8, 11.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Mettre en place un pipeline CI/CD complet sur GitHub Actions avec OIDC",
+  "Versionner l'infrastructure avec Terraform / OpenTofu ou Pulumi",
+  "Choisir entre PaaS, IaaS et VPS selon la charge et le budget",
+  "Industrialiser des conteneurs (Dockerfile prod, K8s quand utile)",
+  "Implémenter l'observabilité (logs, métriques, traces, SLO, alerting)",
+  "Préparer la fiabilité : sauvegardes, runbooks, post-mortems, DR"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="14.1 — Pipelines CI/CD"
+    href="/14-devops/01-cicd/"
+    description="GitHub Actions multi-jobs, parallélisme, matrices, cache, OIDC pour secrets sans tokens long-lived, environnements éphémères par PR."
+  />
+  <LinkCard
+    title="14.2 — Infrastructure as Code"
+    href="/14-devops/02-iac/"
+    description="Terraform, OpenTofu, Pulumi — state distant verrouillé, structure par environnement, modules, drift detection, sécurité IaC."
+  />
+  <LinkCard
+    title="14.3 — Hébergement"
+    href="/14-devops/03-hebergement/"
+    description="Serverless / PaaS / IaaS / VPS — TCO réel, quand passer de Vercel à Hetzner, Caddy + systemd + UFW pour un VPS sain."
+  />
+  <LinkCard
+    title="14.4 — Conteneurs en production"
+    href="/14-devops/04-conteneurs/"
+    description="Dockerfile multi-stage non-root, scan Trivy, signature cosign, briques K8s essentielles, Helm, Argo CD pour le GitOps."
+  />
+  <LinkCard
+    title="14.5 — Observabilité"
+    href="/14-devops/05-observabilite/"
+    description="Les 3 piliers (logs, métriques, traces), OpenTelemetry, Prometheus + Grafana + Loki + Tempo, Sentry, SLI/SLO/error budget, alerting raisonné."
+  />
+  <LinkCard
+    title="14.6 — Fiabilité"
+    href="/14-devops/06-fiabilite/"
+    description="Sauvegardes 3-2-1 testées, runbooks à 3h du matin, post-mortems blameless, RPO/RTO, game days, chaos engineering, patterns de résilience."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Déploiement complet de `taskly-api`** — pipeline DevOps de bout en bout : Dockerfile multi-stage, CI GitHub Actions avec OIDC (zéro secret long-lived), OpenTofu pour Fly + Sentry, preview par PR, observabilité (Sentry + Prometheus + Better Stack), 2 SLO documentés avec multi-burn-rate, runbooks copy-pastables. Total free tier : ~10 €/mo.
+
+<ExerciseDownload
+  axe="14-devops"
+  slug="01-deploiement-complet"
+  title="Déploiement complet — taskly-api en prod"
+  description="Pré-requis : compte Fly.io + Sentry + Better Stack (free tier) + flyctl + tofu. Tu transformes une API qui tourne en local en service ops-ready : containers, CI/CD avec OIDC, IaC, monitoring, SLO chiffrés, post-mortem blameless. La discipline qui distingue un dev d'un dev qui sait opérer."
+/>
+
+## Ressources clés
+
+- *Site Reliability Engineering* + *SRE Workbook* — Google (gratuits en ligne)
+- *The DevOps Handbook* — Gene Kim et al.
+- *Terraform Up & Running* — Yevgeniy Brikman
+- *Observability Engineering* — Charity Majors et al.
+- *Kubernetes Patterns* — Bilgin Ibryam
+- *DORA reports* — métriques équipes
+- *OpenTelemetry docs* — [opentelemetry.io](https://opentelemetry.io/)
+- *Grafana OSS Stack* — [grafana.com/oss](https://grafana.com/oss/)

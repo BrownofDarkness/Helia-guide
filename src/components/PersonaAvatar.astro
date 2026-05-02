@@ -1,0 +1,53 @@
+---
+/**
+ * Avatar SVG d'un persona du fil rouge.
+ * Monogramme avec couleur du parcours + highlight subtil pour donner du relief.
+ * Indépendant de l'OS (contrairement aux emojis).
+ *
+ * Usage : <PersonaAvatar parcours="A" initial="M" size={56} />
+ */
+interface Props {
+  parcours: 'A' | 'B' | 'C' | 'D' | 'E';
+  initial: string;
+  size?: number;
+  label?: string;
+}
+const { parcours, initial, size = 56, label } = Astro.props;
+---
+
+<svg
+  class={`persona-avatar persona-avatar-${parcours}`}
+  viewBox="0 0 56 56"
+  width={size}
+  height={size}
+  role="img"
+  aria-label={label ?? `Avatar du parcours ${parcours}`}
+>
+  <circle cx="28" cy="28" r="26" class="bg" />
+  <circle cx="22" cy="22" r="9" class="highlight" />
+  <text x="28" y="37" text-anchor="middle" class="initial">{initial}</text>
+</svg>
+
+<style>
+  .persona-avatar {
+    display: block;
+    flex-shrink: 0;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  }
+  .persona-avatar .bg { fill: var(--avatar-bg); }
+  .persona-avatar .highlight { fill: white; opacity: 0.18; }
+  .persona-avatar .initial {
+    font-family: var(--sl-font);
+    font-weight: 700;
+    font-size: 26px;
+    fill: white;
+    letter-spacing: -0.03em;
+  }
+
+  .persona-avatar-A { --avatar-bg: var(--parcours-A-color); }
+  .persona-avatar-B { --avatar-bg: var(--parcours-B-color); }
+  .persona-avatar-C { --avatar-bg: var(--parcours-C-color); }
+  .persona-avatar-D { --avatar-bg: var(--parcours-D-color); }
+  .persona-avatar-E { --avatar-bg: var(--parcours-E-color); }
+</style>

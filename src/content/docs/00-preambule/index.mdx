@@ -1,0 +1,108 @@
+---
+title: Préambule — Comment utiliser ce guide
+description: Méthode, durée, philosophie et plan d'ensemble du parcours.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ScenarioPicker from '../../../components/ScenarioPicker.astro';
+import PhaseTimeline from '../../../components/PhaseTimeline.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+Bienvenue. Avant d'attaquer le contenu, prends quelques minutes pour comprendre **comment ce guide est conçu** et **comment en tirer le maximum**.
+
+<Aside type="tip" title="🎓 Carrière : commence dès l'axe 4, pas à la fin">
+L'axe **17 — Carrière** est numéroté en dernier mais ses conseils sont **actionnables dès tes premiers commits**. Mets ton code public sur GitHub dès l'axe 4. Écris ton premier ADR à l'axe 11. Audite ton portfolio à mi-parcours, pas juste avant de candidater.
+
+**Lis [17.1 (projets fil rouge)](/17-carriere/01-fil-rouge/) et [17.2 (portfolio)](/17-carriere/02-portfolio/) maintenant** — 30 min pour cadrer ce que tu vas montrer plus tard. Le portfolio se construit pendant l'apprentissage, pas après.
+</Aside>
+
+## Choisis ton fil rouge
+
+Pour rendre l'apprentissage **immersif**, ce guide te propose de suivre l'un des 5 personnages qui construisent un vrai projet à travers les axes 5 à 8. Choisis celui qui t'attire — tu peux changer à tout moment via les onglets en haut de chaque page.
+
+<ScenarioPicker />
+
+> 📖 Pour comprendre les conventions visuelles du guide (badges de niveau, glossaire intégré, scénarios), lis aussi [**Comment lire ce guide**](/00-preambule/conventions/) — 2 minutes.
+
+## La promesse
+
+À la fin du parcours, tu seras capable de :
+
+<ObjectiveList items={[
+  "Concevoir, développer, tester, sécuriser et déployer une application web full-stack",
+  "Choisir entre React, Vue, Svelte ; entre Node, Python ou PHP ; entre BaaS et backend custom — en toute lucidité",
+  "Lire un cahier des charges, modéliser une base de données, dessiner une architecture",
+  "Travailler en équipe : Git, code review, méthodes agiles, communication asynchrone",
+  "Te rendre autonome face à un problème nouveau (lecture de doc, recherche, expérimentation)"
+]} />
+
+## La méthode
+
+- **30 % théorie, 70 % pratique.** Chaque axe se termine par un **projet** et des **exercices** avec canevas et correction.
+- **Linéaire pour les débutants**, modulaire pour les autres : si tu connais déjà HTML, saute directement à l'axe qui te manque.
+- **Apprends en expliquant.** Méthode Feynman : si tu ne peux pas expliquer une notion à voix haute, tu ne la maîtrises pas encore.
+- **Construis publiquement.** Mets ton code sur GitHub dès l'axe 4. Ton portfolio se construit pendant l'apprentissage, pas après.
+
+## Durée indicative
+
+| Profil | Durée estimée |
+|--------|--------------|
+| Débutant complet, temps plein | 6 à 9 mois |
+| Débutant complet, temps partiel | 12 à 24 mois |
+| Reconversion, base technique | 4 à 8 mois |
+| Junior consolidant ses bases | 2 à 4 mois |
+
+Ces durées supposent ~10 h/semaine en partiel, ~35 h/semaine en plein temps.
+
+## Les 17 axes
+
+Le guide s'articule autour de 17 axes, regroupés en **5 phases** :
+
+<PhaseTimeline />
+
+### Détail des phases
+
+#### Phase A — Fondations (axes 1 à 4)
+Ce sans quoi rien ne tient : la machine, le réseau, l'analyse, les outils.
+
+#### Phase B — Frontend (axes 5 à 7)
+HTML/CSS, JavaScript/TypeScript, frameworks (React, Vue, Svelte, Next.js…).
+
+> ⚡ **L'axe 6 est le plus dense du parcours** — saut HTML/CSS → JS+TS particulièrement violent. Il est scindé en **2 phases** : 6.1-6.3 (JS essentiel, indispensable avant l'axe 7) puis 6.4 (TypeScript, peut attendre après l'axe 7). Ne te bloque pas sur TS si tu veux progresser sur React.
+
+#### Phase C — Backend & données (axes 8 à 10)
+Trois écosystèmes au choix (Node/TS, Python, PHP), bases de données SQL et NoSQL, BaaS (Firebase, Supabase, …).
+
+> ⚡ **Ordre conseillé dans cette phase** : axe 7 → **9.1 (SQL fondamentaux)** → axe 8 (backend) → **9.2-9.4 (NoSQL, ORM, opérations)** → axe 10 (BaaS).
+>
+> Pourquoi ? L'axe 8 utilise des ORM qui cachent du SQL. Sans 9.1 lu **avant**, tu manipules un ORM sans comprendre. Le reste de l'axe 9 (NoSQL, ORM, opérations) bénéficie au contraire d'avoir d'abord codé un backend.
+
+#### Phase D — Industrialisation (axes 11 à 14)
+Tests, sécurité, performance, accessibilité, DevOps.
+
+#### Phase E — Méta (axes 15 à 17)
+Méthodes de travail, soft skills, spécialisations, carrière.
+
+## Conventions du guide
+
+> 📖 **Détail complet** : voir [« Comment lire ce guide »](/00-preambule/conventions/) — 2 minutes pour comprendre badges, scénarios, glossaire.
+
+- 🌱 / 🌿 / 🌳 **Badges de niveau** en haut de chaque sous-section (débutant / confirmé / avancé) avec temps de lecture estimé et prérequis.
+- 🥖 **Onglets de parcours** en haut des pages des axes 5-8 — bascule entre les 5 personnages narratifs (Marie, Hugo, Sami, Léa, Yanis).
+- 📚 **Termes glossaire** soulignés en pointillés dans le texte (survole pour la définition rapide). Page complète : [/glossaire/](/glossaire/) (260+ termes).
+- 🎯 **Objectifs** en début de sous-section.
+- ✅ **ObjectiveList** — compétences à acquérir.
+- 💡 **Asides** : note (info), tip (astuce), caution (piège), danger (erreur grave).
+- 🛠 **Exercices** avec canevas dans `exercises/<axe>/<slug>/canevas/` et correction commentée dans `correction/`.
+- 🧪 **Quiz** d'auto-évaluation en fin de section.
+
+## Avant de commencer
+
+1. Installe **Node.js ≥ 20**, **Git**, **VS Code**.
+2. Crée un compte **GitHub**.
+3. Clone le dépôt du guide pour avoir accès aux exercices.
+4. Choisis un cahier (papier ou numérique) : tu vas écrire beaucoup de schémas et de notes.
+
+Quand tu es prêt, attaque l'[Axe 1 — Fondations informatiques](/01-fondations/).

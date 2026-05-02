@@ -1,0 +1,297 @@
+---
+title: 2.4 — Anatomie d'un navigateur
+description: Du HTML reçu aux pixels affichés — pipeline de rendu, event loop, Service Workers, PWA.
+sidebar:
+  order: 4
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : comprendre les étapes par lesquelles passe une page HTML pour devenir une interface visible et interactive, et savoir où interviennent les optimisations de performance.
+
+<ObjectiveList items={[
+  "Décrire le pipeline de rendu : parsing → DOM → CSSOM → render tree → layout → paint → composite",
+  "Comprendre l'event loop, les microtasks et les macrotasks",
+  "Distinguer reflow et repaint, savoir ce qui les déclenche",
+  "Identifier ce qu'apportent Service Workers et PWA",
+  "Mesurer le coût d'une animation et la rendre fluide à 60 FPS"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="axe 1 lu" />
+
+
+## Pipeline de rendu — étape par étape
+
+Quand le navigateur reçoit du HTML, il suit ce parcours, en parallèle quand c'est possible :
+
+<Diagram
+  caption="Le pipeline critique d'affichage"
+  code={`
+    flowchart LR
+      HTML[HTML reçu] --> ParseHTML[Parsing HTML]
+      ParseHTML --> DOM[DOM]
+      CSS[CSS reçu] --> ParseCSS[Parsing CSS]
+      ParseCSS --> CSSOM[CSSOM]
+      DOM --> RT[Render Tree]
+      CSSOM --> RT
+      RT --> Layout[Layout<br/>position + taille]
+      Layout --> Paint[Paint<br/>pixels par couche]
+      Paint --> Composite[Composite<br/>assemblage GPU]
+      Composite --> Ecran[Pixels à l'écran]
+  `}
+/>
+
+### 1. Parsing HTML → DOM
+
+Le parseur transforme le HTML en **arbre d'objets** : le DOM. Chaque balise devient un nœud.
+
+```html
+<!DOCTYPE html>
+<html>
+  <head><title>Hello</title></head>
+  <body>
+    <h1>Bonjour</h1>
+    <p>Texte</p>
+  </body>
+</html>
+```
+
+devient :
+
+```
+Document
+└─ html
+   ├─ head
+   │  └─ title — "Hello"
+   └─ body
+      ├─ h1 — "Bonjour"
+      └─ p — "Texte"
+```
+
+### 2. Parsing CSS → CSSOM
+
+Pareil pour les CSS : un arbre **CSS Object Model** (CSSOM).
+
+### 3. Render Tree
+
+Combinaison DOM + CSSOM, **sans** les éléments invisibles (`display: none`, `<head>`, balises sans contenu visuel).
+
+### 4. Layout
+
+Calcul de la **position** et de la **taille** de chaque nœud (en cascade depuis la racine, en respectant les règles CSS : flex, grid, flow).
+
+### 5. Paint
+
+Le navigateur dessine les pixels de chaque nœud sur des **couches** (layers) en mémoire.
+
+### 6. Composite
+
+Le GPU assemble les couches en une image finale. Cette étape peut être très rapide pour des animations de `transform` ou `opacity`.
+
+## Reflow vs repaint vs composite
+
+Modifier le DOM ou le CSS ne déclenche pas toujours tout le pipeline.
+
+| Modif | Étapes affectées | Coût |
+|-------|------------------|------|
+| Changer `transform` ou `opacity` | composite uniquement | 🟢 ~ instantané |
+| Changer `color`, `background-color` | paint + composite | 🟡 modéré |
+| Changer `width`, `height`, `top` | layout + paint + composite | 🔴 cher |
+| Insérer/supprimer un élément | layout + paint + composite | 🔴 cher |
+
+**Conséquence** : pour animer fluide à 60 FPS (16 ms par frame), privilégie `transform` et `opacity`. Évite d'animer `width`, `height`, `top`.
+
+```css
+/* ❌ Animation chère — déclenche layout */
+.box { transition: top 0.3s; }
+.box.move { top: 100px; }
+
+/* ✅ Animation cheap — composite seul */
+.box { transition: transform 0.3s; }
+.box.move { transform: translateY(100px); }
+```
+
+## L'event loop JavaScript
+
+Le navigateur ne fait pas que rendre — il exécute aussi du JS. **Un seul thread** (le main thread) le fait, via une **boucle d'événements**.
+
+<Diagram
+  caption="Event loop : tâches, microtasks, render"
+  code={`
+    flowchart TD
+      Start[Boucle]
+      Start --> Task[Prendre 1 macrotask<br/>setTimeout, événement DOM, fetch...]
+      Task --> Micro[Vider toutes les microtasks<br/>Promesses, queueMicrotask, MutationObserver]
+      Micro --> Render{Rendu nécessaire ?}
+      Render -->|oui| RAF[requestAnimationFrame<br/>+ layout + paint + composite]
+      Render -->|non| Start
+      RAF --> Start
+  `}
+/>
+
+### Microtasks vs macrotasks
+
+| Type | Qui les pose | Quand ils s'exécutent |
+|------|--------------|----------------------|
+| **Macrotask** | `setTimeout`, événements DOM, `fetch` qui revient | Une à la fois entre deux tours de boucle |
+| **Microtask** | `Promise.then`, `await`, `queueMicrotask`, `MutationObserver` | **Toutes** vidées avant la prochaine macrotask |
+
+```js
+console.log('1');
+setTimeout(() => console.log('2'), 0);
+Promise.resolve().then(() => console.log('3'));
+console.log('4');
+// Output : 1, 4, 3, 2
+// 1 et 4 sont synchrones
+// 3 est une microtask (vidée avant le prochain tour)
+// 2 est une macrotask (au tour suivant)
+```
+
+<Aside type="tip" title="Bloquer le thread = UI gelée">
+Une boucle synchrone qui prend 200 ms gèle l'UI : pas de rendu, pas de scroll, pas de clic réactif. Pour les calculs lourds, utilise **Web Workers** (vrai thread parallèle) ou **découpe** (`setTimeout` entre les chunks).
+</Aside>
+
+## Cache HTTP du navigateur
+
+Avant de retéléchargér une ressource, le navigateur vérifie son cache local.
+
+### Stratégies via en-têtes de réponse
+
+| Header | Effet |
+|--------|-------|
+| `Cache-Control: max-age=3600` | Frais pendant 1 h, pas de requête |
+| `Cache-Control: no-cache` | Toujours revalider (mais peut servir si 304) |
+| `Cache-Control: no-store` | Ne jamais cacher (pages sensibles) |
+| `Cache-Control: immutable` | Ne jamais revalider (assets versionnés) |
+| `ETag: "abc123"` | Empreinte de la ressource pour `If-None-Match` |
+
+### Conditional GET
+
+```
+Client : GET /style.css
+         If-None-Match: "abc123"
+
+Serveur : 304 Not Modified  (corps vide, le client réutilise le cache)
+```
+
+### Stratégie typique en prod
+
+| Type d'asset | Stratégie |
+|--------------|-----------|
+| HTML | `Cache-Control: no-cache` (toujours revalider) |
+| Assets versionnés (`app.a3f4e1.js`) | `Cache-Control: public, max-age=31536000, immutable` |
+| Images, polices | Cache long avec ETag |
+| API JSON | Selon le cas — souvent `no-store` ou caching applicatif |
+
+## Service Workers et PWA
+
+Un **Service Worker** est un script qui tourne en arrière-plan, en dehors de la page, et qui peut intercepter les requêtes réseau.
+
+<Diagram
+  caption="Le Service Worker comme proxy de l'application"
+  code={`
+    flowchart LR
+      Page[Page web<br/>main thread] -->|fetch| SW[Service Worker]
+      SW -->|cache hit| Cache[(Cache API)]
+      SW -->|cache miss| Net[Réseau]
+      Net --> SW
+      Cache --> SW
+      SW --> Page
+  `}
+/>
+
+**Capacités** :
+- **Mode hors-ligne** : servir une version cachée si le réseau est absent.
+- **Stratégies de cache** : cache-first, network-first, stale-while-revalidate.
+- **Notifications push**.
+- **Background sync** : envoyer des données quand le réseau revient.
+
+### PWA — Progressive Web App
+
+Une PWA = un site web qui :
+- a un **Service Worker** (offline + perf)
+- a un **manifest.json** (nom, icônes)
+- est **servi en HTTPS**
+- est **installable** (icône sur l'écran d'accueil)
+
+C'est une alternative légère aux apps natives, idéale pour les outils internes ou les sites qu'on veut « presque comme une app ».
+
+```json
+// manifest.json
+{
+  "name": "Mon App",
+  "short_name": "MonApp",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#2563eb",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
+```
+
+## Mesurer la performance
+
+Trois métriques **Core Web Vitals** que Google et tout le monde surveillent :
+
+| Métrique | Mesure | Cible « bonne » |
+|----------|--------|-----------------|
+| **LCP** (Largest Contentful Paint) | Temps avant que le plus gros élément visible soit affiché | < 2.5 s |
+| **INP** (Interaction to Next Paint) | Latence entre clic/tape et rendu visible | < 200 ms |
+| **CLS** (Cumulative Layout Shift) | Ampleur des sauts de layout pendant le chargement | < 0.1 |
+
+**Outils** : Lighthouse (Chrome DevTools), [PageSpeed Insights](https://pagespeed.web.dev), WebPageTest. On approfondit dans l'**axe 13**.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu animes un menu en modifiant width: 0 → width: 300px. L'animation est saccadée. Pourquoi ?"
+  options={[
+    'CSS transitions ne marchent pas sur width',
+    'Animer width déclenche layout + paint + composite à chaque frame, ce qui est cher',
+    'Il faut utiliser !important',
+    'C\'est dû au cache du navigateur'
+  ]}
+  answerIndex={1}
+  explanation="width touche le layout, qui se cascade dans tout le sous-arbre. Préfère transform: scaleX(0) → scaleX(1) qui ne déclenche que le composite (étape GPU)."
+/>
+
+<Quiz
+  question="Quel ordre d'exécution est correct ?  console.log('A'); setTimeout(() => console.log('B'), 0); Promise.resolve().then(() => console.log('C'));"
+  options={[
+    'A, B, C',
+    'A, C, B',
+    'B, A, C',
+    'C, A, B'
+  ]}
+  answerIndex={1}
+  explanation="A est synchrone (immédiat). C est une microtask, vidée avant la prochaine macrotask. B est une macrotask (setTimeout), au tour suivant de la boucle."
+/>
+
+<Quiz
+  question="Tu sers une grosse application avec des assets versionnés (app.a3f4.js). Quelle stratégie de cache pour ces fichiers ?"
+  options={[
+    'Cache-Control: no-store',
+    'Cache-Control: no-cache',
+    'Cache-Control: public, max-age=31536000, immutable',
+    'Pas d\'en-tête, le navigateur décide'
+  ]}
+  answerIndex={2}
+  explanation="Comme l'URL contient un hash du contenu, le fichier ne change jamais. immutable indique au navigateur de ne JAMAIS revalider — performance maximale, et pas de risque puisque toute version change l'URL."
+/>
+
+## Pour aller plus loin
+
+- *Inside look at modern web browser* — Mariko Kosaka (4 articles, Google) : la référence visuelle
+- *web.dev — Rendering performance* : [web.dev/articles/rendering-performance](https://web.dev/articles/rendering-performance)
+- *JavaScript Visualized: Event Loop* — Lydia Hallie (vidéo + article)
+- *PWA on web.dev* : [web.dev/learn/pwa](https://web.dev/learn/pwa)
+
+---
+
+**Fin de l'axe 2.** Direction l'[axe 3 — Analyse & conception](/03-analyse-conception/), ou attaque l'exercice [`mini-curl`](/02-web/#projet-de-laxe).

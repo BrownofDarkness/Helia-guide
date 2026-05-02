@@ -1,0 +1,52 @@
+# Stack full-stack Docker Compose — canevas
+# À compléter aux endroits TODO.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: app_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    # TODO : ajouter un healthcheck avec pg_isready
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ./api
+      target: dev
+    environment:
+      DATABASE_URL: postgres://app:secret@db:5432/app_dev
+      REDIS_URL: redis://redis:6379
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    # TODO : monter le code source en bind, sans écraser node_modules
+    # volumes:
+    #   - ?
+    #   - ?
+    # TODO : faire attendre que db soit healthy
+    # depends_on:
+    #   db: ?
+
+  web:
+    build:
+      context: ./web
+      target: dev
+    environment:
+      VITE_API_URL: http://localhost:3000
+    ports:
+      - "5173:5173"
+    # TODO : bind mount pour le hot-reload
+
+volumes:
+  db-data:

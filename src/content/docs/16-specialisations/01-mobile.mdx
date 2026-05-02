@@ -1,0 +1,497 @@
+---
+title: 16.1 — Mobile & cross-platform
+description: PWA avancée (Service Workers, Background Sync, Push), React Native / Expo, Flutter, Capacitor — choisir selon le contexte (UX, équipe, budget, time-to-market).
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="23">
+Lina a quelques clients qui veulent installer le site comme une app sur leur smartphone. Marie ajoute un manifeste et un Service Worker basique — sa vitrine devient une <Term>PWA</Term> installable. Pas besoin d'app native pour Lina : la PWA suffit largement.
+</Scenario>
+
+<Scenario parcours="B" episode="22">
+Studio Pulse pourrait avoir une app mobile native. Hugo regarde React Native + Expo. Mais il n'a ni le temps ni le budget. PWA avec push notif (rappel cours J-1) suffit : 80 % de la valeur, 20 % du coût.
+</Scenario>
+
+<Scenario parcours="C" episode="23">
+Sami envisage une PWA pour les livreurs vélo (ils consultent leurs créneaux à livrer). Service Worker + offline + push notif = parfait. Pas d'app store, pas de signature, pas de validation — déploiement instantané.
+</Scenario>
+
+<Scenario parcours="D" episode="23">
+**CoupDeMain DOIT être une PWA mobile** — c'est central. Léa configure le manifeste, les icônes adaptatives, Service Worker via Workbox, push notifications, mode hors-ligne. Score Lighthouse PWA 100. Plus tard, peut-être Capacitor pour publier sur les stores si besoin.
+</Scenario>
+
+<Scenario parcours="E" episode="23">
+Yanis ajoute un Service Worker à Tasky pour que les bénévoles consultent leur kanban dans le bus (offline). Notifications push pour les tâches assignées. Pas besoin d'app native pour le scope asso.
+</Scenario>
+
+> 🎯 **Objectif** : choisir une stratégie mobile cohérente avec ta cible. Pas de réponse universelle — la PWA suffit pour 60 % des cas, le natif est obligatoire pour les 10 % les plus exigeants. Entre les deux, React Native, Flutter et Capacitor servent des contextes précis.
+
+<ObjectiveList items={[
+  "Évaluer si une PWA suffit (et quand elle ne suffit pas)",
+  "Construire une PWA installable avec Service Worker, Background Sync et Push",
+  "Comparer React Native / Expo, Flutter et Capacitor pour le cross-platform",
+  "Anticiper les contraintes des stores (Apple, Google) et de la signature d'app",
+  "Choisir entre une équipe web qui s'étend au mobile et une équipe mobile dédiée"
+]} />
+
+<Level value="avancé" reading="13 min" prereq="axes 1-14 maîtrisés" />
+
+
+## Le tronc commun mobile en 2026
+
+Quel que soit le choix, ces problèmes restent à traiter :
+
+| Sujet | Détails |
+|-------|---------|
+| **Distribution** | App Store, Play Store, sideloading (Android), TestFlight |
+| **Signature** | Certificats Apple ($99/an), keystore Android |
+| **Notifications push** | APNs (iOS), FCM (Android), Web Push (PWA) |
+| **Hors-ligne** | Cache, sync différée, gestion conflits |
+| **Capteurs** | GPS, caméra, biométrie, Bluetooth, NFC |
+| **Stockage** | Fichiers, DB locale (SQLite, IndexedDB) |
+| **Mise à jour** | OTA (over-the-air) ou via store |
+| **Permissions** | Demande contextualisée, refus géré |
+| **Accessibilité** | VoiceOver, TalkBack — différents de a11y web |
+
+---
+
+## PWA — la voie sous-estimée
+
+Une **Progressive Web App** est un site web avec :
+
+- **Service Worker** (cache offline + sync en arrière-plan).
+- **Web App Manifest** (icône, nom, splashscreen).
+- **HTTPS** obligatoire.
+- **Installable** depuis le navigateur.
+
+### Capacités PWA en 2026
+
+| Capacité | iOS Safari | Chrome Android | Notes |
+|----------|------------|----------------|-------|
+| Installation home-screen | ✅ | ✅ | Pas via App Store |
+| Offline / cache | ✅ | ✅ | Service Worker |
+| Push notifications | ✅ (iOS 16.4+) | ✅ | iOS exige l'install préalable |
+| Géolocalisation | ✅ | ✅ | Avec consentement |
+| Caméra / mic | ✅ | ✅ | `getUserMedia` |
+| **Background Sync** | ❌ | ✅ | Permet de retry en arrière-plan |
+| **Periodic Background Sync** | ❌ | ✅ avec restrictions | Update de contenu en arrière-plan |
+| Bluetooth | ❌ | ✅ avec restrictions | Web Bluetooth |
+| NFC | ❌ | ✅ avec restrictions | Web NFC (lecture) |
+| Biométrie | ✅ via WebAuthn | ✅ via WebAuthn | Pas l'empreinte natif |
+| Paiements | ✅ Apple Pay via JS | ✅ Google Pay via JS | Pas IAP store |
+
+> Apple a longtemps freiné les PWA. Depuis iOS 16.4 (2023) : push notifications. Depuis iOS 17 : `installprompt` plus prévisible. En 2026, **la PWA est une option crédible** sur iOS.
+
+### Service Worker — l'essentiel
+
+```ts
+// sw.ts (compilé en sw.js)
+const CACHE = 'app-v1';
+const ASSETS = ['/', '/styles.css', '/app.js', '/offline.html'];
+
+self.addEventListener('install', (event: any) => {
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
+});
+
+self.addEventListener('activate', (event: any) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+    )
+  );
+});
+
+self.addEventListener('fetch', (event: any) => {
+  // Network-first pour HTML, cache-first pour les assets versionnés
+  const url = new URL(event.request.url);
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/offline.html'))
+    );
+  } else {
+    event.respondWith(
+      caches.match(event.request).then((r) => r ?? fetch(event.request))
+    );
+  }
+});
+```
+
+Stratégies de cache courantes :
+
+| Stratégie | Quand |
+|-----------|-------|
+| **Cache-first** | Assets immutables (`/static/abc123.js`) |
+| **Network-first** | HTML, données dynamiques |
+| **Stale-while-revalidate** | API peu critiques (catalogue) |
+| **Cache-only** | Mode offline strict |
+| **Network-only** | Endpoints sensibles (auth) |
+
+> **Workbox** (Google) rend tout ça déclaratif. À utiliser plutôt que de réécrire un SW à la main.
+
+### Background Sync — retry quand revient le réseau
+
+```ts
+// Côté app
+const sw = await navigator.serviceWorker.ready;
+await sw.sync.register('sync-orders');
+
+// Côté SW
+self.addEventListener('sync', (event: any) => {
+  if (event.tag === 'sync-orders') {
+    event.waitUntil(syncPendingOrders());
+  }
+});
+```
+
+Tu enqueue des actions hors-ligne dans IndexedDB ; le SW les rejoue dès que le réseau revient.
+
+### Web Push
+
+```ts
+// Demande de permission + souscription
+const registration = await navigator.serviceWorker.ready;
+const subscription = await registration.pushManager.subscribe({
+  userVisibleOnly: true,
+  applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+});
+// Envoyer subscription au serveur
+await fetch('/api/push-subscribe', {
+  method: 'POST',
+  body: JSON.stringify(subscription),
+});
+```
+
+Côté serveur (Node) :
+
+```ts
+import webpush from 'web-push';
+
+webpush.setVapidDetails('mailto:you@example.com', VAPID_PUBLIC, VAPID_PRIVATE);
+await webpush.sendNotification(subscription, JSON.stringify({
+  title: 'Nouvelle commande',
+  body: 'Commande #1234 prête',
+  url: '/orders/1234',
+}));
+```
+
+### Quand la PWA suffit
+
+✅ Cas pour la PWA :
+
+- App de **contenu** ou **transactionnel léger** (e-commerce, blog, dashboard, gestion).
+- Cible **mobile + desktop** unifiée.
+- **Time-to-market** court, équipe web déjà en place.
+- Pas besoin des stores (revenu B2B direct, SaaS abonnement).
+
+❌ Cas où la PWA ne suffit pas :
+
+- App qui doit être **dans l'App Store** (consumer mass-market).
+- Besoin de capteurs **avancés** (HealthKit, AR, NFC complet sur iOS).
+- Contraintes de **performance natives** (jeu, vidéo, AR).
+- Partenariat / SDK propriétaire iOS-only.
+
+---
+
+## React Native / Expo
+
+### React Native en 5 lignes
+
+- JavaScript / TypeScript + JSX → composants natifs (UIView, View Android).
+- Bridge JS ↔ natif (anciennement) ou **New Architecture** (TurboModules, Fabric, JSI).
+- Code partagé iOS + Android, UI **proche du natif**.
+
+### Expo — la rampe d'accès recommandée 2026
+
+**Expo** est devenu le **standard pour démarrer en React Native** :
+
+- **Expo Router** — file-based routing à la Next.js.
+- **EAS Build** — build cloud iOS sans Mac obligatoire.
+- **EAS Update** — OTA updates (corrige bugs sans store).
+- **Config Plugins** — étendre sans éjecter.
+- **Expo Modules** — accès natif typed-safe.
+
+```bash
+npx create-expo-app@latest my-app
+cd my-app
+npx expo start
+```
+
+```tsx
+// app/profile.tsx
+import { Text, View } from 'react-native';
+import { useUser } from '@/hooks/useUser';
+
+export default function Profile() {
+  const user = useUser();
+  return (
+    <View>
+      <Text>Bonjour {user.name}</Text>
+    </View>
+  );
+}
+```
+
+### React Native — choses à savoir en 2026
+
+- **New Architecture** (Fabric / TurboModules) est la norme — bien plus performante.
+- **Hermes** — moteur JS optimisé RN, défaut.
+- **Reanimated 3** + **gesture-handler** — animations à 60-120 FPS sur main thread natif.
+- **React Native Skia** — UI ultra-custom GPU.
+- Performance **proche du natif** sur 95 % des cas.
+
+### Forces
+
+- Réutilisation **équipe React** existante (~80 % de connaissances).
+- **OTA updates** (corrige bugs sans repasser par store).
+- Accès aux APIs natives via les modules Expo / community.
+- Communauté énorme.
+
+### Limites
+
+- UX iOS / Android **un peu différentes** par défaut — il faut polir.
+- Certains modules natifs **pas maintenus** (audit avant intégration).
+- Build initial complexe sans Expo.
+
+---
+
+## Flutter
+
+Google. **Dart** + UI déclarative. Rendu **propre** (Skia/Impeller), pas via composants natifs.
+
+### Forces
+
+- **UI identique** sur toutes les plateformes (rendu maison).
+- **Performance excellente** (compile en code natif AOT).
+- Outillage solide : DevTools, hot reload performant.
+- Multi-plateforme : iOS, Android, **web**, **desktop**, embedded.
+- Excellente pour **apps fortement designées** où le pixel-perfect compte.
+
+### Limites
+
+- **Dart** — langage à apprendre, écosystème plus petit que JS.
+- Bundle plus gros (~5-10 MB de runtime).
+- Recrutement plus difficile que React.
+- Moins idéal si l'équipe est déjà 100 % React.
+
+### Comparaison rapide React Native vs Flutter
+
+| Critère | React Native | Flutter |
+|---------|--------------|---------|
+| Langage | TS / JS | Dart |
+| Rendu | Composants natifs | Canvas (Skia / Impeller) |
+| Look | Différent par OS (par défaut) | Identique partout (par défaut) |
+| Perf | Bonne (excellente avec New Arch) | Excellente |
+| Communauté | Plus large | Solide, en croissance |
+| Bundle | ~3-5 MB | ~5-10 MB |
+| OTA updates | Oui (EAS Update) | Non officiel |
+| Recrutement | Vivier large (React-friendly) | Plus tendu |
+
+> En 2026 : si l'équipe vient du web, **React Native + Expo**. Si tu pars from scratch sans contrainte ou que la qualité visuelle est centrale, **Flutter** est défendable.
+
+---
+
+## Capacitor — l'autre voie web → mobile
+
+[Capacitor](https://capacitorjs.com/) (Ionic) wrap ton **app web** dans un container natif :
+
+```bash
+npm i @capacitor/core @capacitor/cli
+npx cap init my-app com.example.app
+npx cap add ios && npx cap add android
+```
+
+Ton code reste **pur web** (Vue / React / Astro / vanilla). Les APIs natives passent par des plugins JS :
+
+```ts
+import { Camera } from '@capacitor/camera';
+const photo = await Camera.getPhoto({ quality: 90 });
+```
+
+### Forces
+
+- **Reuse** d'une app web existante quasi tel quel.
+- **Plus léger** que React Native (pas de bridge complexe, pas de re-rendu à la marge).
+- Même framework UI partout (la web).
+- Idéal pour **transformer une app web en app store** rapidement.
+
+### Limites
+
+- UX **moins native** (animations, scroll-feel, transitions).
+- WebView a des limites (perfs sur grosses listes, animations 3D).
+- Pour une app **vraiment native** dans le ressenti → React Native ou Flutter.
+
+> **Capacitor** est l'option idéale si tu as déjà une PWA mature et que tu veux la mettre au store sans réécrire.
+
+---
+
+## Et le natif (Swift, Kotlin) ?
+
+Toujours pertinent pour :
+
+- Apps **performance critique** (jeux, AR, audio temps réel).
+- Apps qui exploitent des SDK Apple/Google **récents** (HealthKit, Vision Pro, Core ML).
+- Très **grandes orgs** où mobile = équipe dédiée de longue date.
+- Apps consumer **mass-market** où chaque détail UX compte (Instagram, TikTok…).
+
+Le natif coûte plus cher à entretenir (deux codebases), mais offre le **plafond de qualité**.
+
+---
+
+## Distribution & stores
+
+### App Store (Apple)
+
+- Compte développeur **99 €/an** (entreprise 299 €/an).
+- Review **24-72 h** habituellement, parfois plus pour les apps sensibles.
+- **30 % de commission** sur les achats in-app (15 % pour < 1 M$/an).
+- Refus possibles : guidelines mouvantes, contenu, fonctionnalités.
+
+### Google Play
+
+- Compte développeur **25 € à vie**.
+- Review automatique + manuelle, plus rapide que l'App Store.
+- **15-30 % de commission**.
+- Sideloading possible (APK ou Play Console) — utile pour bêta privée.
+
+### Alternatives
+
+- **TestFlight** (iOS) — bêta jusqu'à 10 000 testeurs.
+- **F-Droid** (Android) — store OSS.
+- **Sideloading direct** (Android, Mac).
+
+### EAS Build (Expo) — sans Mac
+
+```bash
+npx eas-cli build --platform ios
+# Build cloud, IPA téléchargeable
+```
+
+Indispensable pour les équipes qui n'ont pas de Mac local.
+
+---
+
+## Notifications push
+
+| Plateforme | Service | Côté app |
+|------------|---------|----------|
+| iOS | APNs | `expo-notifications`, `@react-native-firebase/messaging` |
+| Android | FCM | idem |
+| Web (PWA) | Web Push (VAPID) | natif `navigator.serviceWorker` |
+| Cross-platform | OneSignal, Pusher Beams, Notif.io | wrapper unifié |
+
+**Anti-pattern** : **demander la permission au boot**. iOS pénalise — tu n'auras jamais de seconde chance. Au lieu de ça, demande **après une action contextuelle** (« voulez-vous être notifié quand votre commande est prête ? »).
+
+---
+
+## Anti-patterns mobiles
+
+| Symptôme | Solution |
+|----------|----------|
+| Push permission au boot | Contextualiser : après value moment |
+| Splash screen 5 s | Préfetch en parallèle, splash visuel sub-1s |
+| Login obligatoire dès l'ouverture | Permettre l'usage anonyme + login différé |
+| Liste de 10 000 items sans virtualisation | `FlatList` (RN), `lazy_load_indexed_stack` (Flutter), `react-window` (web) |
+| Animations sur le main thread JS | Reanimated worklets / GPU compositor |
+| Pas de gestion offline | Au minimum : cacher les data récentes |
+| App sans dark mode | Suivre `prefers-color-scheme` ou `useColorScheme()` |
+| Build Android / iOS uniquement quand on push en prod | CI build à chaque PR (TestFlight + APK) |
+
+---
+
+## Choisir — l'arbre de décision
+
+```
+App déjà web mature ?
+├── Oui → Capacitor (port rapide) ou PWA si store optionnel
+└── Non
+    └── L'équipe est React ?
+        ├── Oui → React Native + Expo
+        └── Non
+            └── Besoin perf / qualité visuelle élite ?
+                ├── Oui → Flutter ou natif
+                └── Non → React Native + Expo (vivier de recrutement large)
+
+Cas particuliers :
+- Mobile seulement, jeu / AR / vidéo → natif (Swift / Kotlin)
+- App jamais déployée au store, intranet → PWA pure
+- Stack Microsoft → MAUI / Avalonia
+```
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu lances une app B2B (gestion d'inventaire) pour des clients qui l'utiliseront sur leurs propres tablettes. Pas besoin du store. Time-to-market 3 mois, équipe 100 % React. Quelle stratégie ?"
+  options={[
+    'Native iOS + Android avec deux équipes',
+    'PWA installable (manifeste + Service Worker), réutilise toute la stack web, déploiement instantané, hors-ligne via SW + IndexedDB',
+    'Flutter from scratch',
+    'Application desktop Electron'
+  ]}
+  answerIndex={1}
+  explanation="Pas de store + cible B2B + équipe React + time-to-market court = PWA quasi évidente. Pas de bureaucratie store, pas de signature, pas de re-deploy. Service Worker + manifeste suffisent pour l'installation et l'offline. Reste Capacitor en backup si une fonctionnalité native manque vraiment."
+/>
+
+<Quiz
+  question="Tu démarres une app consumer photo & vidéo, design pixel-perfect, animations complexes, ambition long terme. Stack idéale ?"
+  options={[
+    'PWA — c\'est suffisant',
+    'Capacitor pour la rapidité',
+    'React Native ou Flutter pour le cross-platform avec quasi-natif ; le natif (Swift / Kotlin) reste pertinent si la qualité doit être au plafond',
+    'Electron'
+  ]}
+  answerIndex={2}
+  explanation="Une app consumer photo/vidéo avec design exigeant cible le plafond de qualité UX. PWA et Capacitor sont sous-dimensionnés (limites WebView, animations). React Native + Reanimated 3 + Skia couvre 95 % des cas pour une équipe web. Flutter est solide. Le natif reste défendable pour la dernière marche de qualité (Instagram, TikTok)."
+/>
+
+<Quiz
+  question="Tu demandes la permission push notifications dès l'ouverture de l'app. Quel risque ?"
+  options={[
+    'Aucun, c\'est la pratique standard',
+    'iOS bloque tout retry après un refus initial — tu perds définitivement l\'opportunité. Demander uniquement après un \"value moment\" contextualisé augmente l\'opt-in de 30-50 %',
+    'Apple récompense ce comportement',
+    'Cela améliore le ranking store'
+  ]}
+  answerIndex={1}
+  explanation="Sur iOS, un refus initial est définitif (l'utilisateur doit aller dans les Réglages pour le changer — quasi personne ne le fait). Le bon pattern : pré-prompt UI custom (« voulez-vous être notifié de X ? ») APRÈS un moment où l'utilisateur en voit la valeur, puis seulement demander la vraie permission OS. Effet sur l'opt-in : énorme."
+/>
+
+<Quiz
+  question="Vous avez une PWA mature. Le client vous demande de la publier sur l'App Store iOS. Solution la plus rapide ?"
+  options={[
+    'Réécrire en Swift',
+    'Capacitor — wrap la PWA dans un container natif, publication store en quelques semaines, code web réutilisé tel quel',
+    'Migrer en Flutter',
+    'Refuser, ce n\'est pas possible'
+  ]}
+  answerIndex={1}
+  explanation="Capacitor est conçu exactement pour ce cas : transformer une web app en app store-ready. Tu ajoutes les manifestes natifs, la gestion des permissions iOS/Android, et tu publies. La PWA reste le déploiement principal, l'app store devient un canal supplémentaire. Réécrire serait un gaspillage si l'UX WebView convient."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *web.dev / progressive-web-apps* — [web.dev/progressive-web-apps](https://web.dev/progressive-web-apps/)
+- *Workbox* — [developer.chrome.com/docs/workbox](https://developer.chrome.com/docs/workbox)
+- *Expo docs* — [docs.expo.dev](https://docs.expo.dev/)
+- *React Native docs* — [reactnative.dev](https://reactnative.dev/)
+- *Flutter docs* — [flutter.dev/docs](https://docs.flutter.dev/)
+- *Capacitor* — [capacitorjs.com](https://capacitorjs.com/)
+- *PWABuilder* — [pwabuilder.com](https://www.pwabuilder.com/) — packager PWA pour les stores
+
+---
+
+**Suite** : [16.2 — Temps réel & collaboratif](/16-specialisations/02-temps-reel/) — WebSockets, WebRTC, CRDT.

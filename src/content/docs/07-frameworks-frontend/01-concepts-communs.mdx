@@ -1,0 +1,427 @@
+---
+title: 7.1 — Concepts communs
+description: Composants, état, virtual DOM vs fine-grained, cycle de vie, routing — ce qui est vrai dans tous les frameworks.
+sidebar:
+  order: 1
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Term from '../../../components/Term.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<Level value="débutant" reading="25 min" prereq="axe 6 lu" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="6">
+Marie regarde son code panier vanilla JS — 800 lignes pour gérer add/remove/update/persist/sync. Quand elle change un produit, **3 endroits du DOM** doivent être mis à jour à la main. Elle commence à voir pourquoi React, Vue, Svelte existent : ils synchronisent automatiquement état et DOM. Reste à comprendre **comment**.
+</Scenario>
+
+<Scenario parcours="B" episode="5">
+Le planning de Studio Pulse est devenu un nid à bugs : Hugo modifie l'état des créneaux à 4 endroits différents. Quand un client réserve, l'affichage du panier ne se met pas à jour. Il sait qu'il lui faut un framework — mais lequel ? Il commence par **comprendre les concepts communs** avant de choisir.
+</Scenario>
+
+<Scenario parcours="C" episode="6">
+GreenBox grossit. Sami sait qu'il doit choisir un framework qui tienne la route 3 ans. React, Vue, Svelte — tous ont leurs forces. Il lit ce chapitre pour comprendre ce qui les distingue (virtual DOM vs compilation vs fine-grained), puis il choisira en toute conscience.
+</Scenario>
+
+<Scenario parcours="D" episode="6">
+Léa a une app vanilla qui devient ingérable : feed live + chat + profils + filtres. L'état partagé devient un cauchemar. Elle choisit React parce que l'écosystème <Term>PWA</Term> + <Term>CRDT</Term> y est mature, mais elle veut d'abord comprendre **pourquoi** un framework l'aide.
+</Scenario>
+
+<Scenario parcours="E" episode="6">
+Yanis le sait depuis le début : Tasky finira en React + Next.js, comme la plupart des apps internes en boîte. Mais avant de prendre des raccourcis, il veut comprendre les concepts généraux pour choisir avec discernement quand React est overkill (formulaire simple) ou pertinent (kanban temps quasi-réel).
+</Scenario>
+
+> 🎯 **Objectif** : avant de plonger dans React, comprendre les **idées partagées** par tous les frameworks UI modernes. Une fois ces concepts assimilés, apprendre Vue ou Svelte demande quelques heures, pas des semaines.
+
+<ObjectiveList items={[
+  "Définir un composant et ses 3 dimensions : props, état, événements",
+  "Distinguer virtual DOM, compilation, fine-grained reactivity",
+  "Comprendre le re-rendu et savoir éviter les rendus inutiles",
+  "Connaître les options de routing client (file-based, programmatique)",
+  "Choisir entre état local, contexte, état global"
+]} />
+
+
+## Le composant — l'unité de tout
+
+Un **composant** combine 3 choses :
+
+```
+Données (props + état) → Rendu (HTML) → Événements
+                               ↓
+                        modifient l'état
+                               ↓
+                          re-rendu
+```
+
+### Vocabulaire universel
+
+| Terme | Sens |
+|-------|------|
+| **Props** | Données reçues du parent (en lecture seule du point de vue de l'enfant) |
+| **État (state)** | Données internes du composant qui peuvent changer |
+| **Rendu** | La fonction qui transforme `(props, state)` en HTML |
+| **Événements** | Actions utilisateur (clic, saisie, scroll…) qui peuvent muter l'état |
+| **Cycle de vie** | Hooks à des moments clés : monté, mis à jour, démonté |
+
+Tout framework UI moderne (React, Vue, Svelte, Angular, Solid…) tourne autour de ces 5 mots.
+
+### Composition
+
+Un composant peut **contenir** d'autres composants. C'est la **composition**, le pilier de la conception moderne.
+
+```jsx
+// Pseudo-code, valable en React/Vue/Svelte avec syntaxe différente
+<Page>
+  <Header user={currentUser} />
+  <Sidebar items={menu} />
+  <Main>
+    <ArticleList articles={articles} />
+  </Main>
+  <Footer />
+</Page>
+```
+
+C'est l'**équivalent moderne** des templates côté serveur (Twig, Blade, EJS), mais avec un état dynamique côté client.
+
+## Approches de réactivité
+
+Quand l'état change, comment le framework met-il à jour le DOM ?
+
+### 1. Virtual DOM (React, Vue)
+
+À chaque changement, le framework :
+
+1. Re-exécute la fonction de rendu → produit un **nouvel arbre virtuel**.
+2. Compare avec l'ancien (**diffing**).
+3. Applique uniquement les changements au DOM réel.
+
+<Diagram
+  caption="Virtual DOM — diff entre 2 arbres"
+  code={`
+    flowchart LR
+      State[Nouvel état] --> Render[Re-render<br/>fonction]
+      Render --> NewVDOM[Nouveau VDOM]
+      OldVDOM[Ancien VDOM] --> Diff{diff}
+      NewVDOM --> Diff
+      Diff --> Patch[Patch minimal au DOM]
+  `}
+/>
+
+✅ Très flexible (n'importe quelle structure JSX/template).
+❌ Coût du diff à chaque changement.
+❌ Tout l'arbre du composant et de ses enfants se ré-exécute.
+
+### 2. Fine-grained reactivity (Solid, Svelte 5, Vue 3 refs)
+
+Chaque morceau d'état réactif **sait quels effets dépendent de lui**. Quand il change, **seuls** ces effets s'exécutent.
+
+```js
+// Pseudo-code Solid
+const [count, setCount] = createSignal(0);
+
+createEffect(() => {
+  console.log(count());   // ne s'exécute QUE si count change
+});
+
+// Ce composant ne re-rend pas — seul l'effet ciblé tourne
+```
+
+✅ Performances brutales (pas de diff).
+✅ Updates ciblées au DOM.
+❌ Modèle mental plus subtil (dépendances implicites).
+
+### 3. Compilation (Svelte, Solid)
+
+Le framework **compile** ton code en JavaScript optimisé qui modifie le DOM directement, sans VDOM ni runtime de réactivité lourd.
+
+```svelte
+<!-- Svelte -->
+<script>
+  let count = $state(0);
+</script>
+
+<button on:click={() => count++}>
+  Compteur : {count}
+</button>
+```
+
+À la compilation, ça devient du JS direct qui sait que cliquer le bouton incrémente une variable et met à jour le `textContent` du bouton.
+
+✅ Bundles minuscules (Svelte ~5 Ko gzippé).
+✅ Performances excellentes.
+
+### Verdict 2026
+
+| Approche | Frameworks | Quand préférer |
+|----------|-----------|-----------------|
+| Virtual DOM | React, Vue | Écosystème énorme, équipe nombreuse |
+| Fine-grained | Solid, Svelte 5 | Performance critique, app très interactive |
+| Compilation | Svelte, Astro | Sites avec peu d'interactivité, bundle minimaliste |
+
+## Le re-rendu — comprendre quand et pourquoi
+
+En **virtual DOM** (React/Vue), un composant re-rend quand :
+
+1. Son **état** change (`setState`).
+2. Ses **props** changent.
+3. Le contexte qu'il consomme change.
+4. Son **parent** re-rend (et cascade).
+
+```jsx
+// React — exemple typique
+function Parent() {
+  const [count, setCount] = useState(0);
+  return (
+    <>
+      <ChildA />          {/* re-rend même si rien ne le concerne */}
+      <ChildB count={count} />
+    </>
+  );
+}
+```
+
+À chaque clic, **`ChildA` re-rend aussi** alors que ses props n'ont pas changé. Solutions :
+
+- **`React.memo`** : skip le re-rendu si props identiques.
+- **Découper l'état** : mettre `count` plus bas dans l'arbre.
+- **Frameworks fine-grained** : pas le problème.
+
+<Aside type="tip" title="Optimisation prématurée">
+Ne mets pas `memo` partout. Le re-rendu virtuel d'un composant simple coûte microsecondes. Optimise quand le profiler te montre un vrai problème, pas avant.
+</Aside>
+
+## Cycle de vie
+
+3 moments universels :
+
+| Moment | React (hooks) | Vue (Options API) | Svelte |
+|--------|---------------|---------------------|--------|
+| **Monté** (DOM créé) | `useEffect(() => {...}, [])` | `mounted()` | `onMount(() => {...})` |
+| **Mis à jour** (re-rendu) | `useEffect(() => {...}, [dep])` | `watch(dep, () => {...})` | `$effect(() => {...})` (Svelte 5) |
+| **Démonté** (DOM retiré) | `useEffect(() => () => cleanup, [])` | `unmounted()` | `onDestroy()` |
+
+### Cas d'usage du cycle de vie
+
+```jsx
+// React
+useEffect(() => {
+  // Au montage : abonnement
+  const subscription = api.subscribe(handler);
+
+  // Au démontage : désabonnement (return)
+  return () => subscription.unsubscribe();
+}, []);
+```
+
+Toujours **se désabonner** dans le démontage. Sinon : memory leak + bug si le composant remonte.
+
+## Routing client
+
+Une **SPA** change l'URL et la vue **sans recharger** la page. Deux approches :
+
+### Routing programmatique (React Router v6, Vue Router)
+
+```jsx
+// React Router
+<BrowserRouter>
+  <Routes>
+    <Route path="/" element={<Home />} />
+    <Route path="/products/:id" element={<Product />} />
+    <Route path="*" element={<NotFound />} />
+  </Routes>
+</BrowserRouter>
+```
+
+Configuration explicite des routes dans le code.
+
+### Routing par fichiers (Next.js, Nuxt, SvelteKit, Astro)
+
+```
+app/
+├── page.tsx                  → /
+├── products/
+│   └── [id]/
+│       └── page.tsx          → /products/:id
+└── about/
+    └── page.tsx              → /about
+```
+
+L'arborescence des fichiers **est** la table de routes. Plus déclaratif, moins de boilerplate.
+
+**Tendance 2026** : la plupart des nouveaux projets utilisent du file-based routing via un méta-framework.
+
+## Gestion d'état — 3 niveaux
+
+### Niveau 1 — Local (state du composant)
+
+```jsx
+const [count, setCount] = useState(0);
+```
+
+90 % des cas. Si seul un composant et ses enfants directs ont besoin d'une donnée, **garde-la locale**.
+
+### Niveau 2 — Partagé via props ou contexte
+
+**Lifting state up** : si 2 frères ont besoin de la même donnée, mets-la dans leur parent commun et passe en props.
+
+Si les enfants sont profondément imbriqués → **contexte** :
+
+```jsx
+// React Context
+const ThemeContext = createContext('light');
+
+<ThemeContext.Provider value={theme}>
+  <App />   {/* tous les descendants peuvent useContext(ThemeContext) */}
+</ThemeContext.Provider>
+```
+
+### Niveau 3 — État global (store)
+
+Quand beaucoup de composants distants partagent la même donnée, ou que la logique est complexe.
+
+**Options modernes** :
+
+| Lib | Style | Forces |
+|-----|-------|--------|
+| **Zustand** (React) | Hooks simples, sans provider | Minimaliste, ergonomique |
+| **Redux Toolkit** | Reducers, actions | Convient aux grosses équipes, devtools puissants |
+| **Jotai** (React) | Atoms primitifs | Très granulaire |
+| **Pinia** (Vue) | Stores typés | Le standard Vue depuis Vuex |
+| **Svelte stores** | Natif Svelte | `writable()`, `$store` |
+
+```js
+// Zustand — exemple
+import { create } from 'zustand';
+
+const useCart = create((set) => ({
+  items: [],
+  add: (item) => set((s) => ({ items: [...s.items, item] })),
+  clear: () => set({ items: [] }),
+}));
+
+// Dans un composant
+function Cart() {
+  const items = useCart((s) => s.items);
+  return <div>{items.length} articles</div>;
+}
+```
+
+<Aside type="caution" title="Pas tout dans le store global">
+**Erreur classique** : tout mettre dans Redux/Zustand. Le store global doit contenir des données **partagées** et **persistantes**. L'état d'un dropdown ouvert ne devrait jamais y être.
+
+Règle : commence local. Remonte uniquement si ça devient nécessaire.
+</Aside>
+
+### Server state vs client state
+
+Distinction importante : **les données serveur** (liste de produits, profil utilisateur, etc.) ont leur propre lib spécialisée.
+
+- **TanStack Query** (React, Vue, Svelte, Solid) : cache, refetch, mutations, devtools.
+- **SWR** (React, Vercel) : équivalent plus léger.
+
+Ces libs résolvent le caching, la synchronisation, le revalidate-on-focus, la pagination, et les mutations optimistes — choses pénibles à gérer manuellement.
+
+```jsx
+// TanStack Query
+function Users() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => fetch('/api/users').then(r => r.json()),
+  });
+
+  if (isLoading) return <Spinner />;
+  if (error) return <Error message={error.message} />;
+  return <UserList users={data} />;
+}
+```
+
+## Styling dans un framework
+
+3 approches majeures :
+
+### CSS classique + classes
+
+```jsx
+import './Button.css';
+<button className="btn btn-primary">Click</button>
+```
+
+Simple. Risque de conflits de noms. Solution : **CSS Modules** (`Button.module.css`) qui scope les classes localement.
+
+### CSS-in-JS
+
+```jsx
+// styled-components
+const Button = styled.button`
+  background: var(--primary);
+  padding: 0.5rem 1rem;
+`;
+```
+
+Pratique pour les composants dynamiques. Mais : runtime cost, complexité, fall en disgrâce avec RSC.
+
+### Utility-first (Tailwind)
+
+```jsx
+<button className="bg-blue-500 hover:bg-blue-700 text-white px-4 py-2 rounded">
+  Click
+</button>
+```
+
+Le standard en 2026 dans la plupart des projets greenfield. Voir [7.6](/07-frameworks-frontend/06-design-systems/).
+
+## Auto-évaluation
+
+<Quiz
+  question="React, à chaque setState, fait quoi sur l'arbre des composants par défaut ?"
+  options={[
+    'Re-rend uniquement le composant qui a changé',
+    'Re-rend le composant ET tous ses enfants (sauf optimisation)',
+    'Modifie le DOM directement sans re-rendu',
+    'Recharge la page'
+  ]}
+  answerIndex={1}
+  explanation="Par défaut, React re-rend le composant qui change ET cascade aux enfants. Le diff du virtual DOM évite la majorité des updates DOM réelles, mais le re-rendu côté JS a lieu. memo, useMemo, useCallback servent à couper cette cascade quand c'est mesurément utile."
+/>
+
+<Quiz
+  question="Tu as un composant React avec 3 useState. L'utilisateur tape dans un input lié au state #1. Que se passe-t-il ?"
+  options={[
+    'Seul le state #1 et son rendu lié changent',
+    'La fonction du composant entière re-tourne (les 3 useState sont relus), mais React diff le résultat',
+    'Erreur',
+    'Cela dépend du framework'
+  ]}
+  answerIndex={1}
+  explanation="La fonction de composant entière re-tourne à chaque rendu. Les 3 useState sont rappelés, mais React renvoie la même valeur (sauf celui qui a changé) car ils sont identifiés par ordre d'appel. C'est pour ça que les hooks doivent être appelés DANS LE MÊME ORDRE à chaque rendu (pas dans un if)."
+/>
+
+<Quiz
+  question="Tu commences un projet front avec une équipe de 5 devs. Quelle gestion d'état ?"
+  options={[
+    'Tout en Redux dès le début',
+    'Commencer par useState local, monter à useContext quand nécessaire, ajouter Zustand ou TanStack Query si vraiment besoin',
+    'Variables globales window.appState',
+    'Un seul useState à la racine de l\'app'
+  ]}
+  answerIndex={1}
+  explanation="Le principe est de monter en complexité quand le besoin apparaît. 90 % des états sont locaux. TanStack Query gère le server state, Zustand le client state global vraiment partagé. Redux est encore utile mais surdimensionné pour la plupart des projets en 2026."
+/>
+
+## Pour aller plus loin
+
+- *Patterns.dev* — [patterns.dev](https://www.patterns.dev/) — patterns de rendu et de chargement
+- *Thinking in React* (officiel) — [react.dev/learn/thinking-in-react](https://react.dev/learn/thinking-in-react)
+- *Reactivity Compared* — comparaison vidéo des 3 modèles de réactivité
+
+---
+
+**Suite** : [7.2 — React](/07-frameworks-frontend/02-react/) — le framework dominant et son écosystème.

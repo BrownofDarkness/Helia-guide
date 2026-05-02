@@ -1,0 +1,66 @@
+---
+title: "Axe 5 — Frontend : HTML & CSS"
+description: Produire des interfaces accessibles, responsives et maintenables.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : maîtriser les fondations visuelles du web — sémantique, accessibilité, responsive.
+
+## Prérequis
+
+Axes 1, 2 et 4.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Écrire du HTML sémantique et accessible (ARIA, navigation clavier)",
+  "Maîtriser Flexbox et CSS Grid pour toute mise en page",
+  "Construire un design responsive mobile-first avec media et container queries",
+  "Atteindre un score Lighthouse > 95 sur les 4 axes",
+  "Choisir entre BEM, ITCSS, utility-first (Tailwind)"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="5.1 — HTML sémantique"
+    href="/05-frontend-html-css/01-html/"
+    description="Structure, sectionnement, formulaires, médias, ARIA, OpenGraph, données structurées."
+  />
+  <LinkCard
+    title="5.2 — CSS moderne"
+    href="/05-frontend-html-css/02-css/"
+    description="Sélecteurs, box model, Flexbox, Grid, responsive, variables, animations, méthodologies."
+  />
+  <LinkCard
+    title="5.3 — Accessibilité (a11y)"
+    href="/05-frontend-html-css/03-accessibilite/"
+    description="WCAG 2.2 AA, contraste, clavier, lecteurs d'écran, axe-core, patterns accessibles."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Refonte Lighthouse** — partir d'une page volontairement catastrophique (que des `<div>`, `outline: none`, contraste #aaa sur blanc, formulaire sans `<label>`…) et la réécrire pour atteindre **≥ 95 sur les 4 axes Lighthouse**. Mesure automatisée via Chrome headless + Lighthouse CI.
+
+<ExerciseDownload
+  axe="05-frontend-html-css"
+  slug="01-refonte-lighthouse"
+  title="Refonte Lighthouse — Café Émeraude"
+  description="Pré-requis : Node ≥ 20 + Chrome/Edge. Tu vis les ~20 erreurs HTML/CSS qui plombent 9 sites sur 10, puis tu les corriges avec preuves chiffrées (audit avant/après). Correction validée à 100 / 100 / 96 / 100."
+/>
+
+## Ressources clés
+
+- MDN — *HTML* et *CSS* — [developer.mozilla.org](https://developer.mozilla.org/fr/docs/Web)
+- *CSS in Depth* — Keith J. Grant
+- *web.dev/learn/* — Google
+- *A Complete Guide to Flexbox* / *Grid* — CSS-Tricks
+- *Refactoring UI* — Adam Wathan & Steve Schoger
+- *A11y Project* — [a11yproject.com](https://www.a11yproject.com/)

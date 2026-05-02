@@ -1,0 +1,450 @@
+---
+title: 17.1 — Projets fil rouge progressifs
+description: 8 projets de difficulté croissante du débutant au senior, ce que chacun t'apprend, et comment les enchaîner sans s'épuiser.
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Level from '../../../components/Level.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+<Level value="débutant" reading="20 min" prereq="aucun" />
+
+> 🎯 **Objectif** : transformer ce que tu apprends en projets que **tu peux montrer**. Chaque projet enseigne une compétence distincte. Suivre les 8 te fait passer du débutant au profil junior solide en 12-18 mois.
+
+<ObjectiveList items={[
+  "Comprendre la progression : 8 projets, ~1-3 par semaine pour les premiers, 1-2 mois pour les derniers",
+  "Identifier ce qu'on apprend (et ce qu'on n'apprend PAS) à chaque palier",
+  "Choisir des sujets qui te motivent VRAIMENT — sinon tu abandonnes en cours de route",
+  "Public sur GitHub avec README impeccable + démo en ligne — chaque projet",
+  "Documenter une décision technique par projet (mini-ADR) pour t'entraîner à argumenter"
+]} />
+
+## La règle d'or
+
+> **3 à 5 projets soignés battent 20 projets bâclés.**
+
+Un recruteur qui voit 20 repos avec un README à 5 lignes te classe en *« code dump »*. Un recruteur qui voit 5 repos avec README détaillé, tests, déploiement, captures, et discussions intelligentes en issues te classe en *« profil sérieux »*.
+
+Lis [17.2 — Portfolio](/17-carriere/02-portfolio/) avant de te lancer.
+
+---
+
+## Vue d'ensemble — la progression
+
+```
+Niveau           Projet                              Durée approx.    Compétences clés
+─────────────────────────────────────────────────────────────────────────────────────
+Découverte       1. Page perso statique               1-2 sem          HTML, CSS, déploiement
+                 2. TODO list (DOM, localStorage)     1-2 sem          JS, état, persistance navigateur
+─────────────────────────────────────────────────────────────────────────────────────
+Confirmation     3. App météo (fetch API publique)    2-3 sem          fetch, async, gestion erreurs, UI dynamique
+                 4. SPA avec routing (React/Vue)      3-4 sem          framework, composants, state global
+─────────────────────────────────────────────────────────────────────────────────────
+Junior solide    5. Full-stack CRUD + auth            5-8 sem          backend, DB, sessions, déploiement complet
+                 6. SaaS multi-tenant + paiement      8-12 sem         BaaS, RLS, Stripe, multi-tenancy
+─────────────────────────────────────────────────────────────────────────────────────
+Niveau supérieur 7. App temps réel (WebSocket)        1-2 mois         realtime, présence, sync, scaling
+                 8. Contribution open source notable  variable         lecture de code, PRs, revue
+```
+
+Total : **6 à 12 mois** en parallèle d'un travail / études, à raison de **5-10 h / semaine**. Plus rapide en bootcamp / dispo full-time.
+
+---
+
+## Projet 1 — Page personnelle statique
+
+### Objectif
+
+Un site **simple** : qui tu es, ce que tu fais, comment te contacter. **Statique**. Pas de backend.
+
+### Stack recommandée 2026
+
+- HTML / CSS / un peu de JS — ou
+- **Astro** + Starlight si tu veux déjà de la doc.
+- Hébergement : **Cloudflare Pages** ou **Netlify** (gratuit).
+
+### Ce que tu apprends
+
+| Compétence | Pourquoi |
+|------------|----------|
+| HTML sémantique | `<main>`, `<nav>`, `<article>`, headings cohérents |
+| CSS moderne | Grid, Flexbox, custom properties, responsive |
+| Accessibilité | Contrastes, alt sur images, focus visible |
+| Lighthouse 95+ | Score perf + a11y dès le projet 1 |
+| Git + GitHub | Premier repo public, push régulier |
+| Domaine + DNS | Optionnel : achète un domaine .me ou .dev |
+| TLS auto | Cloudflare Pages le gère gratuitement |
+
+### Ce que tu n'apprends PAS
+
+- JS dynamique poussé.
+- Backend.
+- Base de données.
+
+### Critères « projet 1 livré »
+
+- [ ] En ligne avec un domaine (gratuit ou payant).
+- [ ] Lighthouse mobile ≥ 95 perf, ≥ 100 a11y.
+- [ ] README qui explique le pourquoi.
+- [ ] Pas de console errors.
+
+> Beaucoup de devs sautent ce projet en pensant que c'est trivial. C'est une erreur — c'est ta **vitrine personnelle** que les recruteurs verront.
+
+---
+
+## Projet 2 — TODO list (DOM, localStorage)
+
+### Objectif
+
+L'**hello world** de la programmation web. Permet d'ajouter, marquer comme terminé, supprimer, filtrer des tâches. Tout en JS pur (pas de framework).
+
+### Stack
+
+- HTML / CSS / **JS vanilla**.
+- Persistance : **localStorage**.
+- Bonus : drag-and-drop, raccourcis clavier.
+
+### Ce que tu apprends
+
+- Manipulation **DOM** (`querySelector`, `addEventListener`, `createElement`).
+- **État** dans la mémoire JS et synchronisation avec le DOM.
+- **localStorage** : sérialisation JSON, limites.
+- **Délégation d'événements** (un seul listener pour 50 tâches).
+- **Accessibilité** des inputs, labels, formulaires.
+
+### Le piège
+
+90 % des TODO list de débutants sont **bâclées** : pas d'a11y, pas de tests, structure spaghetti. C'est un **excellent test d'autodiscipline** — fais-le proprement.
+
+---
+
+## Projet 3 — App météo (fetch API publique)
+
+### Objectif
+
+App qui interroge une API météo (OpenWeather, Open-Meteo) et affiche la météo pour une ville donnée par l'utilisateur.
+
+### Stack
+
+- HTML / CSS / **JS** ou première touche **TypeScript**.
+- API : **Open-Meteo** (gratuite, sans clé) ou OpenWeather.
+
+### Ce que tu apprends
+
+| Compétence | Détail |
+|------------|--------|
+| `fetch` + `async/await` | Appels HTTP réels |
+| Gestion d'erreurs | Réseau, ville inconnue, rate limit |
+| États UI | loading / success / error / empty |
+| Variables d'env | Clé API jamais en dur dans le code |
+| Géolocalisation | API navigator.geolocation, permissions |
+| Cache local | Stocker la dernière requête en localStorage |
+| TypeScript | Typer la réponse de l'API avec une interface |
+
+### Bonus
+
+- Mode hors-ligne (Service Worker).
+- Internationalisation (FR / EN).
+- Animations selon le temps (soleil, pluie).
+
+---
+
+## Projet 4 — SPA avec routing (React / Vue / Svelte)
+
+### Objectif
+
+Première vraie SPA : 3-5 pages avec navigation, état partagé, formulaires. Sujet libre **qui te motive** (catalogue de jeux vidéo, suivi de séries, gestionnaire de recettes…).
+
+### Stack
+
+- **React 19** + **Next.js 16** ou **Vue 3.6** + **Nuxt 4** ou **Astro + Svelte 5**.
+- Tailwind v4 ou Vanilla CSS modules.
+- Hébergement : **Vercel** ou **Cloudflare Pages**.
+
+### Ce que tu apprends
+
+| Compétence | Détail |
+|------------|--------|
+| Composants | Réutilisabilité, props, événements |
+| Routing | Pages, params, navigation |
+| State global | Context, Pinia, stores Svelte |
+| Formulaires | Validation, soumission, état contrôlé |
+| Suspense / loading states | Patterns d'attente |
+| Tests unitaires | Vitest sur les hooks / utils |
+
+### Critères
+
+- [ ] 5 pages min, navigation fluide.
+- [ ] Au moins **un formulaire** validé.
+- [ ] **20-30 % de couverture** Vitest sur la logique pure.
+- [ ] Lighthouse perf ≥ 90.
+- [ ] Déployé en ligne avec preview PR sur Vercel.
+
+---
+
+## Projet 5 — Full-stack CRUD avec auth
+
+### Objectif
+
+Le **passage à grand**. Tu construis backend + frontend qui parlent ensemble, avec utilisateurs authentifiés et persistance en DB.
+
+### Stack 2026 recommandée
+
+- Backend : **Hono** (Node 24) ou **Next.js API Routes / Server Actions**.
+- DB : **Postgres** (Neon, Supabase, ou Docker local) + **Drizzle** ou **Prisma 7**.
+- Auth : **Better Auth** ou **Lucia** (open source, contrôle total) ou **Clerk** (clé en main).
+- Frontend : Next.js 16 ou Nuxt 4.
+- Déploiement : **Fly.io** / **Render** / **Vercel**.
+
+### Idée concrète
+
+Un **gestionnaire de notes** type Notion lite : créer / éditer / supprimer / partager des notes. Plus utile qu'un *« blog d'apprentissage »* qui n'a aucune valeur concrète.
+
+### Ce que tu apprends
+
+| Compétence | Détail |
+|------------|--------|
+| **Schéma DB** | Tables, relations, indexes, migrations |
+| **REST** ou **Server Actions** | Endpoints typés, validation Zod |
+| **Auth** | Sessions, cookies HttpOnly + SameSite, password hash argon2id |
+| **Authorization** | Une note = 1 owner ; pas d'accès cross-user (IDOR) |
+| **Tests d'intégration** | Vitest + Testcontainers ou Docker compose |
+| **CI** | GitHub Actions : lint + test + build + deploy |
+| **Observabilité minimale** | Sentry pour les erreurs |
+| **Variables d'env** | `.env.example`, secrets cloud |
+
+### Critères d'acceptation
+
+- [ ] Auth fonctionnelle (signup / login / logout / forgot password).
+- [ ] CRUD complet d'une ressource (notes, tâches, recettes…).
+- [ ] Tests d'intégration sur les endpoints (≥ 60 % couverture).
+- [ ] Déployé en ligne, accessible via URL.
+- [ ] **Sentry** branché.
+- [ ] CI verte sur GitHub.
+
+> C'est **le projet pivot** de ton portfolio. À l'issue, tu peux postuler en junior. Investis du temps.
+
+---
+
+## Projet 6 — SaaS multi-tenant avec paiement
+
+### Objectif
+
+Aller au-delà du junior : multi-tenancy, paiement, abonnements, RLS. Gérer des utilisateurs qui paient pour utiliser ton produit.
+
+### Idée concrète
+
+- **Tasky Pro** — task manager B2B avec workspaces et plans payants.
+- **Receipts** — gestion notes de frais avec OCR + export.
+- **MeetingMinder** — récap de réunions IA + résumé.
+
+### Stack
+
+- **Supabase** ou **Neon** + **Drizzle** (Postgres + auth managées).
+- **Stripe Subscriptions** + webhook handler.
+- **Resend** ou **Loops** pour les emails transactionnels.
+- **PostHog** pour le product analytics.
+- **Cloudflare R2** pour les uploads.
+
+### Ce que tu apprends
+
+| Compétence | Détail |
+|------------|--------|
+| **Multi-tenant** | 1 user = N workspaces, données cloisonnées |
+| **RLS** Postgres | Row-Level Security : isolation au niveau DB |
+| **Stripe** | Checkout, subscriptions, webhooks idempotents |
+| **Webhooks** | Signature, retries, déduplication |
+| **Email transactionnel** | Templates, deliverability, DKIM |
+| **RBAC** | Owner / admin / member par workspace |
+| **Audit log** | Qui a fait quoi, quand |
+| **GDPR** | Export données, suppression compte |
+
+### Le challenge réel
+
+Le paiement, le webhook, et la **synchronisation entre Stripe et ta DB** sont LE point dur. Beaucoup de bugs, beaucoup d'edge cases (cards déclinées, downgrade, prorata). C'est exactement ce qu'un employeur veut voir que tu sais faire.
+
+---
+
+## Projet 7 — App temps réel (WebSocket)
+
+### Objectif
+
+Maîtriser la communication bidirectionnelle, la synchronisation multi-clients, et les contraintes du scaling realtime.
+
+### Idée concrète
+
+- **Whiteboard collaboratif** (à la Excalidraw).
+- **Chat temps réel** avec présence et typing indicators.
+- **Mini-Notion collaboratif** avec Yjs (CRDT).
+- **Auction live** type Catawiki.
+- **Multi-joueur 2D** simple (Tic-tac-toe, Pictionary).
+
+### Stack
+
+- **Hono** + **WebSocket** ou **PartyKit** / **Liveblocks** (pour économiser le scaling).
+- **Yjs** si collaboration de document.
+- **Redis pub/sub** si multi-node.
+
+### Ce que tu apprends
+
+| Compétence | Détail |
+|------------|--------|
+| **WebSocket** vs SSE | Quand chacun |
+| **Présence** | Heartbeat, online/offline state |
+| **CRDT** | Pourquoi Yjs > last-write-wins |
+| **Scaling stateful** | Sticky sessions, fan-out Redis |
+| **Reconnect** | Backoff, idempotence |
+
+### Le piège
+
+Le realtime est **complexe**. Si tu débutes, **commence par Liveblocks ou PartyKit** (managed) plutôt que d'écrire ton serveur WebSocket maison. Tu apprendras le reste plus tard.
+
+---
+
+## Projet 8 — Contribution open source notable
+
+### Objectif
+
+Pas un projet *à soi* mais une **contribution significative** à un projet établi. C'est la signature qui change tout sur un CV.
+
+### Comment trouver
+
+1. Identifie une **lib que tu utilises**.
+2. Lis ses **issues** marquées `good-first-issue`, `help-wanted`.
+3. Comprends le **CONTRIBUTING.md**.
+4. Ouvre une PR sur un bug ou une petite feature.
+5. **Itère** sur les commentaires des mainteneurs.
+
+### Quelques pistes 2026
+
+| Type | Exemples |
+|------|----------|
+| Frameworks frontend | React, Vue, Svelte, Astro, Next.js |
+| Backend | Hono, Fastify, Drizzle, Prisma |
+| Outils | Biome, ESLint, Vitest, Playwright |
+| UI libs | Radix UI, Reka UI, Headless UI, Tailwind |
+| AI/RAG | AI SDK Vercel, LlamaIndex, Mastra |
+
+### Niveaux de contribution
+
+| Niveau | Exemple | Valeur CV |
+|--------|---------|-----------|
+| **Fix typo** | corriger « returnss » → « returns » | Symbolique |
+| **Doc améliorée** | section manquante, exemple plus clair | Bonne |
+| **Bug fix** | reproduire, fixer, ajouter test | Très bonne |
+| **Petite feature** | issue acceptée, PR mergée | Excellente |
+| **Mainteneur** | commits récurrents sur 6+ mois | Niveau senior |
+
+### Le piège
+
+Beaucoup de devs **annoncent** « je vais contribuer à React ! » et abandonnent à la première friction. C'est un **investissement long** : trouver le bon issue, comprendre le code, parler avec les mainteneurs. Compte plusieurs semaines pour un premier merge.
+
+---
+
+## Comment ne pas s'épuiser
+
+> *« Slow is smooth, smooth is fast. »*
+
+| Habitude | Pourquoi |
+|----------|----------|
+| **Time-box** chaque projet | Sinon dérive infinie sur le projet 5 |
+| **MVP d'abord** | Version minimale en ligne, puis on itère |
+| **Pause de 1 sem** entre 2 gros projets | Recharge, idéation, recul |
+| **Ne PAS commencer 3 projets en parallèle** | Tu en finis 0 |
+| **Public dès le jour 1** | Pression positive, feedback |
+| **README dès le commit 1** | Pas en fin (sinon jamais) |
+| **Tests dès le tier 1** | Plus tu attends, moins tu en feras |
+
+### Quand abandonner un projet
+
+C'est **OK** d'abandonner. Critères pour décider :
+
+- Tu n'apprends plus rien (déjà maîtrisé) → **passer au suivant**.
+- Tu détestes le sujet → **changer de sujet**, pas de tech.
+- Tu as bloqué 3 jours sur le même bug → **demander de l'aide** (Discord, Stack Overflow, Reddit).
+- Tu te sens coincé sans savoir pourquoi → **pause d'une semaine**.
+
+> Ne **jamais** abandonner par culpabilité. Toujours par décision claire.
+
+---
+
+## Au-delà du projet 8 — la spécialisation
+
+Une fois la progression terminée, **deux options** :
+
+| Option | Quoi |
+|--------|------|
+| **Spé sur 1-2 axes** | Suis l'axe 16 (mobile, IA, real-time, edge, Web3) et fais un mini-projet de spé |
+| **Profondeur** | Reprends le projet 5 ou 6, ajoute des features sérieuses (search, exports, RBAC fin, audit, i18n) |
+
+Beaucoup de devs **alternent** : 1 projet de spé puis ajout de features sur leurs projets existants. C'est sain.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu as commencé 4 projets en parallèle. Aucun n'est terminé. Que ferais-tu ?"
+  options={[
+    'Continuer en parallèle, tu finiras un jour',
+    'Choisir UN projet, le mener au déploiement (même imparfait), puis revenir aux autres. Mieux : abandonner les 3 autres si tu n\'es plus motivé',
+    'Embaucher un ami',
+    'Recommencer du zéro avec une autre stack'
+  ]}
+  answerIndex={1}
+  explanation="Le pire signal sur ton GitHub : 8 repos commencés, aucun fini. Mieux vaut 3 projets terminés et déployés. La discipline de **finir** est plus importante que l'habileté technique. Si tu détestes 3 des 4 sujets, tu n'es pas obligé de les finir — tu choisis ce qui te motive le plus pour atteindre la finition."
+/>
+
+<Quiz
+  question="Tu hésites entre projet 5 (CRUD + auth) et projet 7 (real-time WebSocket). Tu n'as fait que la TODO list. Lequel choisir ?"
+  options={[
+    'Le 7, plus impressionnant',
+    'Le 5 — il enseigne backend, DB, auth, déploiement complet (les fondations indispensables). Le 7 sera plus solide après le 5',
+    'Les deux en parallèle',
+    'Aucun, partir sur du Web3'
+  ]}
+  answerIndex={1}
+  explanation="Le projet 5 est le plus formateur du parcours junior. Il couvre les fondations qui te servent partout. Le real-time sans avoir maîtrisé l'auth, la DB et le déploiement standard, c'est partir sur sable mouvant. Plus tard, tu pourras combiner real-time avec ce que tu sais déjà."
+/>
+
+<Quiz
+  question="Pour le projet 6 (SaaS payant), tu hésites à intégrer Stripe parce que c'est complexe. Que fais-tu ?"
+  options={[
+    'Skip Stripe, c\'est trop dur',
+    'Intégrer Stripe avec Stripe Test Mode (gratuit, illimité), maîtriser Checkout + webhooks idempotents — c\'est précisément la compétence qui vaut sur le CV',
+    'Utiliser PayPal pour faire simple',
+    'Faire un faux paiement Mock'
+  ]}
+  answerIndex={1}
+  explanation="Stripe Test Mode te permet d'apprendre l'intégration paiement complète sans coût réel. C'est une compétence très valorisée (peu de devs savent gérer webhooks idempotents, gestion d'échecs, downgrade prorata). Skipper c'est rater l'apprentissage qui distingue le projet 6 du 5. PayPal est plus rare en B2B SaaS."
+/>
+
+<Quiz
+  question="Tu vises une contribution OSS (projet 8) à React directement. Bonne idée ?"
+  options={[
+    'Oui, tirer haut',
+    'Probablement non en début de parcours : le code de React est complexe, les mainteneurs très sollicités. Mieux : commencer par une lib que TU utilises et qui a un good-first-issue accessible (Astro, Drizzle, Hono, Radix UI)',
+    'Oui mais en TypeScript pur',
+    'Mieux vaut React Native'
+  ]}
+  answerIndex={1}
+  explanation="React core est immense, ses mainteneurs filtrent fort, le seuil d'entrée est élevé. Une lib plus jeune mais sérieuse (Astro, Drizzle, Hono, Radix) accueille mieux les premières contributions. Une fois 2-3 PRs mergées sur ces projets, tenter React devient envisageable. La progression vaut mieux que l'ambition aveugle."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *frontendmasters.com* — parcours guidés
+- *roadmap.sh* — feuilles de route par profil
+- *Build Your Own X* — [github.com/codecrafters-io/build-your-own-x](https://github.com/codecrafters-io/build-your-own-x)
+- *The Odin Project* — gratuit, full-stack
+- *Codecrafters* — projets challengeants payants (Redis, Git, Docker)
+- *Frontend Mentor* — designs réalistes à coder
+
+---
+
+**Suite** : [17.2 — Portfolio](/17-carriere/02-portfolio/) — comment présenter tes projets pour qu'ils convertissent.

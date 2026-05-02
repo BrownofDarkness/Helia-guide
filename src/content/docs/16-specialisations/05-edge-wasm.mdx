@@ -1,0 +1,403 @@
+---
+title: 16.5 — Edge & WebAssembly
+description: Cloudflare Workers, Deno Deploy, Bun, WebAssembly (Rust → WASM, AssemblyScript), WASI — quand l'edge change la donne et où WASM brille vraiment.
+sidebar:
+  order: 5
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : comprendre l'edge computing au-delà du buzzword, et savoir quand WebAssembly apporte réellement une valeur (perf, langage, sandbox) plutôt que d'ajouter de la complexité gratuite.
+
+<ObjectiveList items={[
+  "Distinguer Edge / Serverless / IaaS et leurs trade-offs",
+  "Déployer une API simple sur Cloudflare Workers, Deno Deploy ou Bun",
+  "Choisir un runtime selon ses besoins (compatibilité Node, latence, prix)",
+  "Identifier les cas où WebAssembly fait gagner 10-100× (image, crypto, ML)",
+  "Compiler du Rust ou AssemblyScript en WASM et l'utiliser depuis le navigateur"
+]} />
+
+<Level value="avancé" reading="11 min" prereq="axes 1-14 maîtrisés" />
+
+
+## L'edge en 5 lignes
+
+```
+Utilisateur → CDN edge (PoP le plus proche) → Compute léger
+                                              → Fallback vers origin si nécessaire
+```
+
+L'edge est un compute **distribué mondialement** près des utilisateurs. Plutôt qu'un seul datacenter eu-west-3, **300+ PoPs** servent les requêtes en local (~5-50 ms vs ~100-300 ms).
+
+| Plateforme | Compute | Storage edge | Spécificité |
+|------------|---------|--------------|-------------|
+| **Cloudflare Workers** | V8 isolates (1 ms cold start) | KV, R2, D1 (SQLite), Durable Objects | Le plus mûr, prix imbattable |
+| **Vercel Edge Functions** | V8 isolates | Edge Config, KV | Intégré Next.js |
+| **Deno Deploy** | V8 isolates | Deno KV | Stack TS/Deno cohérente |
+| **Bun (self-host)** | JavaScriptCore (Bun runtime) | natif | Pour le compute brut, pas l'edge mondial |
+| **Fastly Compute@Edge** | WASM | KV | Multi-langage via WASM |
+| **AWS Lambda@Edge** | Node + plus | DynamoDB Global Tables | Intégré CloudFront |
+
+---
+
+## Cloudflare Workers — l'archétype
+
+### Hello world
+
+```ts
+// src/index.ts
+export default {
+  async fetch(req: Request): Promise<Response> {
+    return new Response('Hello edge', { headers: { 'content-type': 'text/plain' } });
+  },
+};
+```
+
+```bash
+npm i -g wrangler
+wrangler deploy   # déployé sur 300+ PoPs en 30s
+```
+
+### Avantages
+
+- **Cold start ~1 ms** (V8 isolate vs container Lambda).
+- **Latence < 50 ms** mondialement.
+- **100k req/jour gratuits**, ~0,30 $ / million ensuite.
+- Stockage edge intégré : **KV** (clé/valeur), **R2** (S3 sans egress), **D1** (SQLite distribué), **Durable Objects** (WebSocket / coordination).
+
+### Limites
+
+- **CPU time** : 50 ms / req (Free), 30 s (Paid). Pas pour du gros calcul.
+- **Mémoire** : 128 MB.
+- **Pas tous les modules Node.js** — APIs Web standards privilégiées.
+- **Pas de filesystem persistant** (sauf R2 / D1).
+- **Pas de WebSocket sortant** (Durable Objects compensent).
+
+### Hono sur Workers — la combinaison qui marche
+
+```ts
+import { Hono } from 'hono';
+
+const app = new Hono();
+
+app.get('/api/hello', (c) => c.json({ msg: 'hello edge' }));
+
+app.get('/api/users/:id', async (c) => {
+  const id = c.req.param('id');
+  // Accès KV / D1 sur les bindings
+  const user = await c.env.USERS_KV.get(id, 'json');
+  return c.json(user);
+});
+
+export default app;
+```
+
+`wrangler.toml` :
+
+```toml
+name = "my-api"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+[[kv_namespaces]]
+binding = "USERS_KV"
+id = "abc123..."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "myapp"
+database_id = "xyz..."
+```
+
+---
+
+## Deno Deploy — le runtime TS-first
+
+[Deno](https://deno.com/) propose un **runtime TS sécurisé** (permissions explicites, modules ESM, stdlib intégrée) et **Deno Deploy** pour l'edge.
+
+```ts
+// main.ts
+Deno.serve((req) => new Response('Hello from Deno edge'));
+```
+
+```bash
+deployctl deploy main.ts
+```
+
+### Forces
+
+- **TS natif**, pas de transpilation.
+- **Imports HTTPS** directs (`import { parse } from 'https://deno.land/std/...'`).
+- **Permissions explicites** (`--allow-net`, `--allow-read`).
+- **Deno KV** intégré (FoundationDB sous le capot, fortement consistant).
+- Compatible **NPM** depuis Deno 2.
+
+### Limites vs Cloudflare
+
+- Moins de PoPs (~30 vs 300+).
+- Écosystème plus petit.
+
+---
+
+## Bun — runtime serveur ultra-rapide
+
+[Bun](https://bun.sh/) est un runtime **alternatif à Node**, écrit en Zig, basé sur JavaScriptCore (Safari) plutôt que V8.
+
+| Bun avantage | Quoi |
+|--------------|------|
+| **Démarrage 4-10× plus rapide** que Node | Ideal CLI, scripts |
+| **Test runner intégré** | Pas besoin de Vitest pour les tests basiques |
+| **Bundler intégré** | `bun build` |
+| **`bun install`** | Bien plus rapide que npm/pnpm |
+| **HTTP serveur natif** | `Bun.serve(...)` performant |
+| **Compat Node** très avancée | Drop-in dans 90 % des cas |
+
+```ts
+// server.ts
+Bun.serve({
+  port: 3000,
+  fetch: (req) => new Response('Hello from Bun'),
+});
+```
+
+```bash
+bun server.ts
+```
+
+### Quand Bun ?
+
+- **Self-host** : remplacer Node sur un VPS, gain de cold-start et perfs HTTP.
+- **CLI / scripts** : `bun run script.ts` 5× plus rapide que `tsx`.
+- **Test runner** quand on veut moins de dépendances.
+- **Monorepo** : `bun install` est imbattable sur les gros graphes.
+
+### Quand pas Bun ?
+
+- **Edge mondial** : Bun ne se déploie pas en edge (utilise Workers / Deno Deploy).
+- **Compatibilité critique** avec une lib Node spécifique non supportée.
+- **Production stable** sur des stacks complexes (rare bug encore en 2026).
+
+---
+
+## Limites communes du runtime edge
+
+Les runtimes edge (Workers, Deploy, Lambda Edge) tournent sur **V8 isolates** ou WASM, pas Node. Conséquences :
+
+| Pas dispo | Solution |
+|-----------|----------|
+| `fs` (filesystem) | R2 / S3 / KV |
+| `child_process` | Pas dispo — déporter vers worker queue |
+| Modules natifs (`bcrypt`) | Versions JS pures (`@noble/hashes`) ou WASM |
+| Long-running connections | Durable Objects ou worker dédié |
+| Driver Postgres direct | HTTP driver (Neon serverless, Supabase, Prisma Accelerate) |
+
+> **2026** : la majorité des libs sont passées à du **JS pur** ou WASM compatible edge. L'écart se referme rapidement.
+
+---
+
+## WebAssembly (WASM) — quand est-ce vraiment utile ?
+
+### En 5 lignes
+
+- **WebAssembly** est un format binaire compact qui tourne dans le navigateur (et serveur), à des perfs proches du natif.
+- Tu compiles depuis **Rust, C, C++, Go, AssemblyScript, …**.
+- Le binaire est **sandboxé** (pas d'accès direct DOM, fs).
+- Interop avec JS via `import` / `export`.
+- Universel en 2026 (tous navigateurs, tous serveurs WASI-compatibles).
+
+### Quand WASM rapporte vraiment
+
+| Cas | Gain typique |
+|-----|--------------|
+| **Image processing** (resize, filters, codec) | 5-50× vs JS |
+| **Crypto** custom (compression, hashing, ZK proofs) | 10-100× |
+| **Parsing** lourd (PDF, OCR, XML massif) | 5-30× |
+| **ML inference** côté client | 5-20× |
+| **Jeu / physique** | 2-10× |
+| **Calculs scientifiques** | 10-50× |
+| **Réutiliser une lib C/C++ existante** | infini (impossible en JS pur) |
+
+### Quand WASM ne rapporte pas
+
+- CRUD basique, requêtes API.
+- Manipulation DOM (interop coûteuse).
+- Code peu chaud (le bundle WASM coûte ~50-500 KB initial).
+
+### Exemple — Rust → WASM via wasm-pack
+
+```rust
+// src/lib.rs
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub fn fibonacci(n: u32) -> u64 {
+    let (mut a, mut b) = (0u64, 1u64);
+    for _ in 0..n { let next = a + b; a = b; b = next; }
+    a
+}
+```
+
+```bash
+wasm-pack build --target web
+```
+
+```ts
+// app.ts
+import init, { fibonacci } from './pkg/my_module.js';
+await init();
+console.log(fibonacci(40)); // 102334155
+```
+
+### AssemblyScript — TS-like
+
+Si tu n'es pas Rustacé, [AssemblyScript](https://www.assemblyscript.org/) compile un sous-ensemble de TypeScript en WASM. Plus accessible mais moins performant que Rust optimisé.
+
+### Libs WASM populaires en 2026
+
+| Lib | Quoi |
+|-----|------|
+| **@jsquash/avif / @jsquash/webp** | Encodage / décodage image en JS |
+| **wasm-flate** | Compression gzip/brotli côté client |
+| **sql.js / wa-sqlite** | SQLite dans le navigateur |
+| **@duckdb/duckdb-wasm** | DuckDB analytique côté client |
+| **onnxruntime-web** | ML inference (PyTorch/TF → ONNX → WASM) |
+| **transformers.js** | LLM / vision côté client (Whisper, distilled BERT…) |
+| **@ffmpeg/ffmpeg** | FFmpeg complet en WASM |
+
+### WASI — WASM côté serveur
+
+[WASI](https://wasi.dev/) (WebAssembly System Interface) standardise l'accès **filesystem, network, env** depuis WASM. Permet à un même binaire de tourner sur :
+
+- Cloudflare Workers (`workerd`).
+- Fastly Compute@Edge.
+- Spin (Fermyon).
+- WasmEdge.
+- Cosmonic.
+
+Cas d'usage :
+
+- **Plugin systems** : ton SaaS exécute du code utilisateur en WASM sandboxé.
+- **Edge multi-langage** : compiler du Go ou Rust en WASM pour Cloudflare Workers via Wrangler.
+- **Cold start ~10 µs** (vs 100 ms container).
+
+> 2026 : WASM côté serveur monte fort. Watch **Spin** (Fermyon), **Wasmer**, **WasmCloud**.
+
+---
+
+## Patterns edge gagnants
+
+### 1. Static + edge personnalisé
+
+```
+[ Static SSG ]  ──►  [ Edge Function ]  ──►  Réponse
+   landing.html         /personalize
+                        injecte nom user via cookie
+```
+
+Tu sers un HTML statique cacheable, mais tu **personnalises** au passage du Worker (A/B test, langue, devise, geo).
+
+### 2. Cache edge + revalidation
+
+```ts
+const cache = caches.default;
+const cached = await cache.match(req);
+if (cached) return cached;
+
+const fresh = await fetch(originUrl);
+ctx.waitUntil(cache.put(req, fresh.clone())); // async
+return fresh;
+```
+
+Cache HTTP au plus proche de l'utilisateur. Latence ~30 ms même pour des contenus dynamiques.
+
+### 3. Auth edge
+
+JWT validé à l'edge (HS256/RS256), pas d'aller-retour vers l'origin. Quasi 0 ms d'overhead.
+
+### 4. WebSocket via Durable Objects (Cloudflare)
+
+Une room vit dans un DO unique mondialement, **stateful**, persiste l'état entre déploiements. Solution canon pour collab live, présence, jeux multi-joueur.
+
+---
+
+## Anti-patterns edge
+
+| Symptôme | Solution |
+|----------|----------|
+| Cold start de 600 ms | C'est Lambda, pas un edge isolate. Migrer vers Workers / Deploy si edge mondial nécessaire |
+| TCP direct vers Postgres | Utiliser un HTTP driver (Neon serverless, Supabase pooler, Prisma Accelerate) |
+| Tout l'app en edge, lourde | Splitter : edge pour la latence-sensitive, IaaS pour le compute lourd |
+| 50 KV reads par requête | KV est lent en lecture (~10 ms / read) ; cacher en mémoire de l'isolate |
+| WASM intégré pour gagner 5 % | Le bundle initial coûte. WASM pertinent quand le gain est > 5× |
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu démarres une API à servir mondialement avec une latence < 100 ms partout. Stack idéale ?"
+  options={[
+    'Un VPS Hetzner en Allemagne',
+    'Cloudflare Workers + D1/KV/R2 — déploiement edge sur 300+ PoPs, cold start ~1 ms, prix imbattable',
+    'Lambda en eu-west-3',
+    'Kubernetes single-cluster'
+  ]}
+  answerIndex={1}
+  explanation="Pour latence mondiale, Cloudflare Workers est imbattable en 2026 (V8 isolates, 300+ PoPs, cold start ~1 ms). Un VPS unique a la latence du datacenter (250 ms vers Tokyo depuis Allemagne). Lambda est lourd côté cold start. K8s single-cluster a la latence du cluster. Pour multi-région IaaS classique, il faut multi-AZ multi-région avec route 53 latency routing — beaucoup plus cher à opérer."
+/>
+
+<Quiz
+  question="Tu as une lib JS pour redimensionner des images, mais elle est lente (200ms par image moyenne). WASM peut aider. Pourquoi ?"
+  options={[
+    'Pas vraiment, JS est aussi rapide',
+    'Le redimensionnement est CPU-intensif et benchmarke 5-30× plus vite en Rust → WASM (libs comme @jsquash) qu\'en JS pur. Cas typique où WASM brille',
+    'WASM rend tout 10× plus rapide systématiquement',
+    'WASM marche uniquement côté serveur'
+  ]}
+  answerIndex={1}
+  explanation="L'image processing (resize, filters, codec AVIF/WebP) est un cas archi-classique du WASM : CPU intensif, peu d'interop DOM, gain réel 5-30×. Libs comme @jsquash sont 2026-ready. Pour du CRUD ou de la manipulation DOM, WASM ne sert à rien (l'interop coûte plus que le calcul)."
+/>
+
+<Quiz
+  question="Tu choisis Bun ou Node pour ton API en self-host VPS. Critères ?"
+  options={[
+    'Toujours Node — plus stable',
+    'Bun gagne sur la vélocité dev (install/test/start), Node gagne sur la maturité écosystème. Bun est solide en 2026 mais audite tes deps critiques avant migration prod',
+    'Toujours Bun — plus rapide',
+    'Aucune importance'
+  ]}
+  answerIndex={1}
+  explanation="Bun a énormément mûri en 2024-2026, drop-in replacement dans 90 % des cas, vélocité dev incomparable. Mais quelques libs natives (sharp, certains drivers DB) peuvent encore avoir des edge cases. Node reste le défaut sécurisé pour la prod stable. Bun est un excellent choix pour les projets neufs, monorepos, scripts CI."
+/>
+
+<Quiz
+  question='Tu déploies sur Cloudflare Workers. Ton handler Postgres ouvre une connexion TCP directe et tu vois "too many connections". Pourquoi ?'
+  options={[
+    'Cloudflare est buggé',
+    'Workers ne supportent pas TCP direct vers Postgres ; chaque isolate ouvre une connexion non poolable. Solution : driver HTTP (Neon serverless, Prisma Accelerate, Supabase pooler) qui multiplexe via HTTP',
+    'Augmenter max_connections',
+    'Migrer vers Lambda'
+  ]}
+  answerIndex={1}
+  explanation="V8 isolates ne supportent pas le TCP traditionnel comme un container Node. Les drivers HTTP (Neon serverless driver, Prisma Accelerate, Supabase REST/pooler) routent via HTTP avec multiplexing côté serveur, ce qui permet de partager des connexions Postgres entre des centaines de milliers d'invocations Worker. C'est le pattern standard 2026 pour Postgres en serverless edge."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Cloudflare Workers docs* — [developers.cloudflare.com/workers](https://developers.cloudflare.com/workers/)
+- *Deno Deploy* — [deno.com/deploy](https://deno.com/deploy)
+- *Bun docs* — [bun.sh/docs](https://bun.sh/docs)
+- *Hono on Workers* — [hono.dev/getting-started/cloudflare-workers](https://hono.dev/getting-started/cloudflare-workers)
+- *wasm-bindgen book* — [rustwasm.github.io/wasm-bindgen](https://rustwasm.github.io/wasm-bindgen/)
+- *AssemblyScript* — [assemblyscript.org](https://www.assemblyscript.org/)
+- *Spin (Fermyon)* — [developer.fermyon.com](https://developer.fermyon.com/)
+- *transformers.js* — [huggingface.co/docs/transformers.js](https://huggingface.co/docs/transformers.js)
+
+---
+
+**Suite** : [16.6 — Web3 (si pertinent)](/16-specialisations/06-web3/) — wallets, signatures, EVM, ethers/viem.

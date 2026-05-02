@@ -1,0 +1,512 @@
+---
+title: 9.1 — Bases relationnelles (SQL)
+description: PostgreSQL 17 — DDL, DML, jointures, CTE, fenêtrage, transactions ACID, indexes, EXPLAIN.
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import Pitfall from '../../../components/Pitfall.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="14">
+Marie modélise les commandes Lina en SQL : 4 tables (users, products, orders, order_items). Premier piège : sa requête « top 10 produits du mois » fait 3 secondes en local — sans index. Avec un index sur `orders.created_at`, ça tombe à 12 ms.
+</Scenario>
+
+<Scenario parcours="B" episode="13">
+Hugo modélise Studio Pulse : users, classes, schedule, bookings, subscriptions. La contrainte UNIQUE `(class_id, user_id)` empêche un élève de réserver 2 fois la même séance. Une transaction garantit qu'on ne dépasse pas la capacité.
+</Scenario>
+
+<Scenario parcours="C" episode="14">
+Sami a 200 produits, 50 catégories, 10k clients à terme. Schéma soigné dès la V1 : index B-tree sur les FK, GIN sur le full-text search produits, partial index sur `orders.status='pending'` (la requête la plus chaude).
+</Scenario>
+
+<Scenario parcours="D" episode="14">
+Léa modélise CoupDeMain : users, demandes, messages, signalements. Pour les messages privés : RLS Postgres pour que chaque user ne voie que ses propres messages au niveau DB. Pas même le code applicatif ne peut s'en passer.
+</Scenario>
+
+<Scenario parcours="E" episode="14">
+Yanis reprend le schéma `taskly-api` : users, projects, tasks, comments. Il ajoute la table `roles` pour le RBAC (président / coach / bénévole). Une vue matérialisée pour le dashboard hebdo.
+</Scenario>
+
+> 🎯 **Objectif** : écrire du SQL idiomatique en 2026, indexer correctement, lire un plan d'exécution. PostgreSQL est le défaut industriel — c'est notre référence.
+
+<Aside type="tip" title="⚡ Lis-moi avant l'axe 8 si tu n'as pas de bagage SQL">
+Ce sous-axe est conçu pour être lu **avant l'axe 8 (Backend)**. L'axe 8 utilise des ORM (Drizzle, SQLAlchemy, Eloquent) qui génèrent ce SQL pour toi — sans le bagage de cette page, tu manipuleras un ORM sans comprendre.
+
+Les autres sous-axes (9.2 NoSQL, 9.3 ORM, 9.4 Operations) bénéficient au contraire d'avoir d'abord codé un backend — lis-les **après** l'axe 8.
+</Aside>
+
+<ObjectiveList items={[
+  "Concevoir un schéma SQL avec contraintes, types, index appropriés",
+  "Maîtriser SELECT avec jointures, sous-requêtes, CTE, fenêtrage",
+  "Comprendre les transactions, ACID, niveaux d'isolation",
+  "Indexer correctement (B-tree, GIN, partiels, couvrants)",
+  "Lire un EXPLAIN ANALYZE et identifier un goulot",
+  "Migrer un schéma proprement (Prisma Migrate, Alembic, Doctrine, Knex)"
+]} />
+
+<Level value="confirmé" reading="11 min" prereq="axe 8 lu" />
+
+
+## Pourquoi PostgreSQL en 2026 ?
+
+| Critère | PostgreSQL 17 | MySQL 8.4 | SQLite |
+|---------|---------------|-----------|--------|
+| Type-safety, contraintes | 🟢 Excellent | 🟡 Moyen | 🟡 Faible (typing par valeur) |
+| **JSONB** + indexes GIN | 🟢 Natif | 🟡 JSON limité | 🟡 |
+| **Full-text search** | 🟢 Natif (tsvector) | 🟡 OK | 🟡 FTS5 |
+| **CTEs récursives** | 🟢 | 🟢 (8.0+) | 🟢 |
+| **Window functions** | 🟢 Très complet | 🟢 | 🟢 |
+| **Réplication / scale** | 🟢 logical + physical | 🟢 | 🔴 |
+| **Hébergement managé** | Supabase, Neon, Render, AWS RDS | RDS, PlanetScale | embarqué |
+
+**Verdict 2026** : **PostgreSQL est le défaut universel**. MySQL reste valable (notamment pour WordPress, vieux projets). SQLite excellent pour dev, test, edge, et apps single-user.
+
+PostgreSQL 17 (sortie septembre 2024) apporte :
+- **Performances** des `WITH` non-matérialisées améliorées.
+- **Logical replication** plus mature pour la HA.
+- Améliorations VACUUM (mémoire).
+
+## Modélisation — un rappel
+
+Voir [3.5 — Modélisation de données](/03-analyse-conception/05-donnees/) pour MCD/MLD/MPD et la normalisation 1NF/2NF/3NF. Ici, on plonge dans le SQL concret.
+
+## DDL — créer un schéma
+
+```sql
+-- Types et contraintes
+CREATE TYPE order_status AS ENUM ('pending', 'paid', 'shipped', 'cancelled');
+
+CREATE TABLE customers (
+  id            SERIAL PRIMARY KEY,
+  email         CITEXT NOT NULL UNIQUE,             -- case-insensitive text (extension)
+  name          TEXT NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE products (
+  id            SERIAL PRIMARY KEY,
+  sku           VARCHAR(32) NOT NULL UNIQUE,
+  name          TEXT NOT NULL,
+  price_cents   INTEGER NOT NULL CHECK (price_cents >= 0),  -- argent en centimes !
+  stock         INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
+  metadata      JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE orders (
+  id            SERIAL PRIMARY KEY,
+  customer_id   INTEGER NOT NULL REFERENCES customers(id) ON DELETE RESTRICT,
+  status        order_status NOT NULL DEFAULT 'pending',
+  total_cents   INTEGER NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE order_lines (
+  id            SERIAL PRIMARY KEY,
+  order_id      INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  product_id    INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+  quantity      INTEGER NOT NULL CHECK (quantity > 0),
+  unit_price_cents INTEGER NOT NULL,                   -- snapshot prix au moment de la commande
+  UNIQUE (order_id, product_id)
+);
+```
+
+### Bonnes pratiques
+
+- **`id SERIAL PRIMARY KEY`** ou **`id BIGSERIAL`** si tu prévois > 2 milliards de lignes.
+- **`TIMESTAMPTZ`** (avec timezone) plutôt que `TIMESTAMP` — toujours.
+- **`CITEXT`** pour les emails (recherche insensible à la casse). Extension `CREATE EXTENSION citext`.
+- **Argent en centimes** (INTEGER), JAMAIS en `FLOAT` ou `DOUBLE`.
+- **`ON DELETE RESTRICT`** par défaut (sécurité), `CASCADE` quand le cycle de vie est lié.
+- **`CHECK`** pour les invariants (stock ≥ 0, quantité > 0).
+- **Index unique** sur les colonnes naturelles (`email`, `sku`).
+
+## DML — manipuler les données
+
+### INSERT
+
+```sql
+INSERT INTO products (sku, name, price_cents, stock)
+VALUES ('SKU-001', 'Carnet', 990, 100)
+RETURNING id;          -- récupère l'id généré
+```
+
+### UPDATE
+
+```sql
+UPDATE products
+SET stock = stock - 1, updated_at = now()
+WHERE id = 42 AND stock > 0
+RETURNING stock;       -- 0 ligne renvoyée si stock était à 0 → indicateur de rupture
+```
+
+### DELETE
+
+```sql
+DELETE FROM order_lines WHERE order_id = 99;
+```
+
+### UPSERT — `INSERT ... ON CONFLICT`
+
+```sql
+INSERT INTO products (sku, name, price_cents, stock)
+VALUES ('SKU-001', 'Carnet', 990, 50)
+ON CONFLICT (sku) DO UPDATE
+  SET stock = products.stock + EXCLUDED.stock,
+      name = EXCLUDED.name;
+```
+
+Crée la ligne si le `sku` n'existe pas, sinon **incrémente le stock**. Atomique, idéal pour des imports.
+
+## SELECT — l'arsenal complet
+
+### Jointures
+
+```sql
+SELECT
+  o.id,
+  c.name AS customer,
+  o.status,
+  COUNT(ol.id) AS line_count,
+  SUM(ol.quantity * ol.unit_price_cents) / 100.0 AS total_eur
+FROM orders o
+JOIN customers c ON c.id = o.customer_id              -- INNER JOIN (défaut)
+LEFT JOIN order_lines ol ON ol.order_id = o.id        -- LEFT : garde les commandes sans ligne
+WHERE o.created_at >= now() - INTERVAL '30 days'
+GROUP BY o.id, c.name, o.status
+HAVING COUNT(ol.id) > 0
+ORDER BY total_eur DESC
+LIMIT 50;
+```
+
+### Sous-requêtes
+
+```sql
+-- IN
+SELECT * FROM products WHERE id IN (
+  SELECT product_id FROM order_lines GROUP BY product_id HAVING SUM(quantity) > 100
+);
+
+-- EXISTS (souvent meilleur que IN)
+SELECT * FROM customers c WHERE EXISTS (
+  SELECT 1 FROM orders o WHERE o.customer_id = c.id AND o.status = 'paid'
+);
+```
+
+### CTE — Common Table Expressions
+
+Décompose une requête complexe en étapes nommées, **sans imbriquer de sous-requêtes**.
+
+```sql
+WITH paid_orders AS (
+  SELECT customer_id, total_cents
+  FROM orders
+  WHERE status = 'paid'
+),
+customer_totals AS (
+  SELECT customer_id, SUM(total_cents) AS lifetime_cents
+  FROM paid_orders
+  GROUP BY customer_id
+)
+SELECT c.name, ct.lifetime_cents / 100.0 AS lifetime_eur
+FROM customer_totals ct
+JOIN customers c ON c.id = ct.customer_id
+ORDER BY ct.lifetime_cents DESC
+LIMIT 20;
+```
+
+### Window functions — l'outil ultime
+
+Calculs **par groupe** sans agréger les lignes (contrairement à `GROUP BY`).
+
+```sql
+-- Top 3 produits PAR catégorie en termes de ventes
+SELECT category, name, total_sold
+FROM (
+  SELECT
+    p.category,
+    p.name,
+    SUM(ol.quantity) AS total_sold,
+    ROW_NUMBER() OVER (PARTITION BY p.category ORDER BY SUM(ol.quantity) DESC) AS rank
+  FROM products p
+  JOIN order_lines ol ON ol.product_id = p.id
+  GROUP BY p.category, p.id
+) ranked
+WHERE rank <= 3;
+```
+
+Autres fenêtres utiles :
+- `ROW_NUMBER()` — numéro unique
+- `RANK()`, `DENSE_RANK()` — classement avec ex æquo
+- `LAG(col, 1)`, `LEAD(col, 1)` — valeur précédente / suivante
+- `SUM(col) OVER (PARTITION BY x ORDER BY y)` — somme cumulative
+
+## Transactions et ACID
+
+ACID :
+
+| Lettre | Sens |
+|--------|------|
+| **A**tomicity | Tout ou rien |
+| **C**onsistency | Les contraintes restent valides |
+| **I**solation | Les transactions concurrentes se voient comme isolées |
+| **D**urability | Une fois commit, rien ne se perd |
+
+```sql
+BEGIN;
+
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+
+-- Si l'une des 2 updates échoue ou si on fait ROLLBACK, l'autre est annulée
+COMMIT;
+```
+
+### Niveaux d'isolation
+
+| Niveau | Phénomènes possibles | PostgreSQL |
+|--------|----------------------|------------|
+| Read uncommitted | Dirty read | (n'existe pas, comme Read committed) |
+| **Read committed** | Non-repeatable read | **Défaut PG** |
+| Repeatable read | Phantom read | Disponible |
+| **Serializable** | Aucun (le plus strict) | Disponible |
+
+Pour la majorité des apps : **Read committed** (défaut) suffit. Pour des traitements financiers : **Serializable**.
+
+```sql
+BEGIN ISOLATION LEVEL SERIALIZABLE;
+-- ...
+COMMIT;
+```
+
+## Indexes — la clé de la performance
+
+Sans index, une requête `WHERE email = '...'` fait un **scan séquentiel** de toute la table. Avec un index B-tree, c'est `O(log n)`.
+
+### Types d'index PostgreSQL
+
+| Type | Usage |
+|------|-------|
+| **B-tree** | Défaut, comparaisons d'égalité et d'ordre (`=`, `<`, `BETWEEN`) |
+| **GIN** | Indexer JSONB, tableaux, full-text search (tsvector) |
+| **GiST** | Données géographiques (PostGIS), full-text |
+| **BRIN** | Très grandes tables où les valeurs sont triées (logs, time-series) |
+| **Hash** | Égalité stricte uniquement |
+
+### Index simple
+
+```sql
+CREATE INDEX orders_customer_id_idx ON orders(customer_id);
+CREATE INDEX orders_created_at_idx  ON orders(created_at);
+```
+
+### Index composé
+
+```sql
+-- Pour "WHERE customer_id = X ORDER BY created_at DESC"
+CREATE INDEX orders_customer_created_idx ON orders(customer_id, created_at DESC);
+```
+
+L'**ordre des colonnes** compte : utilisé pour `WHERE customer_id = X`, mais pas pour `WHERE created_at = X` seul.
+
+### Index partiel
+
+Index uniquement les lignes pertinentes :
+
+```sql
+-- Pour "WHERE status = 'pending'" qui est ~1 % des commandes
+CREATE INDEX orders_pending_idx ON orders(created_at)
+  WHERE status = 'pending';
+```
+
+L'index est minuscule, ultra-rapide à scanner, et la requête vole.
+
+### Index sur expressions
+
+```sql
+-- Recherche insensible à la casse sans CITEXT
+CREATE INDEX users_email_lower_idx ON users(LOWER(email));
+
+-- ... puis
+SELECT * FROM users WHERE LOWER(email) = LOWER('Alice@Example.com');
+```
+
+### Index couvrant (covering index)
+
+```sql
+-- Sert à éviter d'aller relire la table
+CREATE INDEX orders_idx ON orders(customer_id) INCLUDE (status, total_cents);
+```
+
+L'index contient déjà `status` et `total_cents` → la requête est satisfaite **uniquement avec l'index** (index-only scan).
+
+### Index GIN sur JSONB
+
+```sql
+CREATE INDEX products_metadata_idx ON products USING GIN (metadata);
+
+-- Maintenant on peut chercher dans le JSON rapidement
+SELECT * FROM products WHERE metadata @> '{"color": "red"}';
+```
+
+<Pitfall title="Foreign Key sans index → DELETE/UPDATE catastrophiques" category="perf" axe="9.1">
+**🩹 Symptôme** : `DELETE FROM orders WHERE id = 42` prend 8 secondes au lieu de 5 ms.
+
+**🔍 Cause** : Postgres n'indexe **pas** automatiquement les colonnes FK côté enfant. Pour vérifier qu'aucun enfant ne référence un parent à supprimer, il scanne toute la table enfant.
+
+**🩺 Fix** : toujours indexer les colonnes FK.
+
+```sql
+CREATE INDEX order_lines_order_id_idx ON order_lines(order_id);
+```
+
+Audit script — liste les FK sans index :
+
+```sql
+SELECT c.conname, c.conrelid::regclass AS table, a.attname AS column
+FROM pg_constraint c
+JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+WHERE c.contype = 'f'
+  AND NOT EXISTS (
+    SELECT 1 FROM pg_index i
+    WHERE i.indrelid = c.conrelid AND a.attnum = ANY(i.indkey)
+  );
+```
+
+**🧠 Leçon** : Postgres indexe la **PK** automatiquement, mais **pas** les FK côté enfant. Toujours créer ces index. Sur une grosse table avec CASCADE, l'oubli peut transformer un DELETE en panne de 30 secondes en prod.
+</Pitfall>
+
+<Pitfall title="JSONB sans index GIN → seq scan systématique" category="perf" axe="9.1">
+**🩹 Symptôme** :
+
+```sql
+SELECT * FROM products WHERE metadata @> '{"color": "red"}';
+-- EXPLAIN : Seq Scan, 800 ms sur 100K rows
+```
+
+**🔍 Cause** : sans index GIN, Postgres ne peut pas accéder rapidement aux clés/valeurs JSONB. Il fait un Seq Scan qui parse chaque `metadata` row par row.
+
+**🩺 Fix** : créer un index GIN.
+
+```sql
+CREATE INDEX products_metadata_idx ON products USING GIN (metadata);
+```
+
+Pour un filtre **sur une seule clé** souvent utilisée, un index expression est plus petit :
+
+```sql
+CREATE INDEX products_color_idx ON products ((metadata->>'color'));
+```
+
+**🧠 Leçon** : si tu utilises JSONB en colonne, **toujours** un index GIN (ou expression) sur ce qui est filtré. Sinon tu as choisi JSONB pour la flexibilité mais tu paies le prix de la lenteur.
+</Pitfall>
+
+## EXPLAIN — comprendre ce que fait Postgres
+
+```sql
+EXPLAIN ANALYZE
+SELECT * FROM orders WHERE customer_id = 42 AND created_at >= '2026-01-01';
+```
+
+Sortie typique :
+
+```
+Index Scan using orders_customer_created_idx on orders
+  (cost=0.42..8.45 rows=12 width=24) (actual time=0.038..0.052 rows=12 loops=1)
+  Index Cond: (customer_id = 42 AND created_at >= '2026-01-01')
+Planning Time: 0.124 ms
+Execution Time: 0.073 ms
+```
+
+| Mot-clé | Sens |
+|---------|------|
+| **Seq Scan** | Scan séquentiel — pas d'index, lent sur grosse table |
+| **Index Scan** | Utilise un index — bon |
+| **Bitmap Heap Scan** | Combine plusieurs index — souvent OK |
+| **Nested Loop** | Jointure par boucle imbriquée — bon pour petits ensembles |
+| **Hash Join** | Bon pour gros ensembles |
+| **Merge Join** | Quand les deux côtés sont déjà triés |
+
+Site indispensable : [explain.dalibo.com](https://explain.dalibo.com/) — colle le plan, il te le visualise et te dit où ça coince.
+
+## Migrations — versionner le schéma
+
+| Outil | Langage | Style |
+|-------|---------|-------|
+| **Prisma Migrate** | TS (Node) | Schema-first, génère le SQL |
+| **Drizzle Kit** | TS | Schema-first ou SQL pur |
+| **Knex** | TS/JS | API JS pour DDL |
+| **Alembic** | Python | SQLAlchemy-friendly |
+| **Doctrine Migrations** | PHP | Symfony |
+| **Laravel Migrations** | PHP | DSL Eloquent |
+| **Flyway** | Multi (Java, JVM) | SQL pur versionné |
+| **Sqitch** | Multi | SQL pur, target-based |
+
+Le pattern est toujours le même : un fichier par migration, ordonné, idempotent, **versionné dans Git**.
+
+```
+migrations/
+├── 20260115_create_customers.sql
+├── 20260120_add_customer_email_unique.sql
+└── 20260201_add_orders_status_index.sql
+```
+
+**Règle d'or** : **jamais modifier une migration déjà appliquée en prod**. Tu crées une nouvelle migration qui annule/corrige la précédente.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu stockes des montants monétaires (€) dans PostgreSQL. Type idéal ?"
+  options={[
+    'FLOAT — précis suffisamment',
+    'DOUBLE PRECISION — meilleur que FLOAT',
+    'DECIMAL(10, 2) ou INTEGER en centimes — exact, jamais de problème d\'arrondi',
+    'TEXT pour stocker la chaîne'
+  ]}
+  answerIndex={2}
+  explanation="Les flottants binaires (FLOAT, DOUBLE) ne représentent pas exactement 0.10. Tu accumules des micro-erreurs qui font perdre des centimes. DECIMAL(10,2) ou INTEGER en centimes (× 100) sont les seules options correctes pour de l'argent. Toutes les libs sérieuses (Stripe, banques) utilisent les centimes."
+/>
+
+<Quiz
+  question="Tu as 1 million de commandes, et `WHERE status = 'pending'` ne ramène que ~5000 lignes. Index idéal ?"
+  options={[
+    'Index B-tree complet sur status — ça marche bien',
+    'Index partiel : `CREATE INDEX ... WHERE status = \'pending\'` — index minuscule, scan immédiat',
+    'Pas d\'index, le seq scan est OK',
+    'Index GIN sur status'
+  ]}
+  answerIndex={1}
+  explanation="Un index partiel ne contient que les ~5000 lignes pertinentes — il fait quelques Ko au lieu de Mo. Le scan est instantané. C'est l'optimisation Postgres la plus sous-utilisée. Un B-tree complet sur status (3-4 valeurs distinctes sur 1M lignes) serait peu sélectif et probablement pas utilisé par le planner."
+/>
+
+<Quiz
+  question="Tu fais un `EXPLAIN ANALYZE` et tu vois `Seq Scan on orders (rows=1000000)`. Avis ?"
+  options={[
+    'Tout va bien',
+    'Mauvais signe : Postgres scanne toute la table. Ajoute un index sur la colonne du WHERE et re-run EXPLAIN',
+    'Cela dépend de la version Postgres',
+    'C\'est plus rapide qu\'un Index Scan'
+  ]}
+  answerIndex={1}
+  explanation="Seq Scan = lecture séquentielle de toute la table. C'est OK sur des petites tables (< 10k lignes), catastrophique sur de la prod. Index Scan ou Bitmap Heap Scan = bon signe. Note : sur des SELECT qui ramènent > 30 % des lignes, Postgres préfère parfois un Seq Scan car c'est plus rapide qu'un index avec random IO. Toujours mesurer."
+/>
+
+## Pour aller plus loin
+
+- *PostgreSQL Documentation* — [postgresql.org/docs](https://www.postgresql.org/docs/)
+- *Use The Index, Luke!* — [use-the-index-luke.com](https://use-the-index-luke.com/) — la référence indexation
+- *PostgreSQL Up & Running* — Regina Obe & Leo Hsu
+- *Explain Visualizer* — [explain.dalibo.com](https://explain.dalibo.com/) — colle ton plan, visualise
+- *PG Mustard* — [pgmustard.com](https://www.pgmustard.com/) — analyse automatique de plans
+
+---
+
+**Suite** : [9.2 — NoSQL](/09-bases-de-donnees/02-nosql/) — quand le relationnel ne suffit pas.

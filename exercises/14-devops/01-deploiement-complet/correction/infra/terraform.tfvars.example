@@ -1,0 +1,5 @@
+fly_org      = "myorg"
+fly_region   = "cdg"
+sentry_org   = "myorg"
+sentry_team  = "platform"
+database_url = "postgres://taskly:CHANGEME@taskly-db.flycast:5432/taskly?sslmode=disable"

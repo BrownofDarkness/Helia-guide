@@ -1,0 +1,352 @@
+---
+title: 10.1 — Plateformes BaaS complètes
+description: Firebase, Supabase, Appwrite, AWS Amplify, Pocketbase — backend prêt à l'emploi.
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="15">
+Marie hésite à utiliser Supabase plutôt que coder son backend Hono. Pour Lina, ce serait plus rapide. Mais elle veut comprendre Hono + Postgres pour pouvoir lire du code en boîte plus tard. Compromis : Better Auth (auth managée) + Hono + Drizzle (DB en main).
+</Scenario>
+
+<Scenario parcours="B" episode="14">
+Hugo regarde Supabase pour Studio Pulse — auth + DB + storage tout-en-un. Tentant. Mais il aime contrôler son backend (transactions complexes pour les réservations). Compromis : Supabase pour le storage des photos profs, Hono custom pour le reste.
+</Scenario>
+
+<Scenario parcours="C" episode="15">
+Sami choisit volontairement de NE PAS utiliser un BaaS complet. GreenBox a un budget serré et un risque de vendor lock-in à éviter (un BaaS qui meurt = projet mort). Postgres + Hono + Cloudflare R2 + Stripe = stack composable, chaque brique remplaçable.
+</Scenario>
+
+<Scenario parcours="D" episode="15">
+Léa pour CoupDeMain regarde Supabase Realtime pour le chat — séduisant. Mais Yjs CRDT lui faut un serveur custom (Hocuspocus). Elle utilise Supabase pour Auth + Storage des photos uniquement, le reste en Node + Postgres.
+</Scenario>
+
+<Scenario parcours="E" episode="15">
+Yanis garde Tasky en Hono + Postgres custom (cohérent avec l'exo `taskly-api`). Pas de BaaS pour cette app — son CV bénéficie d'une stack composée et lisible.
+</Scenario>
+
+> 🎯 **Objectif** : choisir un BaaS adapté à ton projet, et savoir ce qu'il fait à ta place — pour pouvoir migrer plus tard si besoin.
+
+<ObjectiveList items={[
+  "Comparer Firebase, Supabase, Appwrite, AWS Amplify, Pocketbase",
+  "Identifier les modules typiques d'un BaaS : Auth, DB, Storage, Functions, Realtime",
+  "Choisir entre BaaS open source vs propriétaire",
+  "Anticiper le verrouillage fournisseur (vendor lock-in)",
+  "Comprendre quand un BaaS suffit vs quand on backend custom"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 8-9 lus" />
+
+
+## Pourquoi un BaaS ?
+
+Un **BaaS** (Backend as a Service) te fournit en quelques heures ce qui prend des **semaines** à coder :
+
+- Authentification (login, OAuth, magic links, MFA, passkeys)
+- Base de données + API REST/GraphQL auto-générées
+- Stockage de fichiers
+- Functions serverless
+- Realtime (websockets, Pub/Sub)
+- Notifications push
+- Règles de sécurité déclaratives
+
+Le compromis : **vendor lock-in**. Tu perds 1 mois de travail si tu migres, mais tu en gagnes 6 au démarrage. Pour la plupart des MVPs et indie hackers, c'est rentable.
+
+## Tableau de comparaison 2026
+
+| Plateforme | Open source | DB sous-jacente | Realtime | Self-host | Free tier |
+|-----------|-------------|------------------|----------|-----------|-----------|
+| **Firebase** | ❌ | Firestore (NoSQL) ou Realtime DB | ✅ natif | ❌ | Généreux (Spark) |
+| **Supabase** | ✅ | **PostgreSQL** | ✅ via Postgres replication | ✅ | Très généreux |
+| **Appwrite** | ✅ | MariaDB ou collections | ✅ | ✅ (dispo Docker) | Cloud limité |
+| **AWS Amplify** | ❌ (mais composants OS) | DynamoDB / Aurora | ✅ AppSync | ❌ | AWS classique |
+| **Pocketbase** | ✅ | SQLite (intégré) | ✅ | ✅ (un seul binaire Go) | — (self-host only) |
+
+**Verdict 2026** :
+
+- **Supabase** est devenu le **défaut moderne** : PostgreSQL → tu n'es pas verrouillé sur du NoSQL exotique, et tu peux migrer vers du Postgres self-hosted le jour où tu veux.
+- **Firebase** reste solide, surtout pour mobile (iOS/Android) avec une intégration profonde Google Cloud.
+- **Pocketbase** est un **gem** pour des side-projects ou apps locales — un binaire Go ~15 Mo qui te donne tout.
+
+## Firebase — le pionnier
+
+[Firebase](https://firebase.google.com/) (Google) propose un écosystème massif :
+
+| Module | Rôle |
+|--------|------|
+| **Authentication** | Email/password, OAuth (Google, Apple, GitHub…), magic links, anonymous, MFA |
+| **Cloud Firestore** | Base NoSQL document, temps réel, scaling automatique |
+| **Realtime Database** | L'ancêtre de Firestore — JSON arborescent, latence ultra-basse |
+| **Cloud Storage** | Fichiers (images, vidéos), CDN, règles de sécu |
+| **Cloud Functions** | Code serveur déclenché par événements ou HTTP |
+| **Hosting** | Statique avec CDN |
+| **Cloud Messaging (FCM)** | Notifications push iOS/Android/web |
+| **Remote Config** | Feature flags A/B testing |
+| **App Check** | Anti-bot, anti-abuse |
+| **Crashlytics** | Tracking crashes mobile |
+
+### Exemple Firebase Auth + Firestore
+
+```ts
+// Setup
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+
+const app = initializeApp({
+  apiKey: 'AIza...',
+  authDomain: 'mon-projet.firebaseapp.com',
+  projectId: 'mon-projet',
+});
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Login
+await signInWithEmailAndPassword(auth, 'alice@example.com', 'password');
+
+// Lire des tâches
+const tasksRef = collection(db, 'tasks');
+const q = query(tasksRef, where('owner_id', '==', auth.currentUser!.uid));
+const snapshot = await getDocs(q);
+snapshot.forEach(doc => console.log(doc.id, doc.data()));
+
+// Créer une tâche
+await addDoc(tasksRef, {
+  owner_id: auth.currentUser!.uid,
+  title: 'Test',
+  done: false,
+  created_at: new Date(),
+});
+```
+
+### Firestore Security Rules
+
+C'est **le cœur** de la sécurité Firebase. Au lieu d'un middleware d'auth côté serveur, tu déclares les règles dans un DSL :
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /tasks/{taskId} {
+      // Lire : seulement le propriétaire
+      allow read: if request.auth != null
+                  && resource.data.owner_id == request.auth.uid;
+
+      // Créer : connecté ET owner_id correspond à toi
+      allow create: if request.auth != null
+                    && request.resource.data.owner_id == request.auth.uid;
+
+      // Update / delete : seulement le propriétaire
+      allow update, delete: if request.auth != null
+                              && resource.data.owner_id == request.auth.uid;
+    }
+  }
+}
+```
+
+<Aside type="caution" title="Tester ses Security Rules">
+**Toujours** écrire des tests pour tes Security Rules avec le **Firebase emulator** ou `@firebase/rules-unit-testing`. Une règle mal écrite = data leak.
+
+Le plus classique : `allow read: if true;` qui rend tout public. À ne JAMAIS commit, même temporairement.
+</Aside>
+
+## Supabase — l'alternative open source moderne
+
+[Supabase](https://supabase.com/) = **Firebase open source basé PostgreSQL**.
+
+| Module | Sous-jacent |
+|--------|-------------|
+| **Auth** | GoTrue (open source, OAuth, magic links, MFA) |
+| **Database** | **PostgreSQL** (vrai, complet) |
+| **Storage** | S3-compatible |
+| **Realtime** | Postgres replication via WebSockets |
+| **Edge Functions** | Deno-based |
+| **Vector** | pgvector intégré |
+| **AI** | OpenAI / Anthropic via Edge Functions |
+
+### Pourquoi c'est devenu le défaut
+
+1. **PostgreSQL** = pas de DSL exotique, tu utilises du SQL.
+2. **Row-Level Security** = sécurité au niveau base, robuste.
+3. **API auto-générée** REST + GraphQL.
+4. **Self-hostable** — tu peux migrer un jour.
+5. **Free tier** très généreux.
+
+### Exemple Supabase
+
+```ts
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  'https://xxx.supabase.co',
+  'eyJ...'   // public anon key
+);
+
+// Login
+const { data: { session } } = await supabase.auth.signInWithPassword({
+  email: 'alice@example.com',
+  password: 'password',
+});
+
+// Lire (auto-filtré par RLS)
+const { data: tasks } = await supabase
+  .from('tasks')
+  .select('*')
+  .order('created_at', { ascending: false });
+
+// Insert
+await supabase.from('tasks').insert({ title: 'Test', owner_id: session.user.id });
+
+// Realtime
+const subscription = supabase
+  .channel('tasks-channel')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
+    console.log('Changement détecté :', payload);
+  })
+  .subscribe();
+```
+
+### Row-Level Security (RLS)
+
+Le pendant Supabase des Firestore Rules — mais **c'est du Postgres natif** :
+
+```sql
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+
+-- Un user ne voit que ses tâches
+CREATE POLICY "Users see own tasks" ON tasks
+  FOR SELECT USING (auth.uid() = owner_id);
+
+-- Un user ne crée que ses tâches
+CREATE POLICY "Users create own tasks" ON tasks
+  FOR INSERT WITH CHECK (auth.uid() = owner_id);
+
+-- Idem update/delete
+CREATE POLICY "Users update own tasks" ON tasks
+  FOR UPDATE USING (auth.uid() = owner_id);
+
+CREATE POLICY "Users delete own tasks" ON tasks
+  FOR DELETE USING (auth.uid() = owner_id);
+```
+
+**Énorme avantage** : ta logique de sécurité est **en SQL** (testable, versionnable), pas dans un DSL maison.
+
+## Appwrite — l'alternative self-host
+
+[Appwrite](https://appwrite.io/) propose les mêmes briques (Auth, DB, Storage, Functions, Realtime) en **open source** déployable via Docker en quelques minutes.
+
+```bash
+docker run -d --name appwrite \
+  -p 80:80 -p 443:443 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  appwrite/appwrite
+```
+
+**Quand préférer Appwrite** : tu veux le contrôle total (data residency, GDPR, compliance) tout en gardant l'ergonomie d'un BaaS.
+
+## AWS Amplify — l'écosystème Amazon
+
+Si tu es **déjà sur AWS**, Amplify regroupe :
+
+- Cognito (auth)
+- AppSync (GraphQL)
+- DynamoDB (NoSQL)
+- S3 (storage)
+- Lambda (functions)
+
+Plus puissant mais **plus complexe** que Supabase. Réservé aux équipes qui maîtrisent AWS.
+
+## Pocketbase — le gem indie
+
+[Pocketbase](https://pocketbase.io/) = **un seul binaire Go (~15 Mo)** qui inclut tout : Auth, DB SQLite, Storage, Realtime, admin UI.
+
+```bash
+# Linux/Mac
+wget https://github.com/pocketbase/pocketbase/releases/download/v0.22/pocketbase_0.22_linux_amd64.zip
+unzip pocketbase_*
+./pocketbase serve
+# UI à http://localhost:8090/_/
+# API à http://localhost:8090/api/
+```
+
+**Pour quoi** : side-project, MVP local-first, app interne, prototype.
+**Limite** : SQLite (single-writer), donc pas pour des centaines de concurrent writes.
+
+## Verdict 2026 — quel BaaS choisir ?
+
+| Si tu... | Choisis |
+|----------|---------|
+| Démarres un SaaS web moderne | **Supabase** |
+| Construis une app mobile iOS/Android | **Firebase** (intégration native) |
+| Veux une solution open source self-host enterprise | **Appwrite** |
+| Es déjà tout-AWS | **AWS Amplify** |
+| Fais un side-project simple, local-first | **Pocketbase** |
+
+## Quand un BaaS ne suffit plus
+
+- Logique métier **complexe** qui ne se résume pas à du CRUD.
+- **Coûts** qui explosent à grande échelle (Firebase devient cher).
+- Besoins **réglementaires** spécifiques (data residency forte, audits).
+- Performance **critique** (latency < 50 ms requise).
+
+À ce moment-là, tu **migres** vers un backend custom (axe 8). C'est pour ça qu'il vaut mieux choisir un BaaS open source / standard (Supabase) que propriétaire (Firebase).
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu démarres un SaaS solo en 2026 avec un MVP en 1 mois. Choix BaaS ?"
+  options={[
+    'AWS Amplify — c\'est l\'industrie',
+    'Supabase — Postgres standard, RLS, free tier généreux, pas de lock-in NoSQL',
+    'Firebase — c\'est plus mature',
+    'Coder le backend from scratch'
+  ]}
+  answerIndex={1}
+  explanation="Supabase est devenu le défaut indie/PME en 2026 : PostgreSQL standard donc tu peux migrer vers du Postgres self-hosted ; RLS testable en SQL ; auth + storage + realtime + edge functions inclus. Firebase est excellent mais lock-in NoSQL fort. AWS Amplify est puissant mais complexe."
+/>
+
+<Quiz
+  question="Tu écris une règle Firestore : `allow read: if true;`. Risque ?"
+  options={[
+    'Aucun, c\'est juste pour le dev',
+    'CATASTROPHE : toutes les données sont publiques. Quiconque connaît l\'URL Firestore peut lire ta DB sans auth',
+    'Cela dépend de la collection',
+    'Firebase rejette automatiquement'
+  ]}
+  answerIndex={1}
+  explanation="C'est le bug Firebase le plus classique. Une règle 'if true' = toute la collection est publique sans auth. Et certains ont déjà commit ça en prod. Toujours TOUJOURS auditer ses Security Rules avant de mettre live, et idéalement les tester avec @firebase/rules-unit-testing."
+/>
+
+<Quiz
+  question='Pourquoi Supabase RLS (PostgreSQL) est-il considéré comme « plus sûr » que les Firestore Rules ?'
+  options={[
+    'Il est plus rapide',
+    'Le RLS s\'exprime en SQL standard, qui est testable, lisible, versionnable et bien connu. Les Firestore Rules ont leur DSL propre, plus opaque',
+    'Les deux ont le même niveau de sécurité',
+    'Il n\'y a pas vraiment de différence'
+  ]}
+  answerIndex={1}
+  explanation="C'est un argument fort en faveur de Supabase. Une CREATE POLICY ... USING (...) est du SQL standard que tu peux versionner, tester avec pgTAP, déployer via migrations. Les Firestore Rules ont leur grammaire propre, moins outillée. Sur le papier les deux peuvent être aussi sûrs, mais la maintenabilité penche pour SQL."
+/>
+
+## Pour aller plus loin
+
+- *Supabase Docs* — [supabase.com/docs](https://supabase.com/docs)
+- *Firebase Docs* — [firebase.google.com/docs](https://firebase.google.com/docs)
+- *Appwrite Docs* — [appwrite.io/docs](https://appwrite.io/docs)
+- *Pocketbase* — [pocketbase.io](https://pocketbase.io/)
+- *Open Status* — [openstatus.dev](https://openstatus.dev/) (open source de monitoring qui montre l'usage Supabase)
+
+---
+
+**Suite** : [10.2 — Services spécialisés](/10-baas/02-services-specialises/) — composer ton backend avec Stripe, Clerk, Resend, etc.

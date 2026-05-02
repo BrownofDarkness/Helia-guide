@@ -1,0 +1,405 @@
+---
+title: FastAPI 0.136+
+description: Le framework Python moderne — async natif, Pydantic v2, OpenAPI auto, type-safe.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../../../components/ExerciseDownload.astro';
+import Quiz from '../../../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif** : construire des APIs Python **modernes** : async, typées, validées par Pydantic, avec doc OpenAPI gratuite. Le standard 2026 pour les nouveaux projets.
+
+<ObjectiveList items={[
+  "Construire une API FastAPI avec routing, paramètres typés, body Pydantic",
+  "Utiliser async/await pour des handlers non-bloquants",
+  "Injecter des dépendances via Depends (DB, auth, settings)",
+  "Persister avec SQLAlchemy 2 async ou SQLModel",
+  "Authentifier avec JWT en cookie HttpOnly",
+  "Tester avec pytest + httpx async"
+]} />
+
+## Pourquoi FastAPI ?
+
+| Pour | Contre |
+|------|--------|
+| **Async natif** : performances proches de Node/Go pour I/O-bound | Async demande de la rigueur (ne pas bloquer l'event loop) |
+| **Pydantic v2** : validation et sérialisation automatiques typées | Pydantic v1 → v2 a cassé pas mal de code en 2023 |
+| **OpenAPI auto** : `/docs` et `/redoc` gratuits, à jour | Pas d'admin auto comme Django |
+| **TypeScript-niveau** de sécurité de typage en Python | Écosystème plugin plus jeune que Django |
+
+**Verdict 2026** : FastAPI est devenu le **gold standard** des APIs Python. Si tu démarres une API publique en 2026, c'est le choix par défaut.
+
+## Hello FastAPI
+
+```bash
+uv init taskly-fastapi
+cd taskly-fastapi
+uv add fastapi uvicorn
+
+# main.py
+```
+
+```python
+# main.py
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI(title="taskly-api")
+
+class HealthResponse(BaseModel):
+    status: str
+
+@app.get("/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
+    return HealthResponse(status="ok")
+```
+
+```bash
+uv run uvicorn main:app --reload
+# http://127.0.0.1:8000
+# http://127.0.0.1:8000/docs   ← Swagger UI auto !
+# http://127.0.0.1:8000/redoc  ← Redoc auto !
+```
+
+**Tu obtiens immédiatement** :
+- Une API qui valide les types.
+- Une **documentation interactive** Swagger UI.
+- Une spec OpenAPI à `/openapi.json`.
+
+## Paramètres typés
+
+```python
+from fastapi import FastAPI, Path, Query, HTTPException
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class Task(BaseModel):
+    id: int
+    title: str
+    description: str | None = None
+    done: bool = False
+
+@app.get("/tasks")
+async def list_tasks(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+) -> list[Task]:
+    # FastAPI valide automatiquement page et limit
+    return [...]
+
+@app.get("/tasks/{task_id}")
+async def get_task(task_id: int = Path(..., ge=1)) -> Task:
+    if task_id == 999:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return Task(id=task_id, title="Demo")
+```
+
+**Magie** : FastAPI utilise les **type hints Python** + Pydantic pour valider, sérialiser ET documenter automatiquement.
+
+## Body avec Pydantic
+
+```python
+from pydantic import BaseModel, Field
+
+class CreateTaskInput(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str | None = Field(None, max_length=2000)
+    due_at: str | None = None  # ISO 8601
+
+@app.post("/tasks", status_code=201)
+async def create_task(input: CreateTaskInput) -> Task:
+    # input est validé : si invalid, FastAPI renvoie 422 avec détails
+    return Task(id=1, title=input.title, description=input.description)
+```
+
+Si le client envoie `{"title": ""}`, FastAPI répond automatiquement :
+
+```json
+{
+  "detail": [
+    {
+      "type": "string_too_short",
+      "loc": ["body", "title"],
+      "msg": "String should have at least 1 character",
+      "input": ""
+    }
+  ]
+}
+```
+
+## Dependency Injection — `Depends`
+
+C'est **THE** killer feature de FastAPI. Les **dépendances** sont des fonctions qu'on injecte dans les handlers : DB, auth, settings, etc.
+
+```python
+from fastapi import Depends, HTTPException
+from typing import Annotated
+
+# Dependency : retourne le user courant à partir du cookie
+async def get_current_user(token: str = Cookie(alias="session")) -> User:
+    payload = verify_token(token)
+    user = await db.get_user(payload["sub"])
+    if not user:
+        raise HTTPException(401, "Invalid session")
+    return user
+
+# Type alias plus pratique (Python 3.12+)
+CurrentUser = Annotated[User, Depends(get_current_user)]
+
+@app.get("/me")
+async def me(user: CurrentUser) -> User:
+    return user
+
+@app.get("/tasks")
+async def list_tasks(user: CurrentUser) -> list[Task]:
+    return await db.get_tasks(user.id)
+```
+
+**Avantages** :
+- Pas de middleware global pour l'auth — chaque route déclare ce dont elle a besoin.
+- **Testable** : tu peux override les dépendances en test.
+- **Typé** : si tu oublies l'auth, le compilateur te le dit.
+
+### Override en test
+
+```python
+def fake_user():
+    return User(id=1, email="test@test.com")
+
+app.dependency_overrides[get_current_user] = fake_user
+```
+
+## Async ORM avec SQLAlchemy 2
+
+```python
+# db.py
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import DeclarativeBase
+
+engine = create_async_engine("sqlite+aiosqlite:///./data.db")
+AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
+class Base(DeclarativeBase):
+    pass
+
+# models.py
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import ForeignKey
+from datetime import datetime
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(unique=True)
+    name: Mapped[str]
+    password_hash: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+class Task(Base):
+    __tablename__ = "tasks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    title: Mapped[str]
+    description: Mapped[str | None]
+    done: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+# Dependency
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
+
+DB = Annotated[AsyncSession, Depends(get_db)]
+
+@app.get("/tasks")
+async def list_tasks(user: CurrentUser, db: DB) -> list[Task]:
+    result = await db.execute(
+        select(Task).where(Task.owner_id == user.id).order_by(Task.created_at.desc())
+    )
+    return result.scalars().all()
+```
+
+## Alternative : SQLModel
+
+[SQLModel](https://sqlmodel.tiangolo.com/) (par le créateur de FastAPI) combine **SQLAlchemy 2** et **Pydantic** en un seul modèle :
+
+```python
+from sqlmodel import SQLModel, Field
+
+class Task(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    title: str
+    description: str | None = None
+    done: bool = False
+```
+
+Une seule classe sert pour la DB **et** comme schéma API. Très ergonomique, mais moins flexible que SQLAlchemy 2 pur pour des modèles complexes.
+
+## Auth JWT en cookie HttpOnly
+
+```python
+from datetime import datetime, timedelta, timezone
+from jose import jwt   # python-jose — install : uv add python-jose[cryptography]
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+
+SECRET_KEY = settings.JWT_SECRET
+ALGORITHM = "HS256"
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+def create_access_token(user_id: int) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(hours=24)
+    payload = {"sub": str(user_id), "exp": expire}
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_access_token(token: str) -> int:
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    return int(payload["sub"])
+
+# Routes
+from fastapi import Response, Cookie
+
+@app.post("/auth/login")
+async def login(input: LoginInput, response: Response, db: DB) -> User:
+    user = await find_user_by_email(db, input.email)
+    if not user or not verify_password(input.password, user.password_hash):
+        raise HTTPException(401, "Invalid credentials")
+    token = create_access_token(user.id)
+    response.set_cookie(
+        key="session",
+        value=token,
+        httponly=True,
+        secure=settings.ENV == "production",
+        samesite="lax",
+        max_age=86400,
+    )
+    return user
+
+async def get_current_user(
+    session: str | None = Cookie(default=None),
+    db: DB = Depends(get_db),
+) -> User:
+    if not session:
+        raise HTTPException(401, "Unauthorized")
+    try:
+        user_id = verify_access_token(session)
+    except Exception:
+        raise HTTPException(401, "Invalid token")
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(401, "User not found")
+    return user
+```
+
+## Tests avec httpx async
+
+```python
+# tests/test_api.py
+import pytest
+from httpx import AsyncClient, ASGITransport
+from main import app
+
+@pytest.fixture
+async def client():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        yield c
+
+@pytest.mark.asyncio
+async def test_health(client):
+    response = await client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+@pytest.mark.asyncio
+async def test_create_task_unauthenticated(client):
+    response = await client.post("/tasks", json={"title": "test"})
+    assert response.status_code == 401
+```
+
+## Déploiement
+
+```dockerfile
+FROM python:3.13-slim
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN pip install uv && uv sync --frozen
+COPY . .
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+| Plateforme | Note |
+|-----------|------|
+| **Render**, **Fly.io**, **Railway** | Push Git → déployé |
+| **AWS Lambda** | Via [Mangum](https://mangum.io/) (cold start ~500 ms) |
+| **Vercel** | Python runtime supporté (limites taille bundle) |
+
+Pour la prod, lance avec **Uvicorn** (ASGI) derrière un reverse proxy (Nginx/Caddy), ou **Gunicorn + UvicornWorker** pour multi-process.
+
+## Auto-évaluation
+
+<Quiz
+  question="Pourquoi `Depends(get_db)` dans FastAPI plutôt qu'une variable globale `db = ...` ?"
+  options={[
+    'Pour la performance',
+    'Parce que les dépendances sont injectées par requête (peut donner une session DB unique par requête, fermée à la fin), et override-ables en test',
+    'C\'est obligatoire',
+    'Aucune raison particulière'
+  ]}
+  answerIndex={1}
+  explanation="Les dépendances FastAPI ouvrent une nouvelle session DB par requête (via `yield`), la ferment proprement à la fin (rollback en cas d'exception). En test, tu override avec `app.dependency_overrides[get_db] = fake_db`. Une variable globale ne donne aucune de ces garanties."
+/>
+
+<Quiz
+  question="Tu as `async def list_tasks(): users = User.query.all()` (Django ORM). Que se passe-t-il dans FastAPI ?"
+  options={[
+    'Ça marche normalement',
+    'L\'event loop est bloqué pendant la requête DB. C\'est pour ça qu\'il faut SQLAlchemy 2 async (await db.execute(...)) ou Tortoise ORM, pas le Django ORM sync',
+    'FastAPI gère automatiquement',
+    'C\'est plus rapide'
+  ]}
+  answerIndex={1}
+  explanation="C'est le piège classique. Une fonction `async def` qui appelle du code sync bloquant (Django ORM, requests, time.sleep) bloque l'event loop. Pendant ce temps, AUCUNE autre requête n'est traitée. Solutions : SQLAlchemy 2 async, Tortoise ORM, ou `await asyncio.to_thread(blocking_fn)`."
+/>
+
+<Quiz
+  question="Tu visites /docs sur ton API FastAPI. Qu'y vois-tu ?"
+  options={[
+    'Une erreur 404 — il faut configurer manuellement',
+    'L\'interface Swagger UI interactive avec tous tes endpoints, paramètres, schemas, erreurs — générée automatiquement depuis tes types Python',
+    'Juste un JSON',
+    'Une page README'
+  ]}
+  answerIndex={1}
+  explanation="C'est la killer feature de FastAPI : ta doc OpenAPI est générée GRATUITEMENT depuis tes annotations de types, modèles Pydantic, et response_model. Tu peux tester chaque endpoint depuis l'interface. Combiné à /redoc pour une doc lecture, tu n'as quasiment rien d'autre à faire pour exposer une API documentée."
+/>
+
+## Pour aller plus loin
+
+- *FastAPI Documentation* — [fastapi.tiangolo.com](https://fastapi.tiangolo.com/) (excellente)
+- *Pydantic v2 Docs* — [docs.pydantic.dev](https://docs.pydantic.dev/)
+- *SQLModel Docs* — [sqlmodel.tiangolo.com](https://sqlmodel.tiangolo.com/)
+- *Awesome FastAPI* — [github.com/mjhea0/awesome-fastapi](https://github.com/mjhea0/awesome-fastapi)
+- *FastAPI Users* — [fastapi-users.github.io](https://fastapi-users.github.io/) (auth complète prête à l'emploi)
+
+---
+
+## Projet de l'axe — `taskly-api` en FastAPI
+
+Mêmes 10 endpoints que la version Node (axe 8.1) — auth JWT cookie HttpOnly, CRUD tâches avec isolation par owner, pagination, validation Pydantic. Tu compares directement Hono vs FastAPI sur la même API.
+
+<ExerciseDownload
+  axe="08-backend"
+  slug="02-python/fastapi/taskly-api"
+  title="taskly-api en FastAPI"
+  description="Pré-requis : Python 3.12+ et uv (winget/curl). 16 TODO répartis sur 7 modules (security, deps, routers/auth, routers/tasks). Correction validée : 3/3 pytest passent, 0 deprecation warning Pydantic v2 / datetime."
+/>

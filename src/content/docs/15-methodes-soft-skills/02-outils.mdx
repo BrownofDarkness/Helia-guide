@@ -1,0 +1,371 @@
+---
+title: 15.2 — Outils
+description: Linear, Jira, GitHub Projects, Notion, Confluence — choisir, configurer, écrire des tickets exploitables.
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : choisir un outil de gestion de tickets adapté au contexte, écrire des tickets que les devs peuvent commencer **sans rien demander**, et tenir la base de connaissances vivante.
+
+<ObjectiveList items={[
+  "Comparer les outils de gestion de tickets 2026 (Linear, Jira, GitHub, Trello, Notion)",
+  "Écrire un ticket qui démarre tout seul (contexte, AC, maquette, edge cases)",
+  "Définir DoR et DoD adaptés à ton équipe",
+  "Choisir un outil de doc qui survive à 2 ans (Notion, Confluence, MDX en repo)",
+  "Mettre en place une nomenclature de labels et de types qui ne dérive pas"
+]} />
+
+<Level value="confirmé" reading="11 min" prereq="aucun prérequis technique" />
+
+
+## Le paysage 2026
+
+| Outil | Force | Faiblesse | Pour qui |
+|-------|-------|-----------|----------|
+| **Linear** | UX rapide, raccourcis clavier, opinions fortes (cycles), GitHub-tight | Moins customisable, pricing par seat | Startup tech 5-100 devs |
+| **Jira** | Customisable à l'extrême, écosystème énorme | Lourd, lent, complexité combinatoire | Grandes orgs, contextes audités |
+| **GitHub Projects** | Intégré au repo, gratuit | Peu structuré, pas idéal en multi-repo | Open source, side-projects |
+| **Trello** | Simple, low-friction | Pas de hiérarchie, scale mal | Petites équipes, projets simples |
+| **Notion** | Tout-en-un (doc + DB + tickets) | Pas un vrai tracker, lent à grande échelle | Petites équipes < 30, doc-centric |
+| **ClickUp / Asana** | Polyvalents, customisables | UX moins fine que Linear | Hors-tech / mixed teams |
+| **Plane** | OSS, Linear-like | Plus jeune, moins de features | Self-host, OSS-friendly |
+| **Height** | Auto-org IA | Peu mature 2026 | Early adopters |
+
+> En 2026 dans la tech, **Linear** est le défaut sur les startups. **Jira** reste le défaut sur les grandes orgs (souvent imposé). **GitHub Projects** monte sur les petits projets et l'open source. **Notion** s'utilise comme **doc + roadmap macro**, rarement comme tracker primaire.
+
+---
+
+## Linear — l'archétype 2026
+
+### Concepts
+
+| Concept Linear | Équivalent Jira / Scrum |
+|----------------|-------------------------|
+| **Issue** | Ticket / story |
+| **Project** | Epic |
+| **Cycle** | Sprint |
+| **Initiative** | Programme / theme |
+| **Triage** | Inbox de tickets non priorisés |
+| **Roadmap** | Planning macro |
+
+### Workflow type
+
+```
+Backlog → Todo → In Progress → In Review → Done
+```
+
+### Forces
+
+- Raccourcis clavier partout : `C` pour créer, `M` pour move, `Cmd+K` pour tout.
+- **Cycles** automatiques (sprint hebdo / bi-mensuel).
+- Liens GitHub bidirectionnels : PR ouverte → ticket *In Review* automatique.
+- Slack intégration native, threads par issue.
+- API GraphQL solide pour automatisations.
+
+### Limites
+
+- Pricing par seat ~10 $/mois — rapidement coûteux.
+- Customization limitée (par design).
+- Pas idéal pour des workflows non-tech (RH, finance).
+
+---
+
+## Jira — encore là, encore lourd
+
+Jira reste **dominant** dans les grandes orgs (banques, gouvernements, audit ISO). Trois raisons à connaître :
+
+1. **Conformité** : Jira a des certifs (ISO 27001, FedRAMP, HIPAA) que les concurrents n'ont pas.
+2. **Customisation profonde** : workflow, champs, automations, sub-tasks, components.
+3. **Plugins** (Marketplace Atlassian).
+
+### Anti-patterns Jira fréquents
+
+- **Sub-task de sub-task de sub-task** → personne ne sait ce qu'il fait.
+- **40 champs custom obligatoires** par ticket → personne ne les remplit.
+- **20 statuts** au lieu de 4-5 → tableau illisible.
+- **Workflow différent par projet** → impossibilité de comparer.
+
+> Si on te donne du Jira en arrivant, négocie un audit du workflow avant de prétendre le suivre. La plupart des Jira d'entreprise sont **broken by design** par accumulation.
+
+---
+
+## GitHub Projects — la simplicité native
+
+```
+GitHub Repo
+  ├── Issues
+  ├── Pull Requests
+  └── Project (board personnalisé)
+       ├── Status (ToDo, In progress, Done)
+       ├── Iteration (cycles)
+       ├── Priority
+       └── Custom fields
+```
+
+Avantages :
+
+- **Gratuit** illimité.
+- Tickets et PR au **même endroit** que le code.
+- Multi-repo possible.
+- Automations natives (PR mergée → status Done).
+
+Limites :
+
+- Reporting basique.
+- Pas idéal pour > 10 personnes en équipe pure produit.
+- Pas de roadmap macro propre.
+
+**Idéal pour** : open source, side-project, petite équipe full-tech.
+
+---
+
+## Anatomie d'un bon ticket
+
+Un ticket bien écrit est un ticket que **le dev peut démarrer sans interrompre personne**.
+
+### Template recommandé
+
+```markdown
+# Titre court et actionnable
+
+## Contexte
+Pourquoi on fait ça. À quel besoin ça répond.
+Lien vers ticket parent / discussion / RFC si applicable.
+
+## Critères d'acceptation
+- [ ] AC 1 — testable
+- [ ] AC 2 — testable
+- [ ] AC 3 — testable
+
+## Spec technique (si pertinent)
+- API : `POST /api/orders` body `{...}` réponse `{...}`
+- Schéma DB modifié : ajout colonne `orders.status` enum
+- Maquettes : [lien Figma]
+
+## Edge cases / scénarios à couvrir
+- Utilisateur non connecté
+- Quantité 0
+- Stock insuffisant
+
+## Out of scope (explicite !)
+- Pas de notif push
+- Pas d'export PDF (V2)
+
+## Notes
+Lien vers tickets liés, doc, prior art.
+```
+
+### Checklist du « ticket prêt »
+
+- [ ] Titre **actionnable** (« Ajouter X » > « Problème avec Y »)
+- [ ] Contexte clair (pourquoi)
+- [ ] AC **testables** (évite « bien marcher »)
+- [ ] Maquettes UI / contrat API si nécessaire
+- [ ] Edge cases listés
+- [ ] Out of scope explicite
+- [ ] Estimation rough (T-shirt ou points)
+- [ ] Pas de blockers ouvertes
+- [ ] Owner / champion dans l'équipe
+
+### Anti-patterns de ticket
+
+| Symptôme | Réaction |
+|----------|----------|
+| Titre : « Bug » | Refuser → demander plus de précision |
+| Description : « cf Slack thread » | Refuser → résumer dans le ticket |
+| AC absente | Refuser → trop de risque d'interprétation |
+| Estimation à 1 point pour un truc gros | Re-discuter |
+| Ticket à 30 AC | Découper en sous-tickets |
+| 5 « urgent » par jour | Renégocier la définition d'urgent |
+
+---
+
+## Définir DoR / DoD pour ton équipe
+
+Voir 15.1, mais à instancier dans l'outil :
+
+```markdown
+# Definition of Ready (Linear / Jira)
+
+Un ticket peut entrer en cycle si :
+- [ ] Description complète (template suivi)
+- [ ] AC testables
+- [ ] Estimation faite
+- [ ] Maquettes / contrat API si nécessaire
+- [ ] Pas de dépendance bloquante
+
+# Definition of Done
+
+Un ticket est Done quand :
+- [ ] PR mergée sur main
+- [ ] Tests automatisés passent
+- [ ] Code review validée
+- [ ] Documentation à jour (README, OpenAPI, ADR si pertinent)
+- [ ] Déployé en staging
+- [ ] AC cochés par PO
+- [ ] Métriques (perf, erreurs) inchangées ou améliorées
+```
+
+Affiche-les **dans l'outil** (Confluence Page épinglée, Linear template, Notion page principale). Sinon ils existent en théorie, pas en pratique.
+
+---
+
+## Labels — la nomenclature qui dure
+
+Limiter à **3-5 catégories** de labels :
+
+| Catégorie | Exemples |
+|-----------|----------|
+| **Type** | bug · feature · chore · spike · doc |
+| **Priority** | P0 · P1 · P2 · P3 |
+| **Domain** | frontend · backend · infra · design |
+| **Status spécial** | needs-design · needs-review · blocked |
+
+Anti-patterns labels :
+
+- **40 labels** créés par 8 personnes différentes → personne ne sait lesquels utiliser.
+- **Labels personnels** (`alice-todo`).
+- **Labels redondants** avec le statut Linear / Jira.
+- **Pas de doc** des labels.
+
+> Une fois par trimestre, **purge** les labels inutilisés. Sinon ils s'empilent.
+
+---
+
+## Doc — Notion, Confluence, ou MDX en repo ?
+
+| Stack | Force | Faiblesse |
+|-------|-------|-----------|
+| **Notion** | UX excellente, DB inline, partage facile | Lent à scale, lock-in, pas idéal pour la doc technique liée au code |
+| **Confluence** | Standard entreprise, lié à Jira | UX vieillissante, pages qui pourrissent |
+| **MDX dans le repo** (Docusaurus, Starlight, MkDocs) | À côté du code, versionné, code review, gratuit | Pas de DB inline, plus de friction d'édition pour non-tech |
+| **Outline** | OSS Notion-like | Moins de features |
+| **Slack canal pinned** | 0 friction | Catastrophique en doc — non recherchable, pas structurée |
+
+### Stratégie recommandée 2026
+
+- **Doc applicative & technique** (architecture, ADR, runbooks, conventions) → **MDX dans le repo**, à côté du code, mise à jour en PR.
+- **Doc produit / process / RH** → Notion (ou Confluence si c'est l'orga).
+- **Slack** sert pour les conversations, pas la documentation. Tout point durable doit migrer vers la doc dans la journée.
+
+### La doc qui pourrit
+
+Une doc non maintenue est **pire** qu'absente : elle ment.
+
+Stratégies anti-pourriture :
+
+- **Owner** par page (qui maintient ?).
+- **Date de dernière revue** dans la page.
+- **Auto-flag** des pages > 6 mois sans modif.
+- **Lien depuis le code** (« voir docs/architecture.md ») → la doc remonte au radar quand le code change.
+- **Sunset** explicite : page archivée plutôt que laissée à l'abandon.
+
+---
+
+## Automations utiles
+
+### Linear
+
+- **PR mergée** → status In Review puis Done.
+- **Branch créée** → assigne le ticket à son auteur.
+- **Tag `bug`** + P0 → notif Slack #incidents.
+- **Cycle qui finit** → résumé auto en Slack.
+
+### GitHub
+
+- **Issue créée avec label `bug`** → ajout automatique au project.
+- **PR draft** → exclure du board.
+- **PR ouverte > 5 jours** → bot ping l'auteur.
+
+### Slack
+
+- **Daily standup** : un bot demande à 9h30 « Qu'as-tu fait hier ? Aujourd'hui ? Blocage ? » — async > synchrone.
+- **Reminder rétro** la veille avec board pré-rempli.
+
+---
+
+## Pour les outils, la règle d'or
+
+> *« Adapte l'outil à l'équipe, pas l'inverse. »*
+
+Aucun outil ne va sauver une équipe dysfonctionnelle. Et les meilleures équipes peuvent fonctionner avec un Trello + Slack si elles ont la **discipline**.
+
+Quand changer d'outil :
+
+- Friction quotidienne mesurable (ralentit la prise de tickets).
+- Limites techniques (multi-repo, scale).
+- Coût disproportionné.
+- Demande forte de l'équipe (pas du management).
+
+Pas un changement par an. Stabilise.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="On t'arrive sur un projet Jira avec 20 statuts, 40 champs custom obligatoires et 3 niveaux de sub-tasks. Que faire ?"
+  options={[
+    'Adopter et apprendre',
+    'Auditer le workflow avec l\'équipe et proposer une simplification (réduire à 4-5 statuts, supprimer les champs vides à 80 %, limiter à 1 niveau de sub-task)',
+    'Quitter le poste',
+    'Imposer Linear immédiatement'
+  ]}
+  answerIndex={1}
+  explanation="Un Jira « broken by design » est très commun par accumulation de demandes ad-hoc. La plupart des champs / statuts ne sont plus utilisés mais personne n'ose les retirer. Un audit chiffré (% utilisation) débloque la conversation. Imposer un changement d'outil dès l'arrivée est généralement mal accueilli — commence par améliorer l'existant."
+/>
+
+<Quiz
+  question="Un ticket arrive : « Bug : ça ne marche pas — voir Slack ». Tu es dev, ça t'est assigné. Que faire ?"
+  options={[
+    'Aller chercher dans Slack et travailler dessus',
+    'Renvoyer en triage avec un commentaire demandant : description, étapes de reproduction, environnement, comportement attendu vs observé. Sinon tu passes 30 min à reconstituer ce que le PO/QA aurait dû écrire en 5 min',
+    'Le faire en aveugle',
+    'Le fermer'
+  ]}
+  answerIndex={1}
+  explanation="Accepter un ticket mal écrit te coûte 6× plus de temps que de le renvoyer. C'est aussi pédagogique : la prochaine fois, le ticket arrivera avec ce qu'il faut. La discipline de la DoR doit être respectée — si l'équipe accepte du flou, le flou se généralise."
+/>
+
+<Quiz
+  question="Vous êtes une équipe de 5 devs sur un side-project open source. Quel outil tickets choisir ?"
+  options={[
+    'Jira pour la rigueur',
+    'GitHub Projects — gratuit, à côté du code, intégré aux PR, adapté à votre taille et au modèle OSS',
+    'Notion seul',
+    'Trello payant'
+  ]}
+  answerIndex={1}
+  explanation="GitHub Projects est devenu très solide en 2024-2025 et reste gratuit illimité. Sur un OSS où les contributeurs externes regardent les issues GitHub, c'est l'outil naturel. Linear ou Notion fonctionnent aussi mais ajoutent du frottement (les contributeurs doivent créer un compte ailleurs)."
+/>
+
+<Quiz
+  question="Vous avez 80 pages Confluence créées sur 3 ans. La moitié sont obsolètes. Stratégie ?"
+  options={[
+    'Tout supprimer',
+    'Audit + sunset : marquer les pages obsolètes ARCHIVÉES (pas supprimées), en flag les pages > 6 mois sans revue, désigner un owner par page critique. Rétablir une vraie discipline ensuite',
+    'Migrer vers Notion',
+    'Ne rien faire'
+  ]}
+  answerIndex={1}
+  explanation="Supprimer prend le risque de perdre du contexte historique. Archiver garde la trace, sépare le vivant du mort. Désigner un owner empêche le retour à la pourriture. Migrer d'outil ne résoud pas le problème de discipline — la pourriture suivra."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Linear Method* — [linear.app/method](https://linear.app/method) — opinions fortes sur le ticket et le cycle
+- *GitHub Projects docs* — [docs.github.com/issues/planning-and-tracking-with-projects](https://docs.github.com/en/issues/planning-and-tracking-with-projects)
+- *Atlassian Agile Coach* — [atlassian.com/agile](https://www.atlassian.com/agile)
+- *The Information Architecture of Documentation* — Diátaxis (4 quadrants)
+- *Conventional Comments* — [conventionalcomments.org](https://conventionalcomments.org/)
+
+---
+
+**Suite** : [15.3 — Communication & collaboration](/15-methodes-soft-skills/03-communication/) — RFC, ADR, post-mortem, feedback de revue.

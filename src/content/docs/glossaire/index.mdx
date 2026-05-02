@@ -1,0 +1,222 @@
+---
+title: Glossaire
+description: Définitions courtes des termes techniques utilisés dans le guide. À survoler dans le texte ou à parcourir directement.
+sidebar:
+  order: 0
+  label: Glossaire
+---
+
+import { glossaire } from '../../../data/glossaire';
+import GlossaryFilterScript from '../../../components/GlossaryFilterScript.astro';
+
+export const AXE_SLUGS = {
+  '1': 'fondations',
+  '2': 'web',
+  '3': 'analyse-conception',
+  '4': 'outils',
+  '5': 'frontend-html-css',
+  '6': 'javascript-typescript',
+  '7': 'frameworks-frontend',
+  '8': 'backend',
+  '9': 'bases-de-donnees',
+  '10': 'baas',
+  '11': 'qualite-tests',
+  '12': 'securite',
+  '13': 'performance-a11y',
+  '14': 'devops',
+  '15': 'methodes-soft-skills',
+  '16': 'specialisations',
+  '17': 'carriere',
+};
+
+export const sortedEntries = Object.entries(glossaire).sort(([a], [b]) =>
+  a.localeCompare(b, 'fr', { sensitivity: 'base' })
+);
+
+export const letterFirstKey = sortedEntries.reduce((acc, [key]) => {
+  const letter = key[0].toLowerCase();
+  if (!acc[letter]) acc[letter] = key;
+  return acc;
+}, {});
+
+export const ALPHABET = 'abcdefghijklmnopqrstuvwxyz'.split('');
+
+export const presentAxes = [...new Set(
+  Object.values(glossaire).map((e) => e.axe?.split('.')[0]).filter(Boolean)
+)].sort((a, b) => Number(a) - Number(b));
+
+> 🎯 **Comment l'utiliser** : dans le guide, certains mots sont <span class="term">soulignés en pointillés</span>. Survole-les pour la définition rapide ; clique pour atterrir ici sur l'entrée détaillée. Sur cette page, tu peux **filtrer** par axe ou **rechercher** instantanément.
+
+<div class="glossary-controls">
+  <label class="glossary-search-label">
+    <span class="glossary-search-icon" aria-hidden="true">🔍</span>
+    <input
+      type="search"
+      id="glossary-search"
+      placeholder="Rechercher un terme, une définition..."
+      aria-label="Rechercher dans le glossaire"
+      autocomplete="off"
+    />
+    <span class="glossary-count" id="glossary-count" aria-live="polite">{sortedEntries.length} termes</span>
+  </label>
+
+  <div class="glossary-filters" role="toolbar" aria-label="Filtrer par axe">
+    <button type="button" class="axe-pill active" data-axe="all">Tous</button>
+    {presentAxes.map((axe) => (
+      <button type="button" class="axe-pill" data-axe={axe}>Axe {axe}</button>
+    ))}
+  </div>
+
+  <nav class="alphabet-nav" aria-label="Aller à une lettre">
+    {ALPHABET.map((l) => (
+      letterFirstKey[l]
+        ? <a href={`#${letterFirstKey[l]}`} data-letter={l}>{l.toUpperCase()}</a>
+        : <span class="disabled" aria-disabled="true">{l.toUpperCase()}</span>
+    ))}
+  </nav>
+</div>
+
+<section class="glossary-list">
+{sortedEntries.map(([key, entry]) => {
+  const axeNum = entry.axe?.split('.')[0];
+  return (
+    <div
+      id={key}
+      class="glossary-entry"
+      data-axe={axeNum ?? ''}
+      data-letter={key[0].toLowerCase()}
+      data-key={key.toLowerCase()}
+      data-short={entry.short.toLowerCase()}
+    >
+      <h3>{key}</h3>
+      <p>{entry.short}</p>
+      {entry.exemple && <p class="glossary-example"><strong>Exemple :</strong> {entry.exemple}</p>}
+      {entry.axe && (
+        <p class="glossary-axe">
+          Développé dans <a href={`/${axeNum}-${AXE_SLUGS[axeNum]}/`}>axe {entry.axe}</a>
+        </p>
+      )}
+    </div>
+  );
+})}
+</section>
+
+<p class="glossary-empty" id="glossary-empty" hidden>
+  Aucun terme ne correspond. Réinitialise les filtres ou modifie ta recherche.
+</p>
+
+<GlossaryFilterScript />
+
+<style>{`
+.glossary-controls {
+  position: sticky;
+  top: var(--sl-nav-height, 4rem);
+  z-index: 5;
+  background: var(--sl-color-bg);
+  padding: 0.75rem 0;
+  margin-block-end: 1rem;
+  border-block-end: 1px solid var(--sl-color-gray-5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.glossary-search-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--sl-color-gray-7, var(--sl-color-bg));
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.glossary-search-label:focus-within {
+  border-color: var(--sl-color-accent);
+  box-shadow: 0 0 0 4px var(--sl-color-accent-low);
+}
+.glossary-search-icon { font-size: 1rem; opacity: 0.6; }
+
+#glossary-search {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  outline: none;
+  padding: 0.15rem 0;
+}
+
+.glossary-count {
+  font-size: 0.8rem;
+  color: var(--sl-color-gray-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.glossary-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.axe-pill {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--sl-color-gray-5);
+  background: var(--sl-color-bg);
+  color: inherit;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.axe-pill:hover { border-color: var(--sl-color-accent); color: var(--sl-color-accent); }
+.axe-pill.active {
+  background: var(--sl-color-accent);
+  border-color: var(--sl-color-accent);
+  color: white;
+}
+
+.alphabet-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  font-family: var(--sl-font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.alphabet-nav :is(a, span) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.3rem;
+  border-radius: 0.25rem;
+  text-decoration: none;
+  color: var(--sl-color-gray-2);
+  transition: background 100ms ease, color 100ms ease;
+}
+.alphabet-nav a:hover { background: var(--sl-color-accent-low); color: var(--sl-color-accent); }
+.alphabet-nav .disabled { opacity: 0.3; cursor: not-allowed; }
+
+.glossary-entry {
+  padding: 0.85rem 1rem;
+  margin: 0.6rem 0;
+  border-inline-start: 3px solid var(--sl-color-accent);
+  background: var(--sl-color-gray-7, var(--sl-color-bg));
+  border-radius: 0.4rem;
+  scroll-margin-top: 8rem;
+}
+.glossary-entry h3 { margin: 0 0 0.3rem; font-size: 1.05rem; }
+.glossary-entry p { margin: 0.3rem 0; }
+.glossary-example { font-size: 0.9rem; opacity: 0.85; }
+.glossary-axe { font-size: 0.85rem; opacity: 0.7; }
+
+.glossary-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--sl-color-gray-2);
+  font-style: italic;
+}
+`}</style>

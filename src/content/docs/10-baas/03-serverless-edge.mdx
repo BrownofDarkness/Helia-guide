@@ -1,0 +1,260 @@
+---
+title: 10.3 — Plateformes serverless / edge
+description: Vercel, Netlify, Cloudflare Workers, Render, Fly.io, AWS Lambda — où déployer en 2026.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : choisir la plateforme de déploiement adaptée à ton projet — entre déploiement Git-driven, edge computing, et serverless classique.
+
+<ObjectiveList items={[
+  "Distinguer serverless, edge functions, conteneurs, VPS managé",
+  "Choisir entre Vercel, Netlify, Cloudflare Workers, Render, Fly.io",
+  "Comprendre quand l'edge a un vrai bénéfice (et quand non)",
+  "Déployer une app Next.js + DB en quelques minutes",
+  "Estimer le coût mensuel d'une stack serverless"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 8-9 lus" />
+
+
+## Le paysage 2026
+
+| Plateforme | Style | Bons pour |
+|-----------|-------|-----------|
+| **Vercel** | Frontend + serverless + edge | Apps Next.js, JAMstack, frontend modernes |
+| **Netlify** | Frontend + functions | Sites statiques, JAMstack |
+| **Cloudflare Workers** | Edge global, KV/D1/R2/Durable Objects | Latence ultra-basse, échelle massive |
+| **Render** | PaaS conteneurs | App full-stack avec DB Postgres managée |
+| **Fly.io** | Apps déployées globalement (orchestration de VMs) | Multi-régions, latence |
+| **Railway** | PaaS sympa indie | MVP, side-projects |
+| **AWS Lambda** | FaaS classique | Si tu es déjà AWS, jobs sporadiques |
+| **DigitalOcean App Platform** | Déploiement git + DB managée | Alternative Render simple |
+
+## Vercel — le défaut JAMstack
+
+[Vercel](https://vercel.com/) (créateurs de Next.js) :
+
+- Push Git → déployé en secondes.
+- **Preview** par PR (URL unique pour chaque PR).
+- **Edge functions** + **Edge middleware** pour la latence basse.
+- **ISR** (Incremental Static Regeneration) parfaitement intégré.
+- **Image Optimization** native.
+
+```bash
+npm i -g vercel
+vercel deploy   # déploie ton projet (preview)
+vercel --prod   # déploie en prod
+```
+
+### Coûts typiques
+
+- **Hobby** (gratuit) : projets perso, 100 Go bandwidth/mois.
+- **Pro** ($20/mois/membre) : équipes, 1 To bandwidth, support.
+- **Enterprise** : custom.
+
+**Piège** : la facturation **bandwidth** + **functions** peut surprendre. Pour un site statique avec viralité virale soudaine → vérifier le plan.
+
+## Cloudflare Workers — l'edge ultra-bas-coût
+
+[Cloudflare Workers](https://workers.cloudflare.com/) déploient ton code dans **300+ datacenters** mondiaux. Latence de cold start : ~5 ms (vs ~500 ms pour Lambda).
+
+### Stack Cloudflare 2026
+
+| Service | Rôle |
+|---------|------|
+| **Workers** | Code edge (V8 isolates, pas Node — limites mais super rapide) |
+| **Pages** | Static + functions, alternative Vercel |
+| **D1** | SQLite distribué (pour Workers) |
+| **R2** | S3-compatible storage (zero egress) |
+| **KV** | Key-value distribué eventually consistent |
+| **Durable Objects** | État persistant + concurrence (game state, chat) |
+| **Queues** | Messages distribués |
+| **AI** | Inférence LLM gratuite à l'edge |
+
+### Hello Worker
+
+```ts
+// src/index.ts
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    return new Response('Hello from edge!');
+  },
+};
+```
+
+```bash
+npx wrangler deploy
+```
+
+### Quand préférer Cloudflare
+
+- **Latence critique** sur des utilisateurs mondiaux.
+- **Scale massif** sans serveur (millions de req/s, $5/mois pour le free tier).
+- **Edge AI** (LLM, image classif).
+- Stack 100 % web standards (pas de Node-specific APIs).
+
+### Limitations
+
+- Pas tous les modules Node (mais nodejs_compat flag aide).
+- 50 ms CPU max par requête (sauf plan Unbound).
+- Modèle de cold start différent (V8 isolates ≠ container).
+
+## Netlify — le pionnier JAMstack
+
+Concurrent direct de Vercel, plus orienté frontend agnostique :
+
+- Build Astro, Hugo, Next, Eleventy, Jekyll…
+- **Functions** Lambda-like.
+- **Edge Functions** sur Deno Deploy.
+- **Forms** natifs (formulaires HTML capturés sans backend).
+- **Identity** (auth incluse).
+
+Différence clé : Vercel est plus optimisé pour Next.js, Netlify est plus framework-agnostique.
+
+## Render — le PaaS conteneurs
+
+[Render](https://render.com/) est le **VPS managé moderne** :
+
+- Tu pushes ton code, Render build Docker et déploie.
+- **PostgreSQL** managé inclus.
+- **Redis** managé inclus.
+- **Background workers** + **cron jobs**.
+- Auto-scaling.
+
+```yaml
+# render.yaml
+services:
+  - type: web
+    name: api
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+  - type: pserv
+    name: postgres
+    runtime: docker
+    plan: starter
+```
+
+**Quand préférer Render** : tu as un backend Node/Python/Go avec une vraie DB Postgres, et tu veux la simplicité d'un PaaS sans le coût AWS/GCP.
+
+## Fly.io — multi-régions
+
+[Fly.io](https://fly.io/) déploie ton app comme **VMs (Firecracker)** dans **30+ régions** mondiales. Tu décides où.
+
+```bash
+fly launch     # détecte ton app, configure
+fly deploy     # déploie
+fly regions add cdg lhr fra   # ajoute Paris, Londres, Francfort
+```
+
+Forces :
+- **Apps qui doivent être proches de l'utilisateur** (gaming, multi-region SaaS).
+- **PostgreSQL multi-régions** (Fly Postgres).
+- Bon prix (de mémoire le mieux par GB-RAM).
+
+## AWS Lambda — le serverless classique
+
+[Lambda](https://aws.amazon.com/lambda/) :
+
+- Bonne valeur si tu es déjà sur AWS (RDS, S3, etc.).
+- **Cold start** ~200-500 ms (pire avec Java, mieux avec Node/Python).
+- **15 min max** par invocation.
+- **6 Mo de payload max**.
+
+Pour Node.js Lambda, voir frameworks SST ou Serverless Framework qui simplifient.
+
+## Tableau de décision
+
+| Si tu... | Choisis |
+|----------|---------|
+| Déploies Next.js / app frontend moderne | **Vercel** |
+| Veux latence ultra-basse mondiale | **Cloudflare Workers** |
+| As besoin d'une DB Postgres + workers + cron | **Render** ou **Railway** |
+| Construis multi-région (gaming, etc.) | **Fly.io** |
+| Es 100 % AWS | **Lambda + Amplify** |
+| Veux un VPS classique avec contrôle | **Hetzner** + Caddy / Frankenphp |
+
+## Estimer le coût mensuel
+
+Stack indie hacker typique en 2026 :
+
+| Service | Free tier | Premier paid |
+|---------|-----------|--------------|
+| **Vercel Hobby** | 100 Go bw, sites perso | Pro $20/mois si commercial |
+| **Supabase Free** | 500 Mo DB, 50K MAU auth | Pro $25/mois |
+| **Clerk Free** | 10K MAU | $25/mois après |
+| **Stripe** | 2.9 % + 0.30 €/transaction | (pas de fixe) |
+| **Resend Free** | 3K emails/mois, 100/jour | $20/mois pour 50K |
+| **PostHog Free** | 1M events/mois | Variable |
+| **Sentry Free** | 5K erreurs/mois | $26/mois |
+
+**Tu peux lancer un MVP à coût zéro** jusqu'à atteindre certains seuils. Au-delà, prévoir ~$100-150/mois pour la stack complète tant que tu restes < 10K users actifs.
+
+## Cold start — comprendre le tradeoff
+
+| Plateforme | Cold start typique |
+|-----------|-------------------|
+| Cloudflare Workers | ~5 ms |
+| Vercel Edge Functions | ~50 ms |
+| Vercel Serverless | ~200 ms |
+| AWS Lambda Node | ~300 ms |
+| AWS Lambda Java | ~2-5 s |
+| Conteneur (Render, Fly) | ~5-30 s au cold start, instantané ensuite |
+
+Pour des **APIs publiques avec trafic régulier** : peu importe (jamais cold). Pour des **pages rarement visitées** : Workers > Edge > Serverless > Lambda > Container.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu construis un SaaS Next.js avec auth + DB Postgres + Stripe. Plateforme idéale en 2026 ?"
+  options={[
+    'AWS pure — c\'est l\'industrie',
+    'Vercel pour le front (preview deploys par PR, ISR Next.js parfait) + Supabase ou Neon pour Postgres + auth',
+    'Self-host sur un VPS — tu économises',
+    'Tout sur Cloudflare Workers'
+  ]}
+  answerIndex={1}
+  explanation="Vercel + Supabase/Neon est la combo SaaS Next.js par excellence en 2026. Vercel optimise Next (ISR, RSC, image, edge middleware) ; Supabase fournit Postgres + auth + storage en quelques clics. Free tiers cumulables → MVP à coût zéro. Cloudflare Workers est génial pour de l'edge mais limite Postgres natif (D1 est pour SQLite)."
+/>
+
+<Quiz
+  question="Tu construis un chat temps réel mondial. Latence critique (< 100 ms partout). Plateforme ?"
+  options={[
+    'AWS Lambda — le standard',
+    'Cloudflare Workers + Durable Objects (état distribué + edge dans 300 datacenters → latence 5-50 ms partout)',
+    'Vercel Serverless — c\'est plus simple',
+    'Render avec replicas'
+  ]}
+  answerIndex={1}
+  explanation="Cloudflare Workers brille pour ce cas : code exécuté à l'edge (datacenter le plus proche), Durable Objects pour la sync de chat (état persistant + concurrence). Latence ~5-50 ms mondiale vs 200-500 ms pour Vercel/Lambda centralisé. Coût aussi très bas. C'est exactement le cas d'usage qui justifie l'edge."
+/>
+
+<Quiz
+  question="Cold start AWS Lambda Node : ~300 ms. Tu construis une API très peu trafiquée (1 req/heure). Conséquence pour l'utilisateur ?"
+  options={[
+    'Tout va bien',
+    'À chaque appel, ~300 ms de latence supplémentaire avant le code business. Solution : provisioned concurrency (coûteux), warmup tricks, ou changer pour Cloudflare Workers (~5 ms cold)',
+    'AWS optimise automatiquement',
+    'Le cold start n\'arrive qu\'au déploiement'
+  ]}
+  answerIndex={1}
+  explanation="Lambda libère les containers après ~5-15 min d'inactivité. À 1 req/heure, chaque appel a un cold start. Solutions : provisioned concurrency (paie pour garder N instances chaudes — cher), warmup ping (hack), passer en edge (Cloudflare Workers) où le cold start est ~5 ms. Pour des APIs avec trafic régulier (> 1 req/min), le sujet ne se pose pas."
+/>
+
+## Pour aller plus loin
+
+- *Vercel Docs* — [vercel.com/docs](https://vercel.com/docs)
+- *Cloudflare Workers Docs* — [developers.cloudflare.com/workers](https://developers.cloudflare.com/workers/)
+- *Fly.io Docs* — [fly.io/docs](https://fly.io/docs/)
+- *Render Docs* — [render.com/docs](https://render.com/docs)
+- *Cold Starts in Various Runtimes* — articles benchmark
+
+---
+
+**Suite** : [10.4 — Patrons d'intégration](/10-baas/04-patrons/) — JAMstack, BFF, edge functions.

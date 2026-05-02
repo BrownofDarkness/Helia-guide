@@ -1,0 +1,448 @@
+---
+title: 14.6 — Fiabilité
+description: Sauvegardes testées, runbooks, post-mortems blameless, plan de reprise (RPO/RTO), chaos engineering, game days.
+sidebar:
+  order: 6
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : se préparer aux pires scénarios. Une sauvegarde non testée n'existe pas. Un runbook que personne ne lit ne sert à rien. Un post-mortem qui blâme une personne empêche d'apprendre. Cette section couvre les pratiques que les équipes ops mûres mettent en place avant d'en avoir besoin.
+
+<ObjectiveList items={[
+  "Mettre en place des sauvegardes testées et chiffrées (3-2-1)",
+  "Rédiger un runbook actionnable qu'un on-call lira à 3h du matin",
+  "Mener un post-mortem blameless qui aboutit à des actions concrètes",
+  "Définir RPO et RTO et choisir une stratégie de reprise adaptée",
+  "Introduire du chaos engineering et organiser un game day"
+]} />
+
+<Level value="confirmé" reading="14 min" prereq="axes 4 et 8 lus" />
+
+
+## Le triangle qui paie l'addition
+
+Quand un incident arrive, ce qui te sauve est rarement la stack. C'est :
+
+```
+        Sauvegardes
+            /\
+           /  \
+          /    \
+ Runbooks ───── Post-mortems
+```
+
+- **Sauvegardes** te protègent de la perte de données.
+- **Runbooks** te font réagir vite.
+- **Post-mortems** transforment chaque incident en apprentissage durable.
+
+Sans ces trois, même AWS ne te sauve pas.
+
+---
+
+## Sauvegardes — la règle 3-2-1
+
+```
+3 copies des données
+2 supports différents (disque + S3)
+1 hors site (chez un autre fournisseur, autre région)
+```
+
+| Type | Outil 2026 |
+|------|------------|
+| Postgres dump quotidien | `pg_dump` + S3 / R2 / Backblaze B2 |
+| Postgres point-in-time recovery (PITR) | WAL archive (pgBackRest, wal-g) |
+| Snapshots cloud | RDS automated snapshots, EBS snapshots, GCP snapshots |
+| Volumes Linux | restic, borgbackup |
+| Buckets / S3 | Versioning + lifecycle + Object Lock |
+
+### Le point qui change tout — restaurer
+
+> Une sauvegarde n'existe que si tu sais la restaurer.
+
+**Tester une restauration trimestriellement** dans un env staging :
+
+```bash
+# 1. Récupérer le dernier dump
+aws s3 cp s3://myorg-backups/db-2026-04-30.sql.gz .
+
+# 2. Restaurer dans une instance jetable
+gunzip -c db-2026-04-30.sql.gz | psql -h staging-db -U postgres restore_test
+
+# 3. Vérifier
+psql -c "SELECT count(*) FROM users;"
+psql -c "SELECT max(created_at) FROM events;"
+
+# 4. Mesurer le temps total
+# → c'est ton RTO réel pour ce scénario
+```
+
+Si tu n'as **jamais** restauré, considère que tu n'as **pas** de sauvegarde.
+
+### Chiffrement et accès
+
+```bash
+# Chiffrer avec restic + clé dédiée (KMS, Vault)
+restic init --repo s3:s3.amazonaws.com/myorg-backups
+restic backup /var/lib/postgresql/backups
+```
+
+| Règle | Pourquoi |
+|-------|----------|
+| Chiffrement at-rest | RGPD + risque fournisseur compromis |
+| Clé séparée du provider | Si AWS est compromis, ta clé KMS chez Vault tient |
+| Accès en append-only | Object Lock S3 / immutability → un attaquant ne peut pas effacer |
+| Rétention multi-niveau | 7 j quotidiens + 4 sem + 12 mois |
+| Test régulier de restauration | Trimestriel minimum |
+
+---
+
+## RPO et RTO — chiffrer l'acceptable
+
+| Sigle | Définition | Question qu'il pose |
+|-------|------------|---------------------|
+| **RPO** (Recovery Point Objective) | Combien de **données** tolère-t-on de perdre ? | « Si on perd les 12 dernières minutes, c'est OK ? » |
+| **RTO** (Recovery Time Objective) | Combien de **temps** d'indisponibilité tolère-t-on ? | « Si on est down 4h, c'est OK ? » |
+
+| Stratégie | RPO typique | RTO typique | Coût |
+|-----------|-------------|-------------|------|
+| Backup quotidien S3 | 24 h | 4-12 h | € |
+| Backup horaire + WAL | 5-15 min | 1-2 h | €€ |
+| Replica synchrone même région | < 1 min | 5-30 min | €€€ |
+| Multi-région actif/passif | < 1 min | < 5 min | €€€€ |
+| Multi-région actif/actif | ~ 0 | ~ 0 | €€€€€ |
+
+**Ne te survends pas.** Le coût croît exponentiellement. Pour un MVP, RPO 24h / RTO 4h coûte rien et suffit largement.
+
+---
+
+## Runbook — un humain à 3h du matin
+
+Un runbook est **un script écrit pour quelqu'un de fatigué et stressé**. Son public n'est pas l'expert qui l'a écrit.
+
+### Format minimal
+
+```markdown
+# Runbook — API checkout en erreur
+
+## Symptômes
+- Pages d'erreur 5xx sur /checkout
+- Alerte « checkout-error-rate > 5 % » déclenchée
+
+## Diagnostic rapide (≤ 5 min)
+1. Vérifier le status Stripe : https://status.stripe.com
+2. Vérifier la trace dans Tempo (lien direct ↗)
+3. Regarder les logs : `kubectl logs -l app=checkout --since=10m`
+
+## Causes connues et résolutions
+| Cause | Comment confirmer | Mitigation |
+|-------|-------------------|------------|
+| Stripe down | status.stripe.com | Activer le banner "paiement temporairement indispo" |
+| DB Postgres saturée | `SELECT count(*) FROM pg_stat_activity` | Tuer les requêtes longues, scale-up RDS |
+| OOM sur les pods | `kubectl get pods -l app=checkout` | Restart pods, augmenter memory limits |
+
+## Escalation
+- Pas de cause connue trouvée en 15 min → ping #checkout-oncall
+- Impact > 30 min → ping CTO + déclarer incident pubic
+
+## Liens utiles
+- Dashboard Grafana : https://grafana.example/d/checkout
+- Repo : https://github.com/myorg/checkout
+- Owner : @alice (PT), @bob (US)
+```
+
+### Bonnes pratiques
+
+| Règle | Pourquoi |
+|-------|----------|
+| **Court** (1-2 pages max) | Personne ne lit 10 pages à 3h du matin |
+| **Commandes copy-pastables** | Éviter les fautes de frappe sous stress |
+| **Liens directs** dashboards | Pas « va dans Grafana → cherche le dashboard… » |
+| **Mis à jour à chaque incident** | Sinon il pourrit |
+| **Testé en game day** | Vérifier qu'il marche encore |
+
+---
+
+## Post-mortems — apprendre, pas blâmer
+
+### Le principe « blameless »
+
+> *« Aucune personne, intelligente et bien intentionnée, ne souhaite causer un incident. Si elle l'a fait, c'est que le système l'a permis. »*
+
+Le post-mortem ne dit **pas** : *« Marie a oublié de vérifier la migration. »*
+Il dit : *« La revue ne demande pas de checklist migration ; ajouter un template. »*
+
+L'enjeu : **les gens partagent honnêtement** ce qui s'est passé. Si on blâme, on cache la prochaine fois — et on cache la cause profonde.
+
+### Structure standard
+
+```markdown
+# Post-mortem — Incident 2026-04-30 — Indisponibilité checkout
+
+**Date** : 2026-04-30, 14:23 → 15:47 UTC (84 min)
+**Sévérité** : SEV2 (impact partiel, ~12 % du trafic)
+**Auteurs** : @alice, @bob
+
+## Résumé
+Le service checkout a renvoyé 5xx pendant 84 min suite au déploiement
+de v1.34.0 qui contenait une migration DB longue mal détectée.
+
+## Impact
+- 1 247 commandes en erreur (~ 18 200 € de CA perdu / décalé)
+- 3 280 utilisateurs affectés
+- 12 tickets support ouverts
+
+## Timeline
+- 14:23  Déploiement v1.34.0 sur prod
+- 14:24  Migration DB démarre, lock sur la table `orders`
+- 14:25  Premières 5xx, alerte « checkout-error-rate » déclenchée
+- 14:27  On-call (alice) prend l'astreinte
+- 14:42  Diagnostic : migration bloquante identifiée
+- 14:48  Migration interrompue, rollback de la migration partielle
+- 14:53  Déploiement v1.33.7 (rollback applicatif)
+- 15:47  Erreurs revenues à zéro après backfill manuel
+
+## Cause racine (5 whys)
+1. Pourquoi 5xx ? La table `orders` était lockée.
+2. Pourquoi lockée ? Migration `ALTER TABLE` sans `LOCK MODE`.
+3. Pourquoi cette migration ? Ajout d'une colonne NOT NULL sur 8M lignes.
+4. Pourquoi ce design ? La review n'a pas alerté sur la taille de la table.
+5. Pourquoi pas la review ? Aucun garde-fou, pas de test en staging à
+   volumétrie réelle.
+
+## Ce qui a bien marché
+- Détection en 2 min via alerte symptôme
+- Rollback applicatif possible (la nouvelle colonne avait un défaut)
+- Communication claire dans #incident
+
+## Ce qui n'a pas marché
+- Aucune validation préalable de la migration en staging
+- Le runbook ne mentionnait pas le scénario "migration bloquante"
+- Le rollback de migration a pris 15 min (manuel)
+
+## Actions correctives
+| # | Action | Owner | Échéance |
+|---|--------|-------|----------|
+| 1 | Migration linter (gh-action) qui bloque ALTER sur > 1M lignes sans review explicite | @bob | 2026-05-15 |
+| 2 | Stagging avec un dump prod anonymisé pour les migrations | @alice | 2026-05-30 |
+| 3 | Runbook « migration bloquante » + script rollback | @alice | 2026-05-07 |
+| 4 | Post-mortem présenté en all-hands | @cto | 2026-05-10 |
+```
+
+### Règles d'or
+
+| Règle | Pourquoi |
+|-------|----------|
+| **Blameless** | Apprendre > culpabiliser |
+| **Rapide** : sous 7 jours | La mémoire des détails s'efface vite |
+| **Public** dans l'org | Apprentissage transversal |
+| **Actions concrètes** avec owner et deadline | Sinon c'est de la littérature |
+| **Suivi** des actions correctives | Sinon le prochain incident est le même |
+| **Pas une chasse aux sorcières** | Sinon plus personne ne signale |
+
+---
+
+## Plan de reprise — Disaster Recovery (DR)
+
+Au-delà du backup, le DR couvre les cas où **tout** part :
+
+| Scénario | Plan typique |
+|----------|--------------|
+| Région cloud down | Bascule vers région secondaire (DNS / Route53 healthcheck) |
+| Compte cloud compromis / fermé | Backup off-site, multi-fournisseur |
+| Ransomware sur les serveurs | Backup immutable (Object Lock), recovery from scratch |
+| Erreur humaine catastrophique (`DROP DATABASE`) | PITR + audit logs |
+| Disparition d'un fournisseur SaaS | Plan de migration documenté |
+
+### Tester le DR — game day
+
+Une fois par trimestre, l'équipe **simule** un incident :
+
+```
+9h00 — Annonce : "La région eu-west-3 est inaccessible. Bascule, allez-y."
+9h05 — L'équipe ouvre le runbook DR.
+9h15 — Premiers actions (DNS, scale-up region secondaire).
+10h30 — Service rétabli, RTO mesuré.
+11h00 — Debrief : ce qui a marché, ce qui a manqué.
+```
+
+Le game day **révèle** ce que les docs ne disent plus. C'est inconfortable mais c'est le seul moyen de connaître ton vrai RTO.
+
+---
+
+## Chaos engineering — l'antifragile
+
+> *« Si vous voulez être prêt pour les pannes, créez-en délibérément. »*
+> — Netflix Chaos Monkey
+
+Au lieu d'attendre une panne pour découvrir tes faiblesses, tu en provoques **dans un cadre contrôlé** :
+
+| Outil | Quoi |
+|-------|------|
+| **Chaos Mesh** | K8s, OSS, mature |
+| **LitmusChaos** | K8s, OSS |
+| **Gremlin** | SaaS, propre, cher |
+| **AWS Fault Injection Service** | AWS-natif |
+| **Pumba** | Docker chaos |
+
+Expériences typiques :
+
+- **Network partition** : couper la connexion DB ↔ app pendant 30 s.
+- **Latence injectée** : ajouter 500 ms à toutes les requêtes vers Redis.
+- **Pod kill** : tuer 1 pod sur 3 toutes les minutes.
+- **Disk full** : remplir / dans un node.
+- **Clock skew** : décaler l'horloge de 5 min.
+
+### Règle d'or — Game Day
+
+Le chaos engineering **commence** par un game day en staging avec une équipe alignée. **Jamais** en prod sur un coup de tête. Une fois mature, tu peux l'introduire en prod sur **un petit % de trafic**.
+
+---
+
+## Résilience applicative — patterns
+
+Au-delà de l'infra, le code lui-même peut être **résilient** :
+
+| Pattern | Quand |
+|---------|-------|
+| **Retry avec backoff exponentiel** | Toute requête réseau qui peut flap |
+| **Timeout** explicite (3-10 s max) | Tout appel externe (sinon Node attend des heures) |
+| **Circuit breaker** | Service tiers répétitivement KO → couper court |
+| **Bulkhead** | Isoler les pools de connexions par sous-système |
+| **Idempotence** | Pour pouvoir retry sans dupliquer |
+| **Fallback** | Cache stale, valeur par défaut, dégradation gracieuse |
+| **Graceful shutdown** | Drainer les requêtes en cours avant exit |
+
+```ts
+// Retry avec backoff exponentiel + jitter
+async function retry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try { return await fn(); }
+    catch (err) {
+      last = err;
+      const delay = Math.min(1000 * 2 ** i, 30_000) + Math.random() * 1000;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw last;
+}
+```
+
+```ts
+// Circuit breaker simple (opossum est la lib de référence)
+import CircuitBreaker from 'opossum';
+
+const breaker = new CircuitBreaker(callStripe, {
+  timeout: 5000,
+  errorThresholdPercentage: 50,
+  resetTimeout: 30_000,
+});
+breaker.fallback(() => ({ status: 'fallback' }));
+```
+
+---
+
+## Chiffres-clés à connaître
+
+| Métrique | Bon | Médiocre |
+|----------|-----|----------|
+| **MTTR** (Mean Time To Recover) | < 30 min | > 4 h |
+| **MTBF** (Mean Time Between Failures) | > 30 j | < 7 j |
+| **Change failure rate** | < 15 % | > 30 % |
+| **Deployment frequency** | quotidien | mensuel |
+
+Source : *DORA reports* (Google) — corrélations entre ces 4 métriques et la performance d'une équipe.
+
+---
+
+## Checklist « avant la prod »
+
+À cocher **avant** de pointer un domaine vers ton service :
+
+- [ ] Backups configurés ET **testés** (restauration ≥ 1 fois)
+- [ ] RPO et RTO définis et accordés avec le métier
+- [ ] Healthcheck implémenté côté app
+- [ ] Logs structurés vers une stack centralisée
+- [ ] Métriques RED + USE exposées
+- [ ] Tracing distribué (OTel) actif
+- [ ] Sentry (ou équivalent) installé avec source maps
+- [ ] Au moins 3 alertes critiques avec runbook
+- [ ] On-call rotation définie
+- [ ] Page de status (statuspage.io, Better Stack, ou simple page statique)
+- [ ] Plan de rollback déploiement (1 commande)
+- [ ] Migrations DB réversibles
+- [ ] Post-mortem template prêt
+- [ ] Game day prévu dans les 60 j
+
+Ne pas remplir un de ces items ne te bloque pas — mais sois **conscient** du risque.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu as un cron qui dump Postgres quotidiennement vers S3 depuis 2 ans. Personne n'a jamais restauré. Tu pars en weekend, tu pars confiant ?"
+  options={[
+    'Oui, le cron tourne, c\'est bon',
+    'Non — une sauvegarde non testée est probablement HS (format incompatible, dump tronqué, permissions S3 cassées). Tester restauration trimestriellement avant de partir',
+    'Oui si la taille est normale',
+    'Oui si Postgres ne plante jamais'
+  ]}
+  answerIndex={1}
+  explanation="C'est un classique : le cron tourne, mais le dump est tronqué (timeout SSL), ou le format pg n'est plus compatible avec la version Postgres actuelle, ou le bucket a été migré. Une restauration trimestrielle en staging valide la chaîne complète. Sans ce test, ta sauvegarde est de la fiction."
+/>
+
+<Quiz
+  question="Pendant un post-mortem, un membre de l'équipe dit « Marie a déployé sans regarder, c'est elle la responsable ». Que faire ?"
+  options={[
+    'Le valider — il faut bien des responsables',
+    'Recadrer : un humain seul ne devrait pas pouvoir casser la prod ; le post-mortem cherche les défauts du SYSTÈME (review, automation, garde-fous). Sinon, plus personne ne reportera honnêtement',
+    'Mettre Marie en formation',
+    'Embaucher un manager'
+  ]}
+  answerIndex={1}
+  explanation="Le post-mortem blameless est un **contrat social** : on partage tout ce qu'on sait, sans crainte. Dès qu'on blâme, les gens cachent. La responsabilité du système incombe au système : si une PR pouvait casser sans review, la review était optionnelle (problème système). Ce n'est pas un manque de rigueur individuelle."
+/>
+
+<Quiz
+  question="Tu définis RPO = 1 h et RTO = 30 min pour un SaaS B2B avec 200 clients PME. Est-ce raisonnable ?"
+  options={[
+    'Oui, généreusement',
+    'Probablement adapté — la majorité des SaaS B2B mid-market visent RPO 5-15 min / RTO 30 min - 2 h. À valider auprès du métier (combien coûte 1h de downtime ?). Plus strict = explosion du coût',
+    'Non, il faut 0 / 0',
+    'Non, il faut 24h / 24h'
+  ]}
+  answerIndex={1}
+  explanation="RPO 1h / RTO 30 min est dans la norme B2B mid-market. Plus strict (RPO 0, RTO 0) demande de l'actif/actif multi-région et coûte un facteur 5-10. Plus laxiste (RPO 24h) sera incompatible avec une promesse SLA crédible. Le bon RPO/RTO se définit avec le métier, pas l'ingénieur seul."
+/>
+
+<Quiz
+  question="Quand commencer le chaos engineering ?"
+  options={[
+    'Tout de suite, en prod, c\'est l\'esprit',
+    'Quand les bases sont posées (monitoring, runbooks, post-mortems matures), commencer en staging avec des game days, puis seulement après mature, en prod sur un % du trafic',
+    'Jamais, c\'est trop risqué',
+    'Quand on a 50 SRE'
+  ]}
+  answerIndex={1}
+  explanation="Chaos engineering en prod sans monitoring = ajouter du chaos sans pouvoir l'observer. Et sans runbooks, l'équipe ne sait pas réagir. La progression saine : monitoring → runbooks → game days en staging → chaos staging automatisé → chaos prod sur 1 % du trafic. Netflix a mis 5 ans pour arriver au Chaos Monkey en prod."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Site Reliability Engineering* — Google (gratuit), chapitres post-mortem & DR
+- *Chaos Engineering* — Casey Rosenthal & Nora Jones (O'Reilly)
+- *Drift into Failure* — Sidney Dekker (sur la culture sans blâme)
+- *DORA report annuel* — métriques d'équipe à benchmarker
+- *Restic / borgbackup* — outils de sauvegarde modernes
+- *Better Stack Status / statuspage.io* — pages de status
+
+---
+
+**Retour** : [Index axe 14](/14-devops/) — applique tout ça via le projet de l'axe.

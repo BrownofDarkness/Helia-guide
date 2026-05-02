@@ -1,0 +1,293 @@
+---
+title: 9.2 — NoSQL
+description: Document, clé-valeur, graphe, recherche, vector — quand le relationnel n'est pas le bon outil.
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : reconnaître les cas où une base NoSQL est meilleure que SQL, et choisir parmi les 5 grandes familles.
+
+<ObjectiveList items={[
+  "Distinguer document, clé-valeur, colonne large, graphe, recherche, vector",
+  "Choisir entre MongoDB et PostgreSQL+JSONB",
+  "Utiliser Redis pour cache, sessions, rate-limiting, queues",
+  "Comprendre les vector DBs (pgvector, Qdrant) pour la RAG",
+  "Connaître les pièges spécifiques à chaque famille"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axe 8 lu" />
+
+
+## Le vrai débat n'est pas SQL vs NoSQL
+
+> *« 99 % des projets web devraient commencer par PostgreSQL. NoSQL n'est PAS un upgrade. »*
+
+PostgreSQL fait :
+- **JSONB** indexé GIN (équivalent MongoDB pour 80 % des cas)
+- **Full-text search** natif (équivalent Elasticsearch léger)
+- **pgvector** pour les embeddings (équivalent Pinecone)
+- **LISTEN/NOTIFY** pour pub/sub léger (équivalent Redis pub/sub)
+
+**Avant de choisir une NoSQL**, demande-toi : *« est-ce que Postgres fait déjà ça ? »* Souvent oui.
+
+Cela dit, certaines familles NoSQL **excellent** dans leur niche.
+
+## Document — MongoDB
+
+Stocke des **documents JSON** indépendants. Pas de schéma rigide, pas de jointure performante.
+
+```js
+// Document MongoDB
+{
+  _id: ObjectId("..."),
+  email: "alice@example.com",
+  name: "Alice",
+  addresses: [
+    { type: "home", street: "1 rue X", city: "Lyon" },
+    { type: "work", street: "2 avenue Y", city: "Paris" }
+  ],
+  preferences: { theme: "dark", language: "fr" }
+}
+```
+
+```js
+// Requêtes
+db.users.findOne({ email: "alice@example.com" });
+
+db.users.find({ "preferences.theme": "dark" });
+
+db.users.updateOne(
+  { _id },
+  { $push: { addresses: { type: "office", street: "3 rue Z" } } }
+);
+```
+
+### Quand préférer MongoDB à PostgreSQL+JSONB
+
+| Cas favorable MongoDB | Pourquoi |
+|----------------------|----------|
+| Schéma **vraiment** instable (vraiment, pas une excuse) | Pas de migrations |
+| Volumes massifs avec **sharding horizontal** natif | Sharding intégré, plus simple que pg_partman |
+| Équipe déjà fluente Mongo | Stack cohérente |
+| Stockage de logs / events | Insertion ultra-rapide |
+
+**Sinon** : PostgreSQL + JSONB. Tu as joins, transactions ACID, full SQL, et la flexibilité de JSONB pour les champs vraiment libres.
+
+## Clé-valeur — Redis
+
+[Redis](https://redis.io/) est **THE** outil omniprésent. In-memory (rapide), persistant en option, structures riches.
+
+### Cas d'usage
+
+| Cas | Pattern Redis |
+|-----|----------------|
+| **Cache** | `SET user:42 "{...}" EX 300` (TTL 5 min) |
+| **Rate limiting** | `INCR + EXPIRE`, ou Redis modules dédiés |
+| **Queues** | List avec `LPUSH` / `BRPOP` (BullMQ derrière) |
+| **Pub/Sub** | `SUBSCRIBE` / `PUBLISH` |
+| **Sessions** | Stockage clé → données utilisateur |
+| **Locks distribués** | `SET key value NX EX 30` (Redlock pattern) |
+| **Leaderboards** | Sorted Set avec `ZADD` / `ZRANGEBYSCORE` |
+| **Streams** | `XADD` / `XREAD` (équivalent Kafka léger) |
+
+### Exemple cache typique
+
+```ts
+import Redis from 'ioredis';
+const redis = new Redis();
+
+async function getUser(id: number) {
+  const cached = await redis.get(`user:${id}`);
+  if (cached) return JSON.parse(cached);
+
+  const user = await db.user.findById(id);   // PostgreSQL
+  await redis.set(`user:${id}`, JSON.stringify(user), 'EX', 300);  // 5 min
+  return user;
+}
+```
+
+### Redis modernes — alternatives
+
+- **KeyDB** : fork Redis multi-thread (plus rapide sur multi-cœur).
+- **Dragonfly** : compatible Redis, écrit en C++, ×25 plus rapide en certains benchmarks.
+- **Valkey** : fork open source de Redis (Redis Labs ayant changé sa licence en 2024).
+
+## Recherche — Meilisearch, Algolia, Elasticsearch
+
+Pour de la **recherche full-text** complexe (typo-tolerance, ranking, filtres facetés), un moteur dédié bat tout.
+
+| Solution | Style | Note |
+|----------|-------|------|
+| **Meilisearch** | Open source, simple, rapide | **Recommandé 2026** pour les projets indie/PME |
+| **Typesense** | Concurrent direct de Meilisearch | Bonne alternative |
+| **Algolia** | SaaS, premium | Très polish, cher au-delà de quelques milliers de docs |
+| **Elasticsearch** | Open source, ultra-puissant, complexe | Pour gros volumes ou besoins avancés |
+| **OpenSearch** | Fork Elasticsearch (AWS) | Si tu es sur AWS |
+
+### Meilisearch en 5 lignes
+
+```ts
+import { MeiliSearch } from 'meilisearch';
+
+const client = new MeiliSearch({ host: 'http://localhost:7700' });
+const index = client.index('products');
+
+await index.addDocuments([
+  { id: 1, name: 'Carnet rouge', description: '...', price: 9.90 }
+]);
+
+const results = await index.search('carnet rouge'); // typo-tolerant
+```
+
+PostgreSQL fait du full-text search aussi avec `tsvector` — suffisant jusqu'à ~quelques millions de documents et des besoins simples.
+
+## Graphe — Neo4j
+
+Stocke nœuds + relations + propriétés. Excellents pour des données **hautement connectées**.
+
+```cypher
+// Cypher (langage de requête Neo4j)
+MATCH (alice:Person {name: 'Alice'})
+      -[:FRIEND]-(:Person)
+      -[:LIKES]->(p:Product)
+RETURN p.name, COUNT(*) AS recommendations
+ORDER BY recommendations DESC
+LIMIT 10;
+```
+
+### Quand préférer un graphe
+
+- **Recommandations** ("amis d'amis qui ont aimé").
+- **Réseaux sociaux** complexes.
+- **GPS / pathfinding** sur villes.
+- **Détection de fraude** (suivi de chaînes d'opérations).
+- **Knowledge graphs** (Wikidata).
+
+Pour les apps web classiques : **PostgreSQL avec CTE récursives** suffit en général.
+
+## Vector — pgvector, Qdrant, Weaviate, Pinecone
+
+C'est la nouveauté **explosée** depuis ChatGPT. Stocke des **vecteurs** (embeddings de texte/images) et permet la recherche de similarité.
+
+### Cas d'usage : RAG (Retrieval-Augmented Generation)
+
+```
+1. Tu as 10 000 docs → tu génères un embedding par doc avec OpenAI/Anthropic
+2. Tu stockes (vector, doc_id) dans une vector DB
+3. Question utilisateur → embedding de la question
+4. Recherche les 5 vecteurs les plus proches → top 5 docs pertinents
+5. Tu envoies ces 5 docs au LLM en contexte
+```
+
+### Solutions
+
+| Outil | Style | Quand préférer |
+|-------|-------|----------------|
+| **pgvector** | Extension PostgreSQL | Tu as déjà Postgres, < 10 M vecteurs, simplicité maximale |
+| **Qdrant** | Standalone, Rust | Performances, fonctionnalités avancées (filtres + similarité) |
+| **Weaviate** | Standalone, Go | Hybride vector + traditional, multi-tenant |
+| **Pinecone** | SaaS managé | Si tu acceptes le SaaS et veux scale-to-zero |
+| **Redis** + RediSearch | Si tu as déjà Redis | Solution intégrée |
+| **Supabase** | Postgres + pgvector + UI | All-in-one indie hacker |
+
+### Exemple pgvector
+
+```sql
+CREATE EXTENSION vector;
+
+CREATE TABLE documents (
+  id SERIAL PRIMARY KEY,
+  content TEXT,
+  embedding vector(1536)        -- dimension de l'embedding (OpenAI ada-002)
+);
+
+CREATE INDEX documents_embedding_idx ON documents
+  USING hnsw (embedding vector_cosine_ops);
+
+-- Recherche des 5 plus proches
+SELECT id, content, 1 - (embedding <=> $1) AS similarity
+FROM documents
+ORDER BY embedding <=> $1
+LIMIT 5;
+```
+
+L'opérateur `<=>` est la **distance cosine**.
+
+## Time-series — TimescaleDB, InfluxDB
+
+Pour des **données temporelles massives** (IoT, métriques, logs).
+
+| | TimescaleDB | InfluxDB |
+|---|-------------|----------|
+| Base sous-jacente | PostgreSQL (extension) | Standalone |
+| Avantage | SQL standard, transactions ACID | Optimisé time-series, agrégations rapides |
+
+Pour 99 % des apps web : tu n'en as pas besoin. Pour des **logs** ou **métriques internes** à grande échelle : utile.
+
+## Tableau de décision
+
+| Si tu... | Choisis |
+|----------|---------|
+| Démarres une nouvelle app web (cas général) | **PostgreSQL** |
+| As besoin de cache, queue, rate-limit | **Redis** (à côté de Postgres) |
+| Veux une recherche full-text avec typo-tolerance | **Meilisearch** (ou pg full-text search si simple) |
+| Construis une app de recommandation graphe complexe | **Neo4j** (ou Postgres avec CTE récursives) |
+| Construis une RAG / chatbot doc | **pgvector** (ou Qdrant si > 10 M vecteurs) |
+| Stockes des logs / métriques massifs | **TimescaleDB** ou **ClickHouse** |
+| Schéma vraiment instable + sharding natif | **MongoDB** |
+| Single-page app, scripts | **SQLite** (souvent oublié, parfait suffisant) |
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu construis un blog. 90 % des requêtes affichent un post avec ses commentaires. PostgreSQL ou MongoDB ?"
+  options={[
+    'MongoDB — c\'est plus rapide pour les documents imbriqués',
+    'PostgreSQL avec une jointure posts ⟕ comments — performant et normalisé. JSONB possible si on veut imbriquer',
+    'Redis pour tout',
+    'Cassandra pour le scale'
+  ]}
+  answerIndex={1}
+  explanation="Pour ce volume (un blog), PostgreSQL avec une jointure indexée est tout à fait suffisant et plus correct. Modélisation classique : posts(id, title, body) + comments(post_id, body). Une requête JOIN avec index sur post_id renvoie les commentaires en quelques ms. MongoDB ne donne aucun bénéfice net ici."
+/>
+
+<Quiz
+  question="Tu veux faire du cache + rate-limit + une queue de jobs. Outil idéal ?"
+  options={[
+    'Une nouvelle DB pour chaque',
+    'Redis — un seul outil polyvalent (clés-valeurs avec TTL pour cache, INCR+EXPIRE pour rate-limit, listes pour queue ou lib BullMQ)',
+    'PostgreSQL pour tout',
+    'Memcached'
+  ]}
+  answerIndex={1}
+  explanation="Redis est le couteau suisse côté backend. Cache (SET avec EX), rate-limit (INCR+EXPIRE par IP), queue (avec BullMQ ou listes), pub/sub, locks distribués, leaderboards. Un seul outil, ultra-rapide, déployable en quelques Mo. C'est dans presque toutes les stacks web modernes."
+/>
+
+<Quiz
+  question="Tu construis un assistant qui répond depuis 5000 docs internes. Architecture moderne ?"
+  options={[
+    'Concaténer tous les docs et envoyer à GPT — trop gros, dépasse le contexte',
+    'RAG : embeddings des docs dans une vector DB (pgvector / Qdrant), embedding de la question, recherche top-K, contexte au LLM',
+    'Faire tourner un LLM local entraîné sur tes docs',
+    'Recherche full-text classique'
+  ]}
+  answerIndex={1}
+  explanation="C'est le pattern RAG (Retrieval-Augmented Generation), devenu standard depuis 2023. La vector DB (pgvector pour la simplicité, Qdrant pour les perfs) stocke les embeddings, recherche par similarité cosine, sélectionne 5-10 docs pertinents, les injecte en contexte au LLM. Tu obtiens un assistant à jour sans réentraîner."
+/>
+
+## Pour aller plus loin
+
+- *Designing Data-Intensive Applications* — Martin Kleppmann (le manuel de référence)
+- *NoSQL Distilled* — Pramod Sadalage & Martin Fowler
+- *Redis University* — [university.redis.com](https://university.redis.com/) (gratuit)
+- *Meilisearch Docs* — [meilisearch.com/docs](https://www.meilisearch.com/docs)
+- *pgvector* — [github.com/pgvector/pgvector](https://github.com/pgvector/pgvector)
+
+---
+
+**Suite** : [9.3 — ORM & query builders](/09-bases-de-donnees/03-orm/) — comment ne pas tomber dans les pièges N+1.

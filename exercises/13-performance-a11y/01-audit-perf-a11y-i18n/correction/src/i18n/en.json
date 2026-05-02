@@ -1,0 +1,46 @@
+{
+  "skipToMain": "Skip to main content",
+  "lang": { "label": "Language" },
+  "nav": { "menu": "Menu", "offers": "Deals", "contact": "Contact" },
+  "hero": {
+    "title": "Gourmet delivery, everywhere in town",
+    "subtitle": "Fresh meals delivered in under 30 minutes. Today: free delivery.",
+    "cta": "Order now"
+  },
+  "menu": {
+    "title": "This week's menu",
+    "items": {
+      "thai": "Thai bowl",
+      "calzone": "Calzone pizza",
+      "truffle": "Truffle burger",
+      "caesar": "Caesar salad",
+      "apple": "Apple pie",
+      "smoothie": "Mango smoothie"
+    },
+    "addAria": "Add {item} to cart"
+  },
+  "cart": {
+    "empty": "Empty cart",
+    "one": "1 item",
+    "many": "{count} items",
+    "label": "Cart"
+  },
+  "contact": {
+    "title": "Get our deals",
+    "emailLabel": "Email address",
+    "emailHelp": "We never share it.",
+    "emailErrorEmpty": "Please enter your email address.",
+    "emailErrorInvalid": "Email address format is invalid.",
+    "submit": "Subscribe"
+  },
+  "modal": {
+    "title": "Order confirmed",
+    "body": "Thanks for your order!",
+    "close": "Close"
+  },
+  "cookies": {
+    "message": "This site uses cookies to improve your experience.",
+    "accept": "OK"
+  },
+  "footer": { "lastUpdate": "Last update: {date}" }
+}

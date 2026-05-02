@@ -1,0 +1,66 @@
+---
+/**
+ * Composant TabbedCode — montre un même exemple en plusieurs langages/frameworks.
+ *
+ * Utilisation :
+ *   <TabbedCode tabs={['Node.js', 'Python', 'PHP']}>
+ *     <Fragment slot="tab-0">```js ... ```</Fragment>
+ *     <Fragment slot="tab-1">```python ... ```</Fragment>
+ *     <Fragment slot="tab-2">```php ... ```</Fragment>
+ *   </TabbedCode>
+ */
+
+interface Props {
+  tabs: string[];
+}
+
+const { tabs } = Astro.props;
+const id = `tabs-${Math.random().toString(36).slice(2, 9)}`;
+---
+
+<div class="tabbed-code" role="region" aria-label="Exemple multi-langages">
+  <div class="tabbed-code-tabs" role="tablist">
+    {tabs.map((label, i) => (
+      <button
+        type="button"
+        class="tabbed-code-tab"
+        role="tab"
+        aria-selected={i === 0 ? 'true' : 'false'}
+        data-target={`${id}-${i}`}
+      >
+        {label}
+      </button>
+    ))}
+  </div>
+  {tabs.map((_, i) => (
+    <div
+      class="tabbed-code-panel"
+      role="tabpanel"
+      id={`${id}-${i}`}
+      data-active={i === 0 ? 'true' : 'false'}
+    >
+      <slot name={`tab-${i}`} />
+    </div>
+  ))}
+</div>
+
+<script>
+  document.querySelectorAll<HTMLDivElement>('.tabbed-code').forEach((container) => {
+    const tabs = container.querySelectorAll<HTMLButtonElement>('.tabbed-code-tab');
+    const panels = container.querySelectorAll<HTMLDivElement>('.tabbed-code-panel');
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        tabs.forEach((t) => t.setAttribute('aria-selected', 'false'));
+        panels.forEach((p) => p.setAttribute('data-active', 'false'));
+
+        tab.setAttribute('aria-selected', 'true');
+        const targetId = tab.dataset.target;
+        if (targetId) {
+          const target = document.getElementById(targetId);
+          target?.setAttribute('data-active', 'true');
+        }
+      });
+    });
+  });
+</script>

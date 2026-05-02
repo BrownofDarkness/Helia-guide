@@ -1,0 +1,341 @@
+---
+title: 10.2 — Services spécialisés (composable backend)
+description: Auth (Clerk), paiement (Stripe), email (Resend), search, analytics, IA, CMS — assembler son backend.
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="16">
+Marie compose son backend Lina : **Stripe** pour le paiement (commande à retirer), **Resend** pour l'email de confirmation, **PostHog** pour comprendre où les clients abandonnent dans le tunnel. Stack composable — chaque service remplaçable.
+</Scenario>
+
+<Scenario parcours="B" episode="15">
+Hugo intègre **Stripe Subscriptions** pour les carnets de cours, **Resend** pour les emails de rappel J-1, et plus tard **Loops** pour les campagnes marketing d'Inès. Webhook Stripe vérifié par signature, idempotent.
+</Scenario>
+
+<Scenario parcours="C" episode="16">
+Sami compose : **Stripe** (paiement + Tax automatique), **Resend** (emails transactionnels), **Plausible** (analytics RGPD-friendly, pas Google), **Cloudflare Images** (CDN images zoomables).
+</Scenario>
+
+<Scenario parcours="D" episode="16">
+Léa intègre **Better Auth** pour l'auth (magic link + Apple Sign-In), **Pusher Beams** pour les push notifications mobile, **Anthropic API** pour la modération IA des signalements.
+</Scenario>
+
+<Scenario parcours="E" episode="16">
+Yanis branche **Resend** pour les notifications email (tâche assignée, retard 48h), **Better Stack** pour le monitoring uptime, **Sentry** pour les erreurs. Pas de paiement (interne asso).
+</Scenario>
+
+> 🎯 **Objectif** : connaître les **services tiers** qu'on assemble pour construire un produit moderne, et savoir quels critères les choisir.
+
+<ObjectiveList items={[
+  "Connaître les solutions par catégorie : auth, paiement, email, search, analytics, IA, CMS",
+  "Choisir entre une solution complète (BaaS) et un assemblage de services",
+  "Évaluer un service : prix, vendor lock-in, support, sécurité",
+  "Mettre en place une intégration via webhook",
+  "Gérer les clés API et secrets correctement"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 8-9 lus" />
+
+
+## L'approche "composable backend"
+
+Au lieu d'un BaaS unique (Firebase, Supabase) qui fait tout, tu **assembles** des services spécialisés. C'est la **stratégie indie hacker 2026** :
+
+```
+Frontend (Next.js sur Vercel)
+   ├── Auth   ← Clerk
+   ├── DB     ← Supabase / Neon
+   ├── Stripe (paiement)
+   ├── Resend (email transactionnel)
+   ├── PostHog (analytics produit)
+   ├── Sentry (erreurs)
+   ├── Algolia / Meilisearch (search)
+   └── OpenAI / Anthropic (IA)
+```
+
+### Avantages
+
+- Chaque service est **best-in-class** sur son domaine.
+- **Free tiers cumulables** → coût initial zéro.
+- **Migrations partielles** possibles (changer Stripe ne casse pas l'auth).
+
+### Inconvénients
+
+- **Multiplicité** des intégrations à maintenir.
+- **Webhooks** qui prolifèrent.
+- **Pannes** : si Stripe tombe, ton paiement tombe (mais tes autres services tournent).
+
+## Le catalogue 2026
+
+### Auth as a service
+
+| Service | Forces |
+|---------|--------|
+| **Clerk** | DX excellente, UI prête, gestion organisations, **standard 2026** |
+| **Auth.js (NextAuth v5)** | Open source, multi-providers, hébergeable |
+| **Supabase Auth** | Si tu utilises déjà Supabase |
+| **Firebase Auth** | Si tu utilises déjà Firebase |
+| **WorkOS** | SSO enterprise (SAML), prix entreprise |
+| **Stytch** | Passwordless, M2M |
+| **Keycloak** | Self-host, Java, complexe mais open source enterprise |
+
+### Paiement
+
+| Service | Forces |
+|---------|--------|
+| **Stripe** | **Le standard mondial** — paiements, subscriptions, marketplaces, factures, fraud detection |
+| **Lemon Squeezy** | Merchant of Record (gère TVA mondiale pour toi) — idéal indie hackers |
+| **Paddle** | Idem MoR, alternative reconnue |
+| **Mollie** | Européen, IBAN/Bancontact, conformité EU |
+| **Adyen** | Enterprise, gros volumes |
+
+<Aside type="tip" title="Merchant of Record (MoR)">
+**Lemon Squeezy** et **Paddle** sont MoR : ils sont **techniquement le vendeur**, donc gèrent la TVA pour toi dans tous les pays. C'est crucial si tu vends en EU + US + UK + AU sans avoir d'entité dans chaque pays.
+
+Stripe ne fait pas ça (sauf Stripe Tax, qui te facilite mais ne t'enlève pas la responsabilité).
+</Aside>
+
+### Email transactionnel
+
+| Service | Forces |
+|---------|--------|
+| **Resend** | DX excellente, MJML/JSX templates, **standard 2026** pour les indies |
+| **Postmark** | Délivrabilité top, prix raisonnable |
+| **SendGrid** | Vétéran, gros volumes |
+| **AWS SES** | Si tu es sur AWS, prix imbattable mais setup complexe |
+| **Loops** | Email marketing simple pour produits SaaS |
+| **Customer.io** | Email marketing avancé, segmentation, automation |
+
+### Recherche
+
+| Service | Forces |
+|---------|--------|
+| **Meilisearch Cloud** | Open source, simple, typo-tolérant, **recommandé** |
+| **Algolia** | Premium, ultra-polish, cher |
+| **Typesense Cloud** | Concurrent direct Meilisearch |
+| **OpenSearch / Elasticsearch managé** | Si tu as déjà Elasticsearch ou besoins avancés |
+
+### Analytics produit
+
+| Service | Forces |
+|---------|--------|
+| **PostHog** | Open source, complet (analytics + feature flags + A/B + replay), free tier généreux |
+| **Mixpanel** | Premium, segmentation puissante |
+| **Amplitude** | Enterprise, BI-niveau |
+
+### Analytics web (sans cookie consent banner)
+
+| Service | Forces |
+|---------|--------|
+| **Plausible** | Open source, no-cookies, simple, **recommandé 2026** |
+| **Fathom** | Idem, légèrement différent |
+| **Umami** | Open source self-host |
+| **GA4** | Gratuit mais usine à gaz, cookies, RGPD complexe |
+
+### Erreurs et observabilité
+
+| Service | Forces |
+|---------|--------|
+| **Sentry** | **Le standard** — backend + frontend, replay, performance |
+| **Bugsnag** | Concurrent fonctionnel |
+| **Highlight** | Plus récent, replay-first |
+| **Datadog** | Enterprise observabilité complète |
+
+### Feature flags / A/B
+
+| Service | Forces |
+|---------|--------|
+| **PostHog** | Inclus avec analytics, gratuit |
+| **LaunchDarkly** | Premium, enterprise |
+| **Unleash** | Open source |
+| **Statsig** | Concurrent moderne |
+
+### Vidéo en direct / WebRTC
+
+| Service | Forces |
+|---------|--------|
+| **LiveKit** | Open source, self-hostable, le plus populaire |
+| **Daily.co** | API simple, intégration rapide |
+| **Mux** | Vidéo on-demand + streaming |
+| **Zoom Video SDK** | API Zoom embarquable |
+
+### IA / LLM
+
+| Service | Forces |
+|---------|--------|
+| **Anthropic** | Claude Sonnet/Opus — qualité et raisonnement |
+| **OpenAI** | GPT — large adoption |
+| **Mistral** | EU, open source, plus economical |
+| **Groq** | Inférence ultra-rapide |
+| **Ollama** | Self-host local |
+
+### CMS headless
+
+| Service | Forces |
+|---------|--------|
+| **Sanity** | DX top, structuré, queries GROQ |
+| **Contentful** | Enterprise, mature |
+| **Strapi** | Open source self-host, Node.js |
+| **Payload** | Open source moderne, TypeScript-first |
+| **Directus** | Open source, no-code admin |
+| **Storyblok** | Visual editor, marketing-friendly |
+
+### Webhooks (réception fiable)
+
+| Service | Forces |
+|---------|--------|
+| **Svix** | Outbound webhooks managés, retry logic |
+| **Hookdeck** | Inbound, capture/replay |
+
+## Pattern d'intégration : webhook
+
+Beaucoup de services t'envoient des **webhooks** quand un événement se produit. Tu dois les recevoir et les traiter de façon **fiable**.
+
+```ts
+// Stripe webhook — Next.js Route Handler
+import { headers } from 'next/headers';
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+export async function POST(request: Request) {
+  const body = await request.text();
+  const signature = (await headers()).get('stripe-signature')!;
+
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    );
+  } catch (err) {
+    return Response.json({ error: 'Invalid signature' }, { status: 400 });
+  }
+
+  // ⚠ Traiter de façon IDEMPOTENTE — Stripe peut retry
+  switch (event.type) {
+    case 'checkout.session.completed':
+      await handleCheckoutComplete(event.data.object);
+      break;
+    case 'customer.subscription.updated':
+      await handleSubscriptionUpdate(event.data.object);
+      break;
+  }
+
+  return Response.json({ received: true });
+}
+```
+
+**Règles d'or des webhooks** :
+
+1. **Vérifier la signature** (sinon n'importe qui peut t'envoyer des fake events).
+2. **Idempotence** : Stripe peut retry — utilise un `event.id` comme clé.
+3. **Réponse rapide** (< 5 s) : pousse en queue si traitement long, réponds 200 immédiatement.
+4. **Logs** : garde tous les events reçus pour le debug.
+
+## Gestion des secrets
+
+> Une **clé API** n'a **JAMAIS** sa place dans ton repo Git.
+
+### Bonnes pratiques
+
+```
+.env (PAS dans Git)
+.env.example (DANS Git, sans les vraies valeurs)
+.gitignore : .env*.local, .env (sauf .env.example)
+```
+
+### Stockage en prod
+
+| Plateforme | Outil |
+|-----------|-------|
+| **Vercel / Netlify** | Variables d'environnement dashboard |
+| **AWS** | Secrets Manager / Parameter Store |
+| **Kubernetes** | Sealed Secrets, External Secrets, Vault |
+| **Hashicorp Vault** | Self-host enterprise |
+| **Doppler** | Service tiers, sync vers tes envs |
+| **1Password Secrets Automation** | Si tu utilises déjà 1Password |
+
+### Côté client
+
+**Distinguer** clés publiques et secrètes :
+
+| Clé | Public ? | Exemple |
+|-----|----------|---------|
+| **Publishable / anon key** | Oui — ok dans le code client | `STRIPE_PUBLISHABLE_KEY=pk_...`, `SUPABASE_ANON_KEY` |
+| **Secret / service key** | NON — backend uniquement | `STRIPE_SECRET_KEY=sk_...`, `SUPABASE_SERVICE_ROLE_KEY` |
+
+Avec Next.js, le préfixe `NEXT_PUBLIC_` expose au client. Sans préfixe, reste serveur.
+
+```bash
+# Public (exposé au client)
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+
+# Secret (jamais exposé au client)
+STRIPE_SECRET_KEY=sk_...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+RESEND_API_KEY=re_...
+```
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu intègres Stripe webhooks pour confirmer un paiement. Stripe envoie 'checkout.session.completed' deux fois (retry). Que se passe-t-il sans précaution ?"
+  options={[
+    'Rien, Stripe gère',
+    'Tu actives le compte 2 fois, ou tu envoies 2 emails de confirmation. Solution : check si event.id a déjà été traité (idempotence)',
+    'Le 2e webhook est ignoré automatiquement',
+    'Stripe retry uniquement en cas d\'erreur'
+  ]}
+  answerIndex={1}
+  explanation="Stripe (et la plupart des services webhooks) PEUVENT envoyer le même event plusieurs fois en cas de réseau lent, retry, etc. Tu DOIS être idempotent : enregistrer event.id en DB et skip si déjà traité. Sinon : double-charge, double-email, état corrompu."
+/>
+
+<Quiz
+  question="Tu commit `.env` dans Git par erreur, avec STRIPE_SECRET_KEY=sk_live_xxxx. Que faire ?"
+  options={[
+    'Faire un revert pour supprimer le commit',
+    'RÉVOQUER LA CLÉ chez Stripe IMMÉDIATEMENT (le commit reste dans l\'historique Git pour toujours, même supprimé). Puis git filter-repo + push --force pour nettoyer l\'historique',
+    'Modifier le fichier dans un nouveau commit',
+    'Rien, Stripe ne pourra rien faire'
+  ]}
+  answerIndex={1}
+  explanation="Une clé secrète exposée dans Git public reste dans l'historique pour toujours. Les bots scannent GitHub en permanence. RÉVOQUER d'abord (sur le dashboard Stripe), puis nettoyer l'historique. C'est l'erreur sécu la plus fréquente — d'où la nécessité de tools comme git-secrets, gitleaks pre-commit."
+/>
+
+<Quiz
+  question="Tu vends un SaaS B2C dans 30 pays. Pour la TVA, quel service ?"
+  options={[
+    'Stripe seul — il gère tout',
+    'Lemon Squeezy ou Paddle (Merchant of Record) — ils SONT le vendeur, gèrent la TVA mondiale pour toi',
+    'Tu calcules la TVA manuellement',
+    'Aucun service ne gère ça'
+  ]}
+  answerIndex={1}
+  explanation="C'est la différence MoR vs Stripe. Stripe encaisse pour toi, mais c'est TOI le vendeur juridique → TOI qui dois t'enregistrer fiscalement dans chaque pays > seuil. Lemon Squeezy et Paddle sont LE vendeur (Merchant of Record), gèrent la TVA, te paient ton net. Coût ~5-7 % vs Stripe ~3 %, mais tu épargnes une équipe compta internationale."
+/>
+
+## Pour aller plus loin
+
+- *Composable Architecture for Enterprises* — Salesforce papers
+- *Stripe Documentation* — [stripe.com/docs](https://stripe.com/docs) (référence absolue)
+- *Clerk Docs* — [clerk.com/docs](https://clerk.com/docs)
+- *Resend Docs* — [resend.com/docs](https://resend.com/docs)
+- *PostHog Docs* — [posthog.com/docs](https://posthog.com/docs)
+
+---
+
+**Suite** : [10.3 — Plateformes serverless / edge](/10-baas/03-serverless-edge/) — Vercel, Cloudflare, Fly.io.

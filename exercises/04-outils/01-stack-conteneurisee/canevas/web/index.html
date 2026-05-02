@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stack conteneurisée</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { color: #2563eb; }
+    .health { padding: 0.5rem; border-radius: 0.25rem; margin: 1rem 0; }
+    .ok { background: #d1fae5; color: #065f46; }
+    .ko { background: #fee2e2; color: #991b1b; }
+    form { display: flex; gap: 0.5rem; margin: 1rem 0; }
+    input { flex: 1; padding: 0.5rem; }
+    button { padding: 0.5rem 1rem; }
+    li { padding: 0.25rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Stack conteneurisée</h1>
+  <div id="health" class="health">Chargement…</div>
+
+  <form id="form">
+    <input id="name" placeholder="Nom de l'item" required />
+    <button type="submit">Ajouter</button>
+  </form>
+
+  <ul id="items"></ul>
+
+  <script type="module">
+    const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+    async function refreshHealth() {
+      const el = document.querySelector('#health');
+      try {
+        const r = await fetch(`${API}/health`);
+        const data = await r.json();
+        el.textContent = `API : ${data.status} · DB : ${data.db}`;
+        el.className = 'health ' + (data.db === 'ok' ? 'ok' : 'ko');
+      } catch {
+        el.textContent = 'API injoignable';
+        el.className = 'health ko';
+      }
+    }
+
+    async function refreshItems() {
+      const r = await fetch(`${API}/items`);
+      const items = await r.json();
+      const ul = document.querySelector('#items');
+      ul.innerHTML = items.map(i => `<li>${i.id}. ${i.name}</li>`).join('');
+    }
+
+    document.querySelector('#form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.querySelector('#name').value;
+      await fetch(`${API}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      document.querySelector('#name').value = '';
+      refreshItems();
+    });
+
+    refreshHealth();
+    refreshItems();
+    setInterval(refreshHealth, 5000);
+  </script>
+</body>
+</html>

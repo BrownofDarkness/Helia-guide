@@ -1,0 +1,768 @@
+---
+/**
+ * Command palette type Linear/Vercel — ouverte via Cmd+K (ou Ctrl+K).
+ * - Fuzzy match avec highlight des caractères matchés
+ * - Section Actions (thème, parcours, reset progress, copier URL)
+ * - Section Récent (localStorage)
+ * - 5 raccourcis + 17 axes
+ * - Recherche Pagefind dynamique au-delà de 2 chars (build prod uniquement)
+ */
+const SHORTCUTS = [
+  { id: 'home',      icon: '🏠', label: 'Accueil',         hint: "Page d'accueil",          href: '/' },
+  { id: 'preamble',  icon: '📖', label: 'Préambule',       hint: 'Comment lire ce guide',   href: '/00-preambule/' },
+  { id: 'fil',       icon: '🎭', label: 'Fil rouge',       hint: '5 parcours immersifs',    href: '/fil-rouge/' },
+  { id: 'glossaire', icon: '📚', label: 'Glossaire',       hint: '280 termes techniques',   href: '/glossaire/' },
+  { id: 'pieges',    icon: '🪤', label: 'Pièges réels',    hint: '32 bugs à éviter',        href: '/pieges/' },
+];
+
+const AXES = [
+  { num: 1,  icon: '💾', title: 'Fondations informatiques',     href: '/01-fondations/' },
+  { num: 2,  icon: '🌐', title: 'Comment fonctionne le Web',     href: '/02-web/' },
+  { num: 3,  icon: '📐', title: 'Analyse & conception',          href: '/03-analyse-conception/' },
+  { num: 4,  icon: '🛠', title: 'Outils du développeur',          href: '/04-outils/' },
+  { num: 5,  icon: '🎨', title: 'Frontend : HTML & CSS',          href: '/05-frontend-html-css/' },
+  { num: 6,  icon: '⚡', title: 'JavaScript & TypeScript',         href: '/06-javascript-typescript/' },
+  { num: 7,  icon: '⚛',  title: 'Frameworks frontend',            href: '/07-frameworks-frontend/' },
+  { num: 8,  icon: '🚀', title: 'Backend (multi-langages)',        href: '/08-backend/' },
+  { num: 9,  icon: '🗄', title: 'Bases de données',                href: '/09-bases-de-donnees/' },
+  { num: 10, icon: '☁',  title: 'BaaS & services managés',         href: '/10-baas/' },
+  { num: 11, icon: '✅', title: 'Qualité & tests',                href: '/11-qualite-tests/' },
+  { num: 12, icon: '🔐', title: 'Sécurité applicative',            href: '/12-securite/' },
+  { num: 13, icon: '📊', title: 'Performance & accessibilité',    href: '/13-performance-a11y/' },
+  { num: 14, icon: '🚢', title: 'DevOps & exploitation',           href: '/14-devops/' },
+  { num: 15, icon: '🤝', title: 'Méthodes & soft skills',          href: '/15-methodes-soft-skills/' },
+  { num: 16, icon: '🔬', title: 'Spécialisations',                 href: '/16-specialisations/' },
+  { num: 17, icon: '💼', title: 'Carrière & parcours',             href: '/17-carriere/' },
+];
+
+const ACTIONS = [
+  { id: 'toggle-theme',   icon: '🌓', label: 'Basculer le thème',        hint: 'Clair ↔ Sombre' },
+  { id: 'reset-progress', icon: '🔄', label: 'Réinitialiser la progression', hint: 'Efface les pages lues' },
+  { id: 'copy-url',       icon: '📋', label: "Copier l'URL courante",     hint: 'Dans le presse-papier' },
+];
+---
+
+<dialog id="cmdk-dialog" class="cmdk" aria-label="Palette de commandes">
+  <div class="cmdk-container">
+    <div class="cmdk-input-wrap">
+      <span class="cmdk-icon" aria-hidden="true">🔍</span>
+      <input
+        id="cmdk-input"
+        type="search"
+        placeholder="Rechercher un axe, une page, une action…"
+        autocomplete="off"
+        spellcheck="false"
+        aria-label="Recherche"
+      />
+      <kbd class="cmdk-kbd-esc">Esc</kbd>
+    </div>
+
+    <div id="cmdk-results" class="cmdk-results" role="listbox"></div>
+
+    <footer class="cmdk-footer">
+      <span><kbd>↑</kbd><kbd>↓</kbd>&nbsp;Naviguer</span>
+      <span><kbd>↵</kbd>&nbsp;Ouvrir</span>
+      <span><kbd>Esc</kbd>&nbsp;Fermer</span>
+      <span class="cmdk-footer-spacer"></span>
+      <span class="cmdk-footer-status" id="cmdk-status"></span>
+    </footer>
+  </div>
+
+  <script
+    is:inline
+    type="application/json"
+    id="cmdk-data"
+    set:html={JSON.stringify({ shortcuts: SHORTCUTS, axes: AXES, actions: ACTIONS })}
+  />
+</dialog>
+
+<button type="button" id="cmdk-trigger" class="cmdk-trigger" aria-label="Ouvrir la palette de commandes">
+  <span class="cmdk-trigger-icon" aria-hidden="true">🔍</span>
+  <span class="cmdk-trigger-label">Rechercher…</span>
+  <kbd class="cmdk-trigger-kbd"><span class="cmdk-trigger-mod">⌘</span>K</kbd>
+</button>
+
+<style>
+  /* === Trigger flottant === */
+  .cmdk-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--sl-color-gray-5);
+    background: var(--sl-color-gray-7, var(--sl-color-bg));
+    color: var(--sl-color-gray-2);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font: inherit;
+    transition: border-color 120ms ease, color 120ms ease, transform 120ms ease;
+    position: fixed;
+    bottom: 1.25rem;
+    right: 1.25rem;
+    z-index: 50;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  .cmdk-trigger:hover {
+    border-color: var(--sl-color-accent);
+    color: var(--sl-color-accent);
+  }
+  .cmdk-trigger-kbd {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1rem;
+    padding: 0.1rem 0.35rem;
+    background: var(--sl-color-bg);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.25rem;
+    font-family: var(--sl-font-mono);
+    font-size: 0.72rem;
+    color: var(--sl-color-gray-2);
+  }
+  .cmdk-trigger-mod { font-size: 0.85em; }
+
+  @media (max-width: 640px) {
+    .cmdk-trigger-label { display: none; }
+    .cmdk-trigger { padding: 0.5rem; }
+  }
+
+  /* === Dialog === */
+  .cmdk {
+    border: none;
+    padding: 0;
+    background: transparent;
+    margin: 12vh auto 0;
+    max-width: min(640px, 92vw);
+    width: 92vw;
+    max-height: 76vh;
+    color: inherit;
+  }
+  .cmdk::backdrop {
+    background: rgba(8, 10, 16, 0.6);
+    backdrop-filter: blur(10px);
+  }
+  .cmdk[open] {
+    animation: cmdkIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @keyframes cmdkIn {
+    from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .cmdk-container {
+    background: var(--sl-color-bg);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.85rem;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+      0 24px 60px -12px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    max-height: 76vh;
+  }
+
+  /* === Input === */
+  .cmdk-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.95rem 1.1rem;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+  .cmdk-icon { font-size: 1.05rem; opacity: 0.55; flex-shrink: 0; }
+  #cmdk-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 1.05rem;
+    outline: none;
+    min-width: 0;
+  }
+  .cmdk-kbd-esc {
+    padding: 0.18rem 0.5rem;
+    background: var(--sl-color-gray-6);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.3rem;
+    font-family: var(--sl-font-mono);
+    font-size: 0.72rem;
+    color: var(--sl-color-gray-2);
+    flex-shrink: 0;
+  }
+
+  /* === Results list === */
+  .cmdk-results {
+    overflow-y: auto;
+    flex: 1;
+    padding: 0.4rem 0.5rem 0.5rem;
+    scrollbar-width: thin;
+  }
+
+  .cmdk-section {
+    margin-top: 0.6rem;
+  }
+  .cmdk-section:first-child { margin-top: 0.2rem; }
+
+  .cmdk-section-title {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--sl-color-gray-2);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .cmdk-section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, var(--sl-color-gray-5), transparent);
+  }
+
+  .cmdk-item {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.55rem 0.6rem;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid transparent;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    border-radius: 0.4rem;
+    transition: background 80ms ease, border-color 80ms ease;
+  }
+  .cmdk-item:hover { background: var(--sl-color-gray-6); }
+  .cmdk-item[aria-selected='true'] {
+    background: var(--sl-color-accent-low);
+    border-color: var(--sl-color-accent);
+    color: inherit;
+  }
+
+  .cmdk-item-icon {
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--sl-color-gray-6);
+    border-radius: 0.4rem;
+    font-size: 1rem;
+    flex-shrink: 0;
+    transition: background 100ms ease;
+  }
+  .cmdk-item[aria-selected='true'] .cmdk-item-icon {
+    background: color-mix(in srgb, var(--sl-color-accent) 20%, transparent);
+  }
+
+  .cmdk-item-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+  }
+  .cmdk-item-label {
+    font-weight: 500;
+    font-size: 0.92rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cmdk-item-hint {
+    font-size: 0.78rem;
+    color: var(--sl-color-gray-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cmdk-item[aria-selected='true'] .cmdk-item-hint { opacity: 0.85; }
+
+  /* Highlighted matched chars */
+  .cmdk-item mark {
+    background: transparent;
+    color: var(--sl-color-accent);
+    font-weight: 700;
+    padding: 0;
+  }
+  .cmdk-item[aria-selected='true'] mark { color: inherit; }
+
+  .cmdk-item-arrow {
+    color: var(--sl-color-gray-2);
+    opacity: 0;
+    transition: opacity 100ms ease, transform 100ms ease;
+    flex-shrink: 0;
+  }
+  .cmdk-item[aria-selected='true'] .cmdk-item-arrow {
+    opacity: 0.9;
+    transform: translateX(2px);
+  }
+
+  .cmdk-empty {
+    padding: 2.5rem 1rem;
+    text-align: center;
+    color: var(--sl-color-gray-2);
+  }
+  .cmdk-empty-icon { font-size: 1.8rem; opacity: 0.5; display: block; margin-bottom: 0.5rem; }
+  .cmdk-empty-text { font-size: 0.9rem; }
+
+  /* === Footer === */
+  .cmdk-footer {
+    display: flex;
+    gap: 1rem;
+    padding: 0.55rem 1rem;
+    border-top: 1px solid var(--sl-color-gray-5);
+    font-size: 0.75rem;
+    color: var(--sl-color-gray-2);
+    background: var(--sl-color-gray-7, var(--sl-color-bg));
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .cmdk-footer kbd {
+    padding: 0.05rem 0.35rem;
+    background: var(--sl-color-bg);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.2rem;
+    font-family: var(--sl-font-mono);
+    font-size: 0.7rem;
+    margin-right: 0.15rem;
+  }
+  .cmdk-footer-spacer { flex: 1; }
+  .cmdk-footer-status {
+    color: var(--sl-color-accent);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.72rem;
+  }
+</style>
+
+<script>
+  type CmdkAction = { id: string; icon: string; label: string; hint?: string };
+  type CmdkShortcut = { id: string; icon: string; label: string; hint: string; href: string };
+  type CmdkAxe = { num: number; icon: string; title: string; href: string };
+  type CmdkData = { shortcuts: CmdkShortcut[]; axes: CmdkAxe[]; actions: CmdkAction[] };
+
+  type CmdkItem = {
+    id: string;
+    icon: string;
+    label: string;
+    hint?: string;
+    href?: string;
+    action?: string;
+    section: string;
+  };
+
+  const RECENT_KEY = 'guideRecentPages';
+  const MAX_RECENTS = 5;
+
+  function loadRecents(): string[] {
+    try {
+      const raw = localStorage.getItem(RECENT_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  }
+
+  function pushRecent(path: string) {
+    try {
+      const recents = loadRecents().filter((p) => p !== path);
+      recents.unshift(path);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recents.slice(0, MAX_RECENTS)));
+    } catch {}
+  }
+
+  function getData(): CmdkData {
+    const el = document.getElementById('cmdk-data');
+    return el ? JSON.parse(el.textContent || '{}') : { shortcuts: [], axes: [], actions: [] };
+  }
+
+  function buildAllItems(data: CmdkData): CmdkItem[] {
+    const items: CmdkItem[] = [];
+    for (const a of data.actions) {
+      items.push({ ...a, action: a.id, section: 'Actions' });
+    }
+    for (const s of data.shortcuts) {
+      items.push({ ...s, section: 'Raccourcis' });
+    }
+    for (const a of data.axes) {
+      items.push({
+        id: `axe-${a.num}`,
+        icon: a.icon,
+        label: `Axe ${a.num} — ${a.title}`,
+        href: a.href,
+        section: 'Axes',
+      });
+    }
+    return items;
+  }
+
+  function normalize(s: string): string {
+    return s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  }
+
+  /** Fuzzy match : retourne -1 si pas de match, sinon score + indices des chars matchés (sur la chaîne normalisée). */
+  function fuzzy(query: string, str: string): { score: number; indices: number[] } | null {
+    const q = normalize(query);
+    const s = normalize(str);
+    if (!q) return { score: 0, indices: [] };
+    const indices: number[] = [];
+    let qi = 0;
+    let lastMatch = -2;
+    let consecutive = 0;
+    let score = 0;
+    for (let i = 0; i < s.length && qi < q.length; i++) {
+      if (s[i] === q[qi]) {
+        consecutive = lastMatch === i - 1 ? consecutive + 1 : 1;
+        score += 1 + consecutive * 2;
+        if (i === 0 || s[i - 1] === ' ' || s[i - 1] === '-') score += 5; // bonus début mot
+        indices.push(i);
+        lastMatch = i;
+        qi++;
+      }
+    }
+    if (qi !== q.length) return null;
+    score -= s.length * 0.05; // pénalité pour les chaînes longues
+    return { score, indices };
+  }
+
+  /** Highlight les chars matchés en utilisant les indices (calculés sur la chaîne normalisée). */
+  function highlight(str: string, indices: number[]): string {
+    if (!indices.length) return escapeHtml(str);
+    const idxSet = new Set(indices);
+    let out = '';
+    let inMark = false;
+    for (let i = 0; i < str.length; i++) {
+      const isMatch = idxSet.has(i);
+      if (isMatch && !inMark) { out += '<mark>'; inMark = true; }
+      if (!isMatch && inMark) { out += '</mark>'; inMark = false; }
+      out += escapeHtml(str[i]);
+    }
+    if (inMark) out += '</mark>';
+    return out;
+  }
+
+  function escapeHtml(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+  }
+
+  function filterAndSort(items: CmdkItem[], query: string): Array<CmdkItem & { _indices?: number[]; _score?: number }> {
+    if (!query.trim()) return items;
+    const matched: Array<CmdkItem & { _indices: number[]; _score: number }> = [];
+    for (const item of items) {
+      const m = fuzzy(query, item.label);
+      if (m) matched.push({ ...item, _indices: m.indices, _score: m.score });
+    }
+    matched.sort((a, b) => b._score - a._score);
+    return matched;
+  }
+
+  function groupBySection(items: Array<CmdkItem & { _indices?: number[] }>): Record<string, typeof items> {
+    const groups: Record<string, typeof items> = {};
+    for (const it of items) {
+      (groups[it.section] ??= []).push(it);
+    }
+    return groups;
+  }
+
+  // === Pagefind dynamique (build prod uniquement) ===
+  let pagefindLoader: Promise<{ search: (q: string) => Promise<{ results: Array<{ data: () => Promise<{ url: string; meta: { title: string }; excerpt: string }> }> }> } | null> | null = null;
+
+  function loadPagefind() {
+    if (!pagefindLoader) {
+      pagefindLoader = (async () => {
+        try {
+          // Utilise new Function pour cacher l'import à Vite/Rollup
+          // (Pagefind n'existe qu'au build prod, pas en dev).
+          const dynamicImport = new Function('p', 'return import(p)') as (p: string) => Promise<unknown>;
+          const mod = (await dynamicImport('/pagefind/pagefind.js')) as { search?: unknown };
+          if (mod && typeof mod.search === 'function') return mod as { search: (q: string) => Promise<{ results: Array<{ data: () => Promise<{ url: string; meta: { title: string }; excerpt: string }> }> }> };
+          return null;
+        } catch {
+          return null;
+        }
+      })();
+    }
+    return pagefindLoader;
+  }
+
+  async function fetchPagefind(query: string, items: Array<CmdkItem & { _indices?: number[] }>) {
+    if (!query.trim() || query.trim().length < 2) return [];
+    const pf = await loadPagefind();
+    if (!pf) return [];
+    try {
+      const search = await pf.search(query);
+      const top = search.results.slice(0, 8);
+      const datas = await Promise.all(top.map((r) => r.data()));
+      // Évite les doublons avec les axes/raccourcis déjà listés
+      const known = new Set(items.map((i) => i.href).filter(Boolean));
+      return datas
+        .filter((d) => !known.has(d.url) && !known.has(d.url.replace(/\/$/, '')))
+        .map((d) => ({
+          id: 'pf-' + d.url,
+          icon: '📄',
+          label: d.meta.title || d.url,
+          hint: d.excerpt.replace(/<[^>]+>/g, '').slice(0, 90),
+          href: d.url,
+          section: 'Résultats du contenu',
+        }));
+    } catch { return []; }
+  }
+
+  // === Render ===
+  function renderEmpty(container: HTMLElement) {
+    container.innerHTML = `
+      <div class="cmdk-empty">
+        <span class="cmdk-empty-icon">🔎</span>
+        <div class="cmdk-empty-text">Aucun résultat. Essaye un autre terme.</div>
+      </div>`;
+  }
+
+  function renderItems(
+    container: HTMLElement,
+    grouped: Record<string, Array<CmdkItem & { _indices?: number[] }>>,
+    statusEl: HTMLElement | null
+  ) {
+    container.innerHTML = '';
+    let total = 0;
+    for (const [section, items] of Object.entries(grouped)) {
+      if (!items.length) continue;
+      total += items.length;
+      const sec = document.createElement('div');
+      sec.className = 'cmdk-section';
+      const title = document.createElement('div');
+      title.className = 'cmdk-section-title';
+      title.textContent = section;
+      sec.appendChild(title);
+
+      for (const it of items) {
+        const node = document.createElement(it.href ? 'a' : 'button');
+        node.className = 'cmdk-item';
+        node.setAttribute('role', 'option');
+        if (it.href) (node as HTMLAnchorElement).href = it.href;
+        if (it.action) node.dataset.action = it.action;
+        if (it.href) node.dataset.href = it.href;
+
+        const icon = document.createElement('span');
+        icon.className = 'cmdk-item-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = it.icon;
+        node.appendChild(icon);
+
+        const content = document.createElement('span');
+        content.className = 'cmdk-item-content';
+        const label = document.createElement('span');
+        label.className = 'cmdk-item-label';
+        label.innerHTML = it._indices ? highlight(it.label, it._indices) : escapeHtml(it.label);
+        content.appendChild(label);
+        if (it.hint) {
+          const hint = document.createElement('span');
+          hint.className = 'cmdk-item-hint';
+          hint.textContent = it.hint;
+          content.appendChild(hint);
+        }
+        node.appendChild(content);
+
+        const arrow = document.createElement('span');
+        arrow.className = 'cmdk-item-arrow';
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.textContent = '↵';
+        node.appendChild(arrow);
+
+        sec.appendChild(node);
+      }
+      container.appendChild(sec);
+    }
+    if (total === 0) renderEmpty(container);
+    if (statusEl) statusEl.textContent = total ? `${total} résultat${total > 1 ? 's' : ''}` : '';
+  }
+
+  // === Renderer principal ===
+  let currentSearchToken = 0;
+
+  async function renderResults(container: HTMLElement, query: string, statusEl: HTMLElement | null) {
+    const data = getData();
+    const all = buildAllItems(data);
+    const filtered = filterAndSort(all, query);
+
+    // Section "Récent" — visible seulement quand pas de query
+    let displayItems: Array<CmdkItem & { _indices?: number[] }> = [];
+    if (!query.trim()) {
+      const recents = loadRecents();
+      const recentItems = recents
+        .map((path) => all.find((i) => i.href === path))
+        .filter((x): x is CmdkItem => Boolean(x))
+        .map((it) => ({ ...it, section: 'Récent' }));
+      displayItems = [...recentItems, ...all];
+    } else {
+      displayItems = filtered;
+    }
+
+    const grouped = groupBySection(displayItems);
+    // Ordre des sections
+    const ORDER = ['Actions', 'Récent', 'Raccourcis', 'Axes', 'Résultats du contenu'];
+    const ordered: typeof grouped = {};
+    for (const k of ORDER) if (grouped[k]) ordered[k] = grouped[k];
+    for (const [k, v] of Object.entries(grouped)) if (!ordered[k]) ordered[k] = v;
+
+    renderItems(container, ordered, statusEl);
+
+    // Pagefind asynchrone — n'écrase pas si query a changé
+    if (query.trim().length >= 2) {
+      const token = ++currentSearchToken;
+      const pfResults = await fetchPagefind(query, displayItems);
+      if (token !== currentSearchToken) return;
+      if (pfResults.length) {
+        ordered['Résultats du contenu'] = pfResults;
+        renderItems(container, ordered, statusEl);
+      }
+    } else {
+      currentSearchToken++;
+    }
+  }
+
+  function selectIndex(container: HTMLElement, index: number) {
+    const items = container.querySelectorAll<HTMLElement>('.cmdk-item');
+    if (!items.length) return;
+    const wrapped = ((index % items.length) + items.length) % items.length;
+    items.forEach((el, i) => {
+      const sel = i === wrapped;
+      el.setAttribute('aria-selected', sel ? 'true' : 'false');
+      if (sel) el.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
+  function getSelected(container: HTMLElement): HTMLElement | null {
+    return container.querySelector<HTMLElement>('.cmdk-item[aria-selected="true"]');
+  }
+
+  // === Actions ===
+  function runAction(id: string) {
+    if (id === 'toggle-theme') {
+      const current = document.documentElement.dataset.theme;
+      const next = current === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('starlight-theme', next);
+      document.documentElement.dataset.theme = next;
+      // Sync les radios du ThemeSelect
+      document
+        .querySelectorAll<HTMLInputElement>('starlight-theme-select input[type=radio]')
+        .forEach((r) => { r.checked = r.value === next; });
+    } else if (id === 'reset-progress') {
+      if (confirm('Réinitialiser ta progression ? Cette action est irréversible.')) {
+        localStorage.removeItem('guideProgress');
+        document.dispatchEvent(new CustomEvent('guide-progress-update'));
+      }
+    } else if (id === 'copy-url') {
+      try {
+        navigator.clipboard.writeText(window.location.href);
+      } catch {}
+    }
+  }
+
+  function setupPalette() {
+    const dialogEl = document.getElementById('cmdk-dialog') as HTMLDialogElement | null;
+    const inputEl = document.getElementById('cmdk-input') as HTMLInputElement | null;
+    const resultsEl = document.getElementById('cmdk-results');
+    const trigger = document.getElementById('cmdk-trigger');
+    const statusEl = document.getElementById('cmdk-status');
+    if (!dialogEl || !inputEl || !resultsEl) return;
+    const dialog: HTMLDialogElement = dialogEl;
+    const input: HTMLInputElement = inputEl;
+    const results: HTMLElement = resultsEl;
+
+    function open() {
+      if (dialog.open) return;
+      input.value = '';
+      void renderResults(results, '', statusEl);
+      selectIndex(results, 0);
+      dialog.showModal();
+      requestAnimationFrame(() => input.focus());
+    }
+    function close() {
+      if (!dialog.open) return;
+      dialog.close();
+    }
+
+    if (trigger && !trigger.dataset.bound) {
+      trigger.dataset.bound = '1';
+      trigger.addEventListener('click', open);
+    }
+
+    if (!document.body.dataset.cmdkGlobal) {
+      document.body.dataset.cmdkGlobal = '1';
+
+      document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          if (dialog.open) close();
+          else open();
+        }
+      });
+
+      pushRecent(window.location.pathname);
+      document.addEventListener('astro:page-load', () => {
+        pushRecent(window.location.pathname);
+      });
+    }
+
+    if (input.dataset.bound) return;
+    input.dataset.bound = '1';
+
+    input.addEventListener('input', () => {
+      void renderResults(results, input.value, statusEl);
+      selectIndex(results, 0);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      const items = results.querySelectorAll<HTMLElement>('.cmdk-item');
+      if (!items.length) return;
+      const currentIndex = Array.from(items).findIndex((el) => el.getAttribute('aria-selected') === 'true');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectIndex(results, currentIndex + 1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectIndex(results, currentIndex - 1);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const selected = getSelected(results);
+        if (!selected) return;
+        const action = selected.dataset.action;
+        if (action) {
+          runAction(action);
+          close();
+          return;
+        }
+        const href = selected.dataset.href;
+        if (href) {
+          close();
+          window.location.href = href;
+        }
+      }
+    });
+
+    results.addEventListener('click', (e) => {
+      const item = (e.target as HTMLElement).closest<HTMLElement>('.cmdk-item');
+      if (!item) return;
+      const action = item.dataset.action;
+      if (action) {
+        e.preventDefault();
+        runAction(action);
+        close();
+      } else if (item.dataset.href) {
+        close();
+      }
+    });
+
+    dialog.addEventListener('click', (e) => {
+      if (e.target === dialog) close();
+    });
+  }
+
+  setupPalette();
+  document.addEventListener('astro:page-load', setupPalette);
+</script>

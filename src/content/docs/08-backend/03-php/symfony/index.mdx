@@ -1,0 +1,423 @@
+---
+title: Symfony 7.4 LTS
+description: Le framework PHP de référence en entreprise — bundles, Doctrine, API Platform, Messenger.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../../../components/ObjectiveList.astro';
+import Quiz from '../../../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif** : maîtriser Symfony 7.4 LTS pour des projets long-terme, équipes nombreuses, contextes enterprise.
+
+<ObjectiveList items={[
+  "Comprendre la philosophie Symfony : bundles, services, attributs",
+  "Construire une API REST avec API Platform",
+  "Persister avec Doctrine ORM",
+  "Sécuriser avec security.yaml + LexikJWTAuthenticationBundle",
+  "Mettre en file avec Symfony Messenger",
+  "Tester avec PHPUnit + WebTestCase"
+]} />
+
+## Pourquoi Symfony ?
+
+| Pour | Contre |
+|------|--------|
+| **Modulaire** : chaque feature est un bundle, on prend ce qu'on veut | Verbeux par rapport à Laravel |
+| **Architecture imposée** : meilleur sur les gros projets long-terme | Courbe d'apprentissage plus raide |
+| **API Platform** : génère APIs REST + GraphQL automatiquement | Moins de "magie" → plus de boilerplate |
+| **Composants réutilisables** : 60+ packages, utilisés par Laravel et Drupal | Communauté plus restreinte que Laravel |
+| **Stable** : références officielles dans les administrations, banques | |
+
+**Verdict 2026** : Symfony brille sur les **gros projets enterprise** (banque, assurance, gouvernement, e-commerce massif). Pour un MVP rapide, Laravel reste plus productif.
+
+## Versions 2026
+
+- **Symfony 7.4 LTS** (novembre 2025) — support 3 ans, choix recommandé.
+- **Symfony 8.0** (sortie en parallèle) — premier release de la 8.x.
+
+PHP 8.2+ pour 7.4, **PHP 8.4+ pour 8.0**.
+
+## Installation
+
+```bash
+# Symfony CLI (optionnel mais très pratique)
+curl -sS https://get.symfony.com/cli/installer | bash
+
+# Nouveau projet
+symfony new taskly-symfony --version="7.4.*" --webapp
+cd taskly-symfony
+
+# Démarrer
+symfony server:start
+# https://localhost:8000   ← HTTPS local automatique
+```
+
+L'option `--webapp` ajoute déjà : Twig, Doctrine, Security, Forms, Validator, Messenger, Mailer, etc. Pour une API plus légère, ne mets pas `--webapp` et installe à la demande.
+
+## Structure d'un projet Symfony
+
+```
+taskly-symfony/
+├── bin/console                  ← CLI Symfony (équivalent artisan)
+├── config/
+│   ├── packages/                ← config par bundle
+│   ├── routes.yaml
+│   └── services.yaml
+├── src/
+│   ├── Controller/
+│   ├── Entity/                  ← Doctrine entities
+│   ├── Repository/              ← Doctrine repositories
+│   ├── Form/
+│   ├── Security/
+│   └── Kernel.php
+├── migrations/                   ← Doctrine migrations
+├── templates/                    ← Twig
+├── tests/
+└── .env
+```
+
+## Routing par attributs (PHP 8.0+)
+
+```php
+// src/Controller/TaskController.php
+namespace App\Controller;
+
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\Routing\Attribute\Route;
+
+#[Route('/api/tasks')]
+final class TaskController extends AbstractController
+{
+    #[Route('', methods: ['GET'])]
+    public function list(): JsonResponse
+    {
+        return $this->json(['data' => []]);
+    }
+
+    #[Route('/{id}', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function show(int $id): JsonResponse
+    {
+        return $this->json(['id' => $id]);
+    }
+}
+```
+
+L'attribut `#[Route]` remplace la config YAML/XML (encore supportée si tu préfères).
+
+## Doctrine ORM
+
+```bash
+symfony console make:entity Task
+```
+
+```php
+// src/Entity/Task.php
+namespace App\Entity;
+
+use App\Repository\TaskRepository;
+use Doctrine\ORM\Mapping as ORM;
+
+#[ORM\Entity(repositoryClass: TaskRepository::class)]
+class Task
+{
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column]
+    private ?int $id = null;
+
+    #[ORM\Column(length: 200)]
+    private string $title;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $description = null;
+
+    #[ORM\Column]
+    private bool $done = false;
+
+    #[ORM\Column]
+    private \DateTimeImmutable $createdAt;
+
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(nullable: false)]
+    private User $owner;
+
+    public function __construct() {
+        $this->createdAt = new \DateTimeImmutable();
+    }
+
+    // getters et setters générés
+}
+```
+
+```bash
+symfony console make:migration
+symfony console doctrine:migrations:migrate
+```
+
+### Repository
+
+```php
+// src/Repository/TaskRepository.php
+namespace App\Repository;
+
+use App\Entity\Task;
+use App\Entity\User;
+use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\Persistence\ManagerRegistry;
+
+/** @extends ServiceEntityRepository<Task> */
+class TaskRepository extends ServiceEntityRepository
+{
+    public function __construct(ManagerRegistry $registry)
+    {
+        parent::__construct($registry, Task::class);
+    }
+
+    /** @return Task[] */
+    public function findByOwner(User $owner, int $page = 1, int $limit = 20): array
+    {
+        return $this->createQueryBuilder('t')
+            ->andWhere('t.owner = :owner')
+            ->setParameter('owner', $owner)
+            ->orderBy('t.createdAt', 'DESC')
+            ->setFirstResult(($page - 1) * $limit)
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+}
+```
+
+## API Platform — APIs auto-générées
+
+[API Platform](https://api-platform.com/) est **THE** killer feature Symfony pour les APIs.
+
+```bash
+composer require api
+```
+
+```php
+// src/Entity/Task.php
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Delete;
+
+#[ApiResource(
+    operations: [
+        new GetCollection(),
+        new Get(),
+        new Post(),
+        new Patch(),
+        new Delete(),
+    ],
+    paginationItemsPerPage: 20,
+)]
+class Task { /* ... */ }
+```
+
+→ **5 endpoints REST + GraphQL + OpenAPI auto** générés. Tu obtiens à `/api/docs` une interface Swagger UI gratuite. Filtres, pagination, sérialisation, validation : tout est déclaratif via attributs.
+
+C'est l'équivalent FastAPI côté PHP.
+
+## Validator
+
+```php
+use Symfony\Component\Validator\Constraints as Assert;
+
+class CreateTaskInput
+{
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 1, max: 200)]
+    public string $title;
+
+    #[Assert\Length(max: 2000)]
+    public ?string $description = null;
+}
+```
+
+```php
+// Dans un contrôleur
+public function create(Request $request, ValidatorInterface $validator): JsonResponse
+{
+    $input = $serializer->deserialize($request->getContent(), CreateTaskInput::class, 'json');
+    $errors = $validator->validate($input);
+    if (count($errors) > 0) {
+        return $this->json(['errors' => (string) $errors], 422);
+    }
+    // ...
+}
+```
+
+API Platform fait ça automatiquement quand tu mets les contraintes sur l'entité.
+
+## Sécurité — security.yaml
+
+```yaml
+# config/packages/security.yaml
+security:
+    password_hashers:
+        Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: 'argon2id'
+
+    providers:
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: email
+
+    firewalls:
+        api:
+            pattern: ^/api
+            stateless: true
+            jwt: ~      # via LexikJWTAuthenticationBundle
+
+    access_control:
+        - { path: ^/api/login, roles: PUBLIC_ACCESS }
+        - { path: ^/api,       roles: ROLE_USER }
+```
+
+### JWT avec LexikJWTAuthenticationBundle
+
+```bash
+composer require lexik/jwt-authentication-bundle
+
+# Génération de la paire de clés JWT
+php bin/console lexik:jwt:generate-keypair
+```
+
+Tu obtiens automatiquement les routes `/api/login` (POST email/password → JWT) et la validation du JWT sur les routes `firewalled`.
+
+## Symfony Messenger — queues
+
+```bash
+composer require messenger
+```
+
+```yaml
+# config/packages/messenger.yaml
+framework:
+    messenger:
+        transports:
+            async: '%env(MESSENGER_TRANSPORT_DSN)%'   # ex. doctrine://default ou redis://localhost
+        routing:
+            App\Message\SendWelcomeEmail: async
+```
+
+```php
+// src/Message/SendWelcomeEmail.php
+namespace App\Message;
+
+readonly class SendWelcomeEmail
+{
+    public function __construct(public int $userId) {}
+}
+
+// src/MessageHandler/SendWelcomeEmailHandler.php
+namespace App\MessageHandler;
+
+use App\Message\SendWelcomeEmail;
+use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+
+#[AsMessageHandler]
+class SendWelcomeEmailHandler
+{
+    public function __invoke(SendWelcomeEmail $message): void
+    {
+        // envoyer le mail
+    }
+}
+
+// Dispatch
+$bus->dispatch(new SendWelcomeEmail($userId));
+```
+
+```bash
+php bin/console messenger:consume async -vv
+```
+
+## Tests avec WebTestCase
+
+```php
+// tests/Controller/TaskControllerTest.php
+namespace App\Tests\Controller;
+
+use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+
+class TaskControllerTest extends WebTestCase
+{
+    public function testList(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/tasks');
+
+        $this->assertResponseStatusCodeSame(401);   // sans token
+    }
+
+    public function testListAuthenticated(): void
+    {
+        $client = static::createClient();
+        $user = $this->loginUser($client);
+
+        $client->request('GET', '/api/tasks');
+        $this->assertResponseIsSuccessful();
+    }
+}
+```
+
+```bash
+php bin/phpunit
+```
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu démarres une API REST/GraphQL ambitieuse en Symfony. Quel composant te ferait gagner le plus de temps ?"
+  options={[
+    'Forms component',
+    'API Platform — annote les entités, obtiens 5 endpoints REST + GraphQL + OpenAPI gratuitement',
+    'Twig templates',
+    'Console component'
+  ]}
+  answerIndex={1}
+  explanation="API Platform est LA killer feature Symfony pour les APIs. Annote ton entité avec #[ApiResource], et tu as : 5 routes REST, exposition GraphQL, doc OpenAPI/Swagger UI, filtrage, pagination, sérialisation/validation, gestion d'erreurs HTTP. C'est l'équivalent FastAPI côté PHP."
+/>
+
+<Quiz
+  question="Différence philosophique majeure Laravel vs Symfony ?"
+  options={[
+    'Symfony est plus rapide',
+    'Laravel privilégie productivité + magie (façades, Eloquent), Symfony privilégie modularité explicite (services, DI, attributes). Conséquence : Laravel = livrer vite ; Symfony = projet long-terme avec équipe nombreuse',
+    'Laravel n\'utilise pas Composer',
+    'Aucune différence'
+  ]}
+  answerIndex={1}
+  explanation="C'est l'opposition classique. Laravel : conventions et magie (façades globales, Eloquent active record), pousse à livrer vite. Symfony : injection explicite, services dans un container, services.yaml, attributes — plus verbeux mais plus prévisible sur 5 ans avec 30 devs. Choisir selon le contexte."
+/>
+
+<Quiz
+  question="`config/packages/security.yaml` configure password_hashers à 'argon2id'. Avis ?"
+  options={[
+    'Insuffisant — il faut SHA-256',
+    'Excellent choix — argon2id est l\'algo recommandé en 2026, lent et adaptatif',
+    'Trop lent, préférer MD5',
+    'Cela dépend de la base'
+  ]}
+  answerIndex={1}
+  explanation="argon2id est la recommandation OWASP 2026 pour les hashs de mots de passe. Délibérément lent (~100 ms) pour rendre brute-force économiquement infaisable. SHA-256 ou MD5 ne sont PAS des algos de hash de mots de passe — trop rapides, faciles à brute-forcer sur GPU."
+/>
+
+## Pour aller plus loin
+
+- *Symfony Documentation* — [symfony.com/doc](https://symfony.com/doc/current/index.html)
+- *SymfonyCasts* — [symfonycasts.com](https://symfonycasts.com/) (vidéos premium)
+- *API Platform* — [api-platform.com](https://api-platform.com/)
+- *Awesome Symfony* — [github.com/sl-theory/awesome-symfony](https://github.com/sl-theory/awesome-symfony)
+
+---
+
+Suite : le projet **`taskly-api`** est implémenté en Laravel 12 (référence). Pour faire l'équivalent en Symfony, suis la doc API Platform avec les entités ci-dessus.

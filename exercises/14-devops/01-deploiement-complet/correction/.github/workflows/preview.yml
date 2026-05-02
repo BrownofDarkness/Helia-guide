@@ -1,0 +1,45 @@
+name: PR Preview
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+concurrency:
+  group: preview-${{ github.event.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  deploy:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy preview app
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          APP="taskly-api-pr-${{ github.event.number }}"
+          flyctl apps create "$APP" --org ${{ vars.FLY_ORG }} || true
+          flyctl deploy --app "$APP" --remote-only --strategy immediate
+          echo "URL=https://$APP.fly.dev" >> $GITHUB_ENV
+
+      - uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          message: |
+            🚀 Preview déployée : ${{ env.URL }}
+
+            ⚠️ Cette app sera détruite à la fermeture de la PR.
+
+  destroy:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl apps destroy "taskly-api-pr-${{ github.event.number }}" --yes
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -1,0 +1,68 @@
+---
+/**
+ * Composant Pitfall — encadré « Piège réel rencontré ».
+ *
+ * Capture un vrai bug rencontré en travaillant sur le guide ou un projet,
+ * sous forme structurée : symptôme · cause · fix · leçon.
+ *
+ * Replié par défaut pour ne pas surcharger la page. Cliquable pour déplier.
+ *
+ * Usage avec slots (MDX) :
+ *
+ *   <Pitfall title="Zod 4 vs @hono/zod-validator" category="deps" axe="6.4">
+ *     **🩹 Symptôme**
+ *     ...
+ *     **🔍 Cause**
+ *     ...
+ *     **🩺 Fix**
+ *     ...
+ *     **🧠 Leçon**
+ *     ...
+ *   </Pitfall>
+ *
+ * Le composant ne sépare pas les 4 sections via des slots nommés (ce serait
+ * lourd en MDX). Convention : utiliser **🩹 Symptôme**, **🔍 Cause**,
+ * **🩺 Fix**, **🧠 Leçon** comme paragraphes en gras dans le contenu.
+ */
+
+interface Props {
+  /** Titre court — ce que tu vois comme erreur */
+  title: string;
+  /** Catégorie pour le filtrage : deps, build, auth, security, tests, perf, env */
+  category?: string;
+  /** Sous-axe lié, ex: "8.0" — sert au filtrage de la page agrégée */
+  axe?: string;
+  /** Si true, ouvert par défaut (au lieu de replié) */
+  open?: boolean;
+}
+
+const { title, category, axe, open = false } = Astro.props;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  deps: 'Dépendances',
+  build: 'Build / Native',
+  auth: 'Auth',
+  security: 'Sécurité',
+  tests: 'Tests',
+  perf: 'Performance',
+  a11y: 'Accessibilité',
+  env: 'Env / config',
+  cors: 'CORS',
+  db: 'Base de données',
+};
+---
+
+<details class="pitfall" data-axe={axe} data-category={category} open={open}>
+  <summary class="pitfall-summary">
+    <span class="pitfall-icon" aria-hidden="true">🪤</span>
+    <span class="pitfall-title">
+      <strong>Piège réel rencontré</strong> — {title}
+    </span>
+    {category && (
+      <span class="pitfall-tag">{CATEGORY_LABELS[category] ?? category}</span>
+    )}
+  </summary>
+  <div class="pitfall-body">
+    <slot />
+  </div>
+</details>

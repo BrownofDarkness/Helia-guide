@@ -1,0 +1,76 @@
+---
+title: Axe 10 — BaaS & services managés
+description: Firebase, Supabase, Clerk, Stripe… savoir quand déléguer le backend pour livrer plus vite.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : composer une application moderne en assemblant des services managés, et reconnaître quand revenir à un backend custom.
+
+## Prérequis
+
+Axes 7 (frontend) et 8 (backend, au moins partiellement) pour comprendre ce qu'on délègue.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Construire un MVP complet avec un BaaS en moins d'un week-end",
+  "Comparer Firebase, Supabase, Appwrite, Pocketbase et choisir le bon",
+  "Composer plusieurs services (auth + paiement + email + analytics)",
+  "Écrire des règles de sécurité (RLS PostgreSQL, Firestore Rules)",
+  "Identifier le moment où migrer vers un backend custom"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="10.1 — Plateformes BaaS complètes"
+    href="/10-baas/01-plateformes/"
+    description="Firebase, Supabase, Appwrite, AWS Amplify, Pocketbase — comparaison détaillée."
+  />
+  <LinkCard
+    title="10.2 — Services spécialisés"
+    href="/10-baas/02-services-specialises/"
+    description="Clerk, Stripe, Resend, PostHog, Sentry, Algolia, Sanity — composer son backend."
+  />
+  <LinkCard
+    title="10.3 — Plateformes serverless / edge"
+    href="/10-baas/03-serverless-edge/"
+    description="Vercel, Netlify, Cloudflare Workers, Render, Fly.io, AWS Lambda."
+  />
+  <LinkCard
+    title="10.4 — Patrons d'intégration"
+    href="/10-baas/04-patrons/"
+    description="JAMstack, Backend-for-Frontend, edge functions, migration BaaS → custom."
+  />
+  <LinkCard
+    title="10.5 — Sécurité dans un BaaS"
+    href="/10-baas/05-securite/"
+    description="Row-Level Security Postgres, Firestore Rules, App Check, gestion clés API."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Tasky Pro — SaaS minimal en un week-end** — un SaaS complet déployé en < 16 h de travail effectif. Next.js 16 + Clerk (auth) + Stripe (paiement signed webhooks) + Supabase (DB + RLS) + Resend (email transactionnel), déployé sur Vercel. **Coût d'un MVP : 0 €/mois** jusqu'à atteindre certains seuils.
+
+<ExerciseDownload
+  axe="10-baas"
+  slug="01-saas-minimal"
+  title="Tasky Pro — SaaS Next.js avec 5 BaaS intégrés"
+  description="Pré-requis : 6 comptes (Clerk + Stripe + Supabase + Resend + Vercel + GitHub — tous gratuits) + Node ≥ 20. Le canevas a 3 routes API à compléter (checkout, webhook Stripe, webhook Clerk) — le reste du scaffold (UI, lib clients lazy, middleware) est fourni. La correction explique chaque pattern subtil : webhooks signés, RLS, idempotence par upsert."
+/>
+
+## Ressources clés
+
+- *Supabase Docs* — [supabase.com/docs](https://supabase.com/docs)
+- *Firebase Docs* — [firebase.google.com/docs](https://firebase.google.com/docs)
+- *Clerk Docs* — [clerk.com/docs](https://clerk.com/docs)
+- *Stripe Docs* — [stripe.com/docs](https://stripe.com/docs)
+- *Vercel Docs* — [vercel.com/docs](https://vercel.com/docs)
+- *Indie Hackers* — [indiehackers.com](https://www.indiehackers.com/) — études de cas

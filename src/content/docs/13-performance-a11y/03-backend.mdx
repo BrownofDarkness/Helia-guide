@@ -1,0 +1,456 @@
+---
+title: 13.3 — Optimisations backend
+description: Profiling, caching multi-niveaux, requêtes SQL, N+1, indexes, connection pooling, BullMQ, débit et latence.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : faire passer un endpoint de 800 ms à 50 ms. Profiler, lire un EXPLAIN, installer un cache au bon niveau, éliminer les N+1 — chaque étape divise par 2 ou 5.
+
+<ObjectiveList items={[
+  "Profiler une requête lente (CPU, mémoire, DB) et identifier le bottleneck",
+  "Lire un EXPLAIN ANALYZE PostgreSQL et créer le bon index",
+  "Détecter et éliminer le N+1 query problem",
+  "Choisir entre cache HTTP, cache applicatif (Redis) et cache DB",
+  "Configurer connection pooling et back-pressure"
+]} />
+
+<Level value="confirmé" reading="11 min" prereq="axes 5-9 lus" />
+
+
+## La hiérarchie de la lenteur backend
+
+Quand un endpoint est lent, la cause est **presque toujours** dans cet ordre :
+
+```
+1. Requête DB lente (manque d'index, N+1, scan séquentiel)
+2. Trop de requêtes (chacune rapide, mais 50 d'affilée)
+3. Calcul CPU (sérialisation JSON, parsing, hash, image)
+4. Appel externe lent (API tierce, S3, file)
+5. Lock / contention (mutex, DB row lock, single thread Node)
+6. Garbage collection (rare, mais visible en P99)
+```
+
+**Toujours profiler avant** d'optimiser. Sans profiling, tu vas optimiser le 4e poste alors que c'est le 1er qui plombe.
+
+---
+
+## Profiling — voir où va le temps
+
+### Mesurer un endpoint en bout-en-bout
+
+```ts
+// Hono — logger natif
+import { logger } from 'hono/logger';
+app.use('*', logger());
+
+// Plus précis : timing par étape
+app.get('/dashboard', async (c) => {
+  console.time('total');
+  console.time('db');
+  const data = await db.query(...);
+  console.timeEnd('db');
+
+  console.time('serialize');
+  const json = JSON.stringify(data);
+  console.timeEnd('serialize');
+  console.timeEnd('total');
+  return c.text(json);
+});
+```
+
+### Tracing distribué (production)
+
+En production, OpenTelemetry est devenu le standard :
+
+```ts
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+
+new NodeSDK({
+  instrumentations: [getNodeAutoInstrumentations()],
+  // exporte vers Datadog / Honeycomb / Tempo / Jaeger
+}).start();
+```
+
+Tu obtiens automatiquement :
+
+```
+GET /dashboard         (842 ms)
+├─ db.query (users)    (12 ms)
+├─ db.query (orders)   (610 ms)  ← gros suspect
+├─ http.fetch stripe   (98 ms)
+└─ json.stringify      (122 ms)  ← surprise !
+```
+
+### Profiling CPU — `--inspect` & `0x`
+
+Pour un goulot CPU :
+
+```bash
+node --inspect-brk server.js   # ouvrir Chrome DevTools, onglet Profiler
+# ou
+npx 0x server.js                # flame graph côté terminal
+```
+
+---
+
+## Requêtes DB — le premier suspect
+
+### EXPLAIN ANALYZE — ton meilleur ami
+
+```sql
+EXPLAIN ANALYZE
+SELECT u.id, COUNT(o.id)
+FROM users u
+LEFT JOIN orders o ON o.user_id = u.id
+WHERE u.country = 'FR'
+GROUP BY u.id;
+```
+
+Lecture du plan :
+
+| Opérateur | Bon | Mauvais |
+|-----------|-----|---------|
+| `Index Scan` / `Index Only Scan` | ✅ | |
+| `Seq Scan` | sur petite table OK | sur grande = catastrophe |
+| `Hash Join` | ✅ pour gros joins | |
+| `Nested Loop` | ✅ pour petits joins | catastrophe sur gros |
+| `Sort` | ✅ si petit | mauvais si > work_mem (spill disque) |
+| `Bitmap Heap Scan` | OK | |
+
+### Indexes — quoi, où, quand
+
+```sql
+-- Index simple
+CREATE INDEX ON orders (user_id);
+
+-- Index composite : ordre des colonnes IMPORTE
+CREATE INDEX ON orders (user_id, status, created_at);
+-- Utile pour : WHERE user_id = ? AND status = ?
+-- Inutile pour : WHERE status = ?      (la première colonne manque)
+
+-- Index partiel
+CREATE INDEX ON orders (user_id) WHERE status = 'pending';
+
+-- Index couvrant (PostgreSQL)
+CREATE INDEX ON orders (user_id) INCLUDE (total, created_at);
+-- Permet un Index Only Scan : pas besoin de toucher la table
+```
+
+**Règles** :
+
+1. Index sur les colonnes de `WHERE`, `JOIN`, `ORDER BY`.
+2. Pas trop : chaque index ralentit les `INSERT/UPDATE`.
+3. Surveille les `pg_stat_user_indexes` pour les indexes jamais utilisés.
+
+<Aside type="tip" title="Trouver les requêtes lentes">
+PostgreSQL — active `pg_stat_statements` :
+
+```sql
+SELECT query, mean_exec_time, calls
+FROM pg_stat_statements
+ORDER BY mean_exec_time DESC LIMIT 10;
+```
+
+Côté Prisma : log slow queries via `event` ; côté Drizzle : middleware ; côté Mongo : profiler.
+</Aside>
+
+---
+
+## Le N+1 problem
+
+L'erreur la plus coûteuse en ORM. Une requête « parente » + N requêtes « filles » :
+
+```ts
+// ❌ N+1 : 1 + 100 = 101 requêtes
+const posts = await db.posts.findMany();
+for (const post of posts) {
+  post.author = await db.users.findUnique({ where: { id: post.authorId } });
+}
+
+// ✅ Eager loading : 1 ou 2 requêtes
+const posts = await db.posts.findMany({ include: { author: true } });
+
+// ✅ Drizzle equivalent : with
+const posts = await db.query.posts.findMany({ with: { author: true } });
+
+// ✅ Variante DataLoader (GraphQL ou batch manuel)
+const userLoader = new DataLoader(async (ids) =>
+  db.users.findMany({ where: { id: { in: ids } } }));
+```
+
+Détection automatique :
+
+| Outil | Stack |
+|-------|-------|
+| **Prisma metrics** + middleware | Prisma 7 |
+| **Bullet** | Rails / Django |
+| **n-plus-one-detector** | Node |
+| **OpenTelemetry traces** (visuellement) | toutes |
+
+---
+
+## Caching — les bons étages
+
+```
+Browser → CDN/Edge → Reverse proxy → Application cache → Database cache
+```
+
+Plus on cache **tôt** (gauche), moins on travaille. Mais plus c'est dur à invalider.
+
+### Cache HTTP (revoir 13.2)
+
+`Cache-Control: stale-while-revalidate` est ton ami pour les API publiques.
+
+### Cache applicatif — Redis / KeyDB / Memcached
+
+Idéal pour les données coûteuses à calculer mais peu changeantes :
+
+```ts
+import { Redis } from 'ioredis';
+const redis = new Redis(process.env.REDIS_URL!);
+
+async function getPopularPosts() {
+  const cached = await redis.get('popular_posts');
+  if (cached) return JSON.parse(cached);
+
+  const data = await db.posts.findMany({ /* requête lourde */ });
+  await redis.set('popular_posts', JSON.stringify(data), 'EX', 300); // TTL 5 min
+  return data;
+}
+```
+
+### Patterns d'invalidation
+
+| Pattern | Quand | Difficulté |
+|---------|-------|------------|
+| **TTL fixe** | Données peu critiques (top posts, stats) | ⭐ |
+| **Write-through** | Update écrit en DB + cache | ⭐⭐ |
+| **Write-behind** | Update au cache, flush async vers DB | ⭐⭐⭐ |
+| **Cache-aside** + invalidation par tag | App Next.js, complexité moyenne | ⭐⭐ |
+| **Stale-while-revalidate** | API publiques | ⭐⭐ |
+
+<Aside type="caution" title="Le piège du cache">
+> *« Il n'y a que deux problèmes difficiles en informatique : l'invalidation de cache et le nommage des variables. »* — Phil Karlton
+
+Avant de mettre un cache : peux-tu **rendre la requête plus rapide à la source** ? Un index bien placé > un cache mal invalidé.
+</Aside>
+
+### Cache local (in-process) — quand ?
+
+```ts
+import { LRUCache } from 'lru-cache';
+const cache = new LRUCache({ max: 1000, ttl: 60_000 });
+```
+
+Bon pour :
+
+- Données ultra-chaudes lues 1000×/s.
+- Évite l'aller-retour Redis (~1 ms) pour les hot paths.
+
+Mauvais pour :
+
+- Multi-instances (chaque pod a son cache → divergence).
+- Charge importante en mémoire.
+
+---
+
+## Connection pooling
+
+Sans pool : chaque requête ouvre une connexion (TCP + TLS + auth) → ~50-100 ms gaspillés. Avec pool : pré-ouvertes, réutilisées.
+
+```ts
+// node-postgres
+import { Pool } from 'pg';
+const pool = new Pool({
+  max: 20,                    // connexions simultanées
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 2_000,
+});
+```
+
+| Stack | Pool standard |
+|-------|---------------|
+| Postgres + Node | `pg.Pool`, Drizzle/Prisma le gèrent en interne |
+| MySQL | `mysql2/promise.createPool` |
+| Postgres serverless | **PgBouncer** ou **Neon** / **Supabase pooler** ou Prisma Accelerate |
+
+<Aside type="caution" title="Serverless + Postgres — le piège">
+Sur Vercel / AWS Lambda, chaque cold start ouvre une connexion. À 1000 lambdas concurrents : 1000 connexions → ta DB s'écroule.
+
+Solutions 2026 :
+- **Neon serverless driver** (HTTP, pas de TCP).
+- **PgBouncer** transaction-mode devant Postgres.
+- **Prisma Accelerate** ou **Supabase pooler**.
+- **Drizzle + HTTP driver** (`@vercel/postgres`).
+</Aside>
+
+---
+
+## File d'attente — découpler synchrone/asynchrone
+
+Tout ce qui n'a pas besoin d'être fait **dans la requête HTTP** doit en sortir.
+
+| Tâche | Faire en sync ? | Solution async |
+|-------|-----------------|----------------|
+| Renvoyer les données du dashboard | ✅ | — |
+| Envoyer un email de confirmation | ❌ | BullMQ / Inngest / Trigger.dev |
+| Générer une vignette PDF | ❌ | Worker + S3 |
+| Mettre à jour un index Algolia | ❌ | webhook + queue |
+| Logger un événement | ❌ | non-bloquant |
+
+```ts
+// BullMQ
+import { Queue } from 'bullmq';
+const emailQueue = new Queue('email', { connection: redis });
+
+// dans le handler HTTP — retour immédiat
+await emailQueue.add('confirm', { userId, orderId });
+return c.json({ ok: true });
+
+// dans un worker séparé (autre process)
+new Worker('email', async (job) => {
+  await sendEmail(job.data);
+}, { connection: redis });
+```
+
+L'utilisateur reçoit sa réponse en 50 ms au lieu d'attendre 1,2 s d'envoi SMTP.
+
+---
+
+## Sérialisation — le coût caché
+
+`JSON.stringify` sur 500 KB peut prendre **80-150 ms** sur le main thread (single-thread Node).
+
+Leviers :
+
+1. **Streamer** la réponse au lieu de la matérialiser entière.
+2. **Pagination** : retourne 50 items, pas 5000.
+3. **`undici`** pour les fetch (plus rapide que node-fetch).
+4. **DTO** dédié : ne sérialise pas les colonnes inutiles.
+
+```ts
+// Pagination cursor (mieux que offset pour les grosses tables)
+const items = await db.posts.findMany({
+  take: 50,
+  ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+  orderBy: { id: 'desc' },
+});
+```
+
+---
+
+## Concurrence et back-pressure
+
+Node.js est **single-threaded**. Un calcul CPU bloquant bloque **tous** les utilisateurs.
+
+| Solution | Quand |
+|----------|-------|
+| **Worker Threads** | Calcul CPU lourd dans le même process |
+| **Cluster / PM2** | Multi-cœurs |
+| **Service séparé** (Python, Rust, Go) | Vraiment lourd ou spécialisé (ML, image) |
+| **Queue externe** | Découplage temporel (mieux) |
+
+Back-pressure : si tu reçois plus de requêtes que tu peux traiter, **rate-limite** plutôt que de tomber.
+
+```ts
+import { rateLimit } from 'hono/rate-limiter';
+app.use('/api/*', rateLimit({ windowMs: 60_000, limit: 100 }));
+```
+
+---
+
+## Cas d'école — d'un endpoint à 1,4 s à 80 ms
+
+Endpoint `/dashboard` qui retourne stats utilisateur. Profiling initial :
+
+```
+GET /dashboard            (1420 ms)
+├─ db.users.findOne       (8 ms)
+├─ db.orders.findMany     (12 ms)
+├─ for (order in orders): (1180 ms)
+│  └─ db.products.find    (~12 ms × 90 = 1080 ms)   ← N+1
+├─ json.stringify         (180 ms)                   ← gros payload
+└─ ...                    (40 ms)
+```
+
+Plan d'action :
+
+1. **Eager loading** des produits → 1 requête au lieu de 90 → **-1 060 ms**.
+2. **Cache Redis** (TTL 60 s) pour les utilisateurs avec activité < 1/min → **-200 ms** sur les hits.
+3. **Pagination** des derniers ordres (top 20) → JSON 4× plus petit → **-130 ms** sérialisation.
+4. **Index** `orders(user_id, created_at DESC)` → la requête tombe à 4 ms.
+
+Résultat : **80 ms p50, 200 ms p95**. Pas de magie, juste les bons leviers dans le bon ordre.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu as un endpoint à 600 ms. Tu n'as pas profilé. Que fais-tu en premier ?"
+  options={[
+    'Mettre un cache Redis devant tout',
+    'Profiler l\'endpoint pour identifier le bottleneck (DB ? CPU ? appel externe ?)',
+    'Augmenter la taille du serveur',
+    'Migrer en Rust'
+  ]}
+  answerIndex={1}
+  explanation="Toujours mesurer avant. Si le bottleneck est une requête DB, le cache aide. Si c'est un JSON.stringify géant, le cache n'aide pas. Sans profil, tu optimises au hasard."
+/>
+
+<Quiz
+  question="Tu vois 100 requêtes SELECT consécutives dans une trace OpenTelemetry pour un même endpoint. Que fais-tu ?"
+  options={[
+    'Augmenter la connection pool',
+    'Identifier le N+1 et utiliser eager loading (`include` / `with`) ou DataLoader',
+    'Activer Brotli',
+    'Migrer en NoSQL'
+  ]}
+  answerIndex={1}
+  explanation="C'est un N+1 typique. Eager loading collapsera ces 100 requêtes en 1 ou 2 (avec un IN). DataLoader fait la même chose en batchant à la volée. Le pool ne change pas le nombre total de requêtes, juste leur parallélisme."
+/>
+
+<Quiz
+  question="Tu déploies sur Vercel (serverless) avec Postgres. À forte charge, tu vois `too many connections`. Quelle est la cause profonde ?"
+  options={[
+    'Le code est buggé',
+    'Chaque lambda ouvre sa connexion ; il faut un pooler externe (PgBouncer, Neon serverless driver, Prisma Accelerate)',
+    'Postgres ne supporte pas le serverless',
+    'Augmenter max_connections sur Postgres'
+  ]}
+  answerIndex={1}
+  explanation="Serverless + connexions persistantes ne se marient pas. Un pooler en mode transaction permet de partager peu de connexions Postgres entre beaucoup de lambdas. Augmenter max_connections retarde le problème mais consomme énormément de RAM côté Postgres."
+/>
+
+<Quiz
+  question="Tu envoies un email de confirmation dans le handler `POST /orders`. La requête prend 1,8 s, la commande est correctement créée. Comment améliorer ?"
+  options={[
+    'Optimiser la requête SQL',
+    'Pousser l\'envoi d\'email dans une queue (BullMQ, Inngest) et répondre tout de suite — l\'email part en async',
+    'Cacher l\'email côté Redis',
+    'Utiliser un autre fournisseur SMTP'
+  ]}
+  answerIndex={1}
+  explanation="L'utilisateur n'a pas besoin que l'email soit envoyé pour considérer la commande comme passée. Pousser dans une queue et répondre immédiatement réduit la requête HTTP à ~50 ms. La queue gère ensuite les retries et la résilience SMTP."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Use The Index, Luke* — [use-the-index-luke.com](https://use-the-index-luke.com/) — bible des indexes SQL
+- *PostgreSQL EXPLAIN* — [explain.dalibo.com](https://explain.dalibo.com/) — visualise les plans
+- *High Performance Browser Networking* — Ilya Grigorik (côté réseau)
+- *Designing Data-Intensive Applications* — Martin Kleppmann
+- *OpenTelemetry* — [opentelemetry.io](https://opentelemetry.io/)
+
+---
+
+**Suite** : [13.4 — Accessibilité avancée](/13-performance-a11y/04-accessibilite/) pour livrer des apps utilisables par tout le monde.

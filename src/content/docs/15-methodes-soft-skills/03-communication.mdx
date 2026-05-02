@@ -1,0 +1,451 @@
+---
+title: 15.3 — Communication & collaboration
+description: RFC, ADR, post-mortem, code review, pair / mob programming, feedback constructif, asynchrone par défaut, réunions justifiées.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : devenir le coéquipier que les autres veulent dans leur équipe. Communiquer en async par défaut, écrire pour être lu, donner du feedback qui aide, dire non quand c'est nécessaire — sans abîmer la relation.
+
+<ObjectiveList items={[
+  "Rédiger un RFC, un ADR, un post-mortem suivant des templates éprouvés",
+  "Donner un feedback de code review respectueux et utile (Conventional Comments)",
+  "Pratiquer le pair / mob programming — quand et comment",
+  "Adopter l'asynchrone par défaut, défendre ton focus sans nuire à l'équipe",
+  "Identifier quand une réunion est justifiée — et la rendre productive"
+]} />
+
+<Level value="confirmé" reading="13 min" prereq="aucun prérequis technique" />
+
+
+## Async par défaut, sync quand justifié
+
+> *« Si la réunion peut être un message, c'est un message. »* — devise des équipes distribuées matures
+
+| Format | Coût | Quand l'utiliser |
+|--------|------|------------------|
+| **Doc / RFC / ADR** | 0 interruption | Décisions structurantes, contexte durable |
+| **Slack message** | Faible | Question rapide, partage info |
+| **Slack thread** | Faible | Discussion ciblée |
+| **Loom / vidéo async** | Moyenne | Démo, walkthrough complexe |
+| **Réunion 1:1** | Forte | Feedback humain, conflit, mentorship |
+| **Réunion d'équipe** | Très forte | Décision urgente nécessitant discussion live |
+
+**Règles** :
+
+- Une question fermée → message Slack.
+- Une question ouverte → thread.
+- Plus de 5 ping-pong dans un thread → escaler en 15 min de call.
+- Décision impactant > 3 personnes → écrire un RFC.
+
+---
+
+## RFC — Request For Comments
+
+Un **RFC** est un document court qui propose une décision technique ou organisationnelle. Format pratiqué chez Cloudflare, Stripe, Vercel, etc.
+
+### Quand écrire un RFC
+
+- Choix structurant : *« Migrer de REST vers GraphQL »*
+- Nouvelle architecture : *« Multi-tenancy par schéma Postgres »*
+- Convention d'équipe : *« Adopter Conventional Commits »*
+- Refactor non-trivial : *« Découper le monolithe en 3 services »*
+
+### Template RFC
+
+```markdown
+# RFC-001 — <titre>
+
+**Auteur** : @nom
+**Date** : YYYY-MM-DD
+**Statut** : draft / under review / accepted / rejected / superseded by RFC-N
+
+## Contexte
+Quel problème on résout. Pourquoi maintenant.
+Lien vers tickets / incidents / docs pertinents.
+
+## Proposition
+Ce qu'on veut faire. En clair.
+
+## Alternatives envisagées
+| Alternative | Avantages | Inconvénients |
+|-------------|-----------|---------------|
+| Option A    | …         | …             |
+| Option B    | …         | …             |
+| Statu quo   | …         | …             |
+
+## Risques et coûts
+- Migration : ~ X jours
+- Risque Y : mitigation Z
+
+## Plan d'exécution
+1. Phase 1 (sem 1-2) — …
+2. Phase 2 (sem 3-4) — …
+3. Phase 3 (sem 5+) — …
+
+## Métriques de succès
+- Avant : X
+- Cible : Y
+- Comment on mesure : …
+
+## Décision finale
+À remplir une fois les commentaires intégrés.
+```
+
+### Workflow
+
+1. **Rédige** en draft, partage en lecture, **3-7 jours** de feedback async.
+2. **Itère** sur les commentaires.
+3. **Sync** de 30 min si conflit non résolu en async.
+4. **Décide** explicitement (statut → accepted/rejected).
+5. **Implémente**.
+
+> Garde tes RFC dans le repo (`docs/rfcs/`). Versionnés, recherchables, exécutables comme code.
+
+---
+
+## ADR — Architecture Decision Record
+
+Un **ADR** est un mini-document qui capture **une décision** d'architecture, son contexte, et ses conséquences. Plus court qu'un RFC.
+
+### Pourquoi des ADR
+
+> *« Pourquoi diable est-ce qu'on utilise PostgreSQL au lieu de MongoDB pour ce service ? »*
+
+3 ans plus tard, plus personne ne sait. L'ADR le **fige** au moment de la décision.
+
+### Template ADR (Michael Nygard)
+
+```markdown
+# ADR-014 — Choix de PostgreSQL pour les commandes
+
+**Date** : 2026-04-30
+**Statut** : accepté
+**Décideurs** : @alice (lead), @bob, @carol
+
+## Contexte
+On stocke des commandes avec relations vers users, products, payments.
+Volumétrie attendue : 100k commandes/jour, ACID requis.
+
+## Décision
+On utilise PostgreSQL 17.
+
+## Conséquences
+
+### Positives
+- Transactions ACID natives
+- Joins riches sur relations users/products/payments
+- pgvector si on veut l'embedding produit plus tard
+- Équipe déjà habituée
+
+### Négatives
+- Scale vertical principalement, sharding lourd
+- Pas de stockage key-value performant : pour le panier (volatile),
+  on utilisera Redis en complément
+
+### Alternatives écartées
+- **MongoDB** — relations complexes pas son fort
+- **DynamoDB** — vendor lock AWS, pas de joins
+- **MySQL** — JSON moins puissant, pas pgvector
+```
+
+ADR vs RFC :
+
+- **ADR** : décision **prise**, un fait historique. Court (1 page).
+- **RFC** : décision **à prendre**, on cherche du feedback.
+
+Un RFC accepté **devient** un ADR. Beaucoup d'équipes utilisent **uniquement des ADR** : décision prise, capturée, terminée.
+
+---
+
+## Post-mortems
+
+Couvert en détail dans [14.6 Fiabilité](/14-devops/06-fiabilite/). Trois piliers :
+
+1. **Blameless** — pas de chasse aux sorcières.
+2. **Sous 7 jours** — la mémoire s'efface vite.
+3. **Actions concrètes** avec owner et deadline.
+
+> Une équipe dont les post-mortems n'aboutissent à aucune action mérite ses incidents répétés.
+
+---
+
+## Code review — l'art de relire
+
+### Pourquoi c'est critique
+
+| Bénéfice | Effet |
+|----------|-------|
+| **Qualité** | Détecte bugs, mauvaises décisions |
+| **Apprentissage** | Tout le monde apprend du code des autres |
+| **Diffusion connaissance** | Personne n'est seul à connaître X |
+| **Conformité** | Trace audit, GDPR, sécurité |
+| **Cohérence** | Le code reste lisible par tous |
+
+### Conventional Comments
+
+[Conventional Comments](https://conventionalcomments.org/) propose une nomenclature simple :
+
+| Préfixe | Sens |
+|---------|------|
+| `praise:` | Souligner ce qui est bien — facile, à faire ! |
+| `nitpick:` | Détail mineur, pas bloquant |
+| `suggestion:` | Proposition d'amélioration |
+| `issue:` | Problème à corriger |
+| `question:` | Demande de clarification |
+| `thought:` | Réflexion sans demande d'action |
+| `chore:` | Tâche annexe à faire (typo, format) |
+| `note:` | Information utile |
+
+```markdown
+nitpick: pourrais-tu utiliser `const` plutôt que `let` ici ?
+
+suggestion (non-blocking): on pourrait extraire ça dans un util.
+
+issue (blocking): la requête n'est pas paramétrée — SQL injection.
+
+praise: jolie utilisation du pattern observer ici 🙂
+```
+
+### Bonnes pratiques
+
+| Règle | Pourquoi |
+|-------|----------|
+| Review **dans la journée** | Au-delà, le contexte se perd, l'auteur change de tâche |
+| Mentionner **ce qui est bien** | Pas que du négatif. Crée la sécurité psychologique |
+| **Préciser ce qui bloque** | « issue blocking » vs « suggestion non blocking » |
+| **Justifier** les remarques | Pas « c'est mal » mais « risque X parce que Y » |
+| **Question avant accusation** | « Pourquoi cette approche ? » > « Pourquoi tu as fait ça ? » |
+| Limiter à **400 lignes** par PR | Au-delà, la review devient superficielle |
+| Approuver quand satisfait | Pas de chichis, ne traîne pas |
+| Auteur = répondre à **chaque commentaire** | Même par « bon point, je change » |
+
+### Anti-patterns
+
+- **« LGTM 👍 »** sans avoir lu → fausse review.
+- **Review dictatoriale** : imposer son style sans justification.
+- **Bikeshedding** sur le formatage (Prettier / Biome règle ça).
+- **Demander 30 changements** sur une PR de 50 lignes → l'auteur abandonne.
+- **PR de 2000 lignes** → splitter en 5.
+
+### Auteur de la PR — qualité de soumission
+
+```markdown
+## Description
+Ajoute le rate-limit sur /auth/login (5 req/min/IP).
+Lié à #1234, RFC-027.
+
+## Comment tester
+1. `npm run dev`
+2. `for i in {1..10}; do curl -X POST http://localhost:3000/auth/login -d '{}'; done`
+3. À partir du 6ème : 429 Too Many Requests.
+
+## Captures
+[screenshot Postman]
+
+## Checklist
+- [x] Tests ajoutés
+- [x] Doc OpenAPI à jour
+- [x] Pas de breaking change
+```
+
+Plus la PR est **expliquée**, plus la review est rapide et bonne.
+
+---
+
+## Pair programming
+
+Deux dev sur un clavier. Pas une heure perdue — un investissement.
+
+### Modes
+
+| Mode | Comment |
+|------|---------|
+| **Driver / Navigator** | Driver tape, navigator pense plus loin. Permutation toutes les 15-25 min |
+| **Ping-pong** (TDD) | A écrit le test rouge, B le fait passer, B écrit le test suivant, A le fait passer |
+| **Strong-style** | Le navigator décide, le driver tape. Interdit de toucher le clavier sans l'avis du navigator |
+
+### Quand le pratiquer
+
+| Situation | Bénéfice |
+|-----------|----------|
+| **Onboarding** d'un nouveau | Diffusion rapide du contexte |
+| **Bug épineux** | 4 yeux > 2 yeux |
+| **Feature critique** | Sécurité psychologique + qualité |
+| **Code review en live** | Évite l'asynchrone douloureux |
+| **Pas pour** : tâches triviales, exploration solo | Coût disproportionné |
+
+### Mob programming
+
+3+ personnes sur un même problème. Plus rare, **excellent** sur :
+
+- Architecture nouvelle (alignement immédiat).
+- Bug critique en prod.
+- Onboarding d'un projet complexe.
+
+Coût élevé (3 personnes × 2h = 6h/personne). À doser.
+
+---
+
+## Feedback — donner et recevoir
+
+### SBI — Situation, Behavior, Impact
+
+Pour donner un feedback **factuel** :
+
+> **Situation** : « Hier en standup… »
+> **Behavior** : « Quand tu as dit "non, c'est faux" sur la suggestion de Marie… »
+> **Impact** : « …Marie n'a plus parlé du sprint, ce qui nous a privé de son input. »
+
+Évite : *« Tu es agressif »* (jugement de personnalité, indéfendable).
+Préfère : décrire le **comportement observable**, l'**impact mesurable**.
+
+### Recevoir — discipline difficile
+
+Le feedback est un **cadeau**. Discipline :
+
+1. **Écouter** entièrement avant de répondre.
+2. **Demander** des exemples concrets (« peux-tu me donner un cas ? »).
+3. **Reformuler** pour vérifier la compréhension.
+4. **Remercier** — même si tu n'es pas d'accord.
+5. **Décider** : intégrer / négocier / écarter explicitement.
+
+> Un dev qui ne **demande jamais** de feedback se prive de progression. Une habitude saine : *« 1 truc que j'ai bien fait sur cette PR, 1 truc que j'aurais pu mieux faire ? »* à la fin de chaque revue.
+
+### Le feedback de pair
+
+Distinct du feedback de manager. Plus fréquent, plus opérationnel :
+
+- *« Ton commit `fix bug` ne dit rien — pourrais-tu écrire `fix(auth): redirect after expired session` la prochaine fois ? »*
+- *« J'ai galéré à comprendre cette fonction sans test, peux-tu en ajouter un ? »*
+
+Direct, court, sans filtre. Ça rend l'équipe forte.
+
+---
+
+## Réunions — quand justifiées, comment productives
+
+### Test des 3 questions
+
+Avant de créer une réunion, réponds :
+
+1. Y a-t-il une **décision à prendre** maintenant ?
+2. Y a-t-il un **conflit à résoudre** ?
+3. Y a-t-il **information à diffuser** + Q&A nécessaire ?
+
+Si non aux 3 → message / RFC / Loom.
+
+### Format productif
+
+| Élément | Pourquoi |
+|---------|----------|
+| **Agenda** dans l'invite | Sinon on improvise = on perd du temps |
+| **Durée pré-fixée** | 30 min par défaut, 15 si possible |
+| **Décisions** notées en live | Qui ? Quoi ? Pour quand ? |
+| **Async pre-read** | Lire le doc 24h avant, on commence par les questions |
+| **Liste des absents** assumée | Si décision impactante, escaler à eux après |
+
+### Anti-patterns
+
+- **Réunion récurrente** dont l'objet est flou.
+- **« On en parle ? »** sans agenda.
+- **Status réunion** que personne ne lit après.
+- **15 personnes** dont 12 silencieuses.
+- **Sans décision**, juste « rediscussion ».
+
+> Le calendrier d'un IC senior ne devrait **pas** dépasser 8 h de réunions / semaine. Au-delà, le focus disparaît, et la prod aussi.
+
+---
+
+## Sécurité psychologique
+
+Le concept (Amy Edmondson, *The Fearless Organization*) : pouvoir prendre un risque interpersonnel **sans peur d'être ridiculisé**.
+
+C'est ce qui fait que les équipes :
+
+- **Reportent les bugs** au lieu de les cacher.
+- **Posent les questions « bêtes »** qui sauvent du temps.
+- **Disent « je ne sais pas »** au lieu d'inventer.
+- **Pratiquent le post-mortem blameless** sincèrement.
+
+Ce n'est pas du *« toujours d'accord »*. C'est *« on peut être en désaccord sans guerre »*.
+
+Construire :
+
+- Reconnaître les erreurs publiquement (à commencer par les leads).
+- Récompenser les questions / signalements.
+- **Sanctionner** explicitement les comportements toxiques (sarcasme, humiliation publique).
+- Créer des espaces (1:1, rétrospectives) où le feedback circule.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Une PR de 1500 lignes arrive sur ton bureau. Que faire ?"
+  options={[
+    'La reviewer telle quelle',
+    'Demander à l\'auteur de la splitter en 3-5 PR plus petites avec des objectifs cohérents — tu lui rends service car la review sera meilleure et plus rapide',
+    'Approuver vite avec un LGTM',
+    'Ignorer'
+  ]}
+  answerIndex={1}
+  explanation="Au-delà de 400 lignes, la review devient superficielle (concentration humaine limitée). Splitter coûte 30 min à l'auteur et économise 2h aux reviewers + détecte 3× plus de bugs. Approuver à l'aveugle (LGTM) est une démission de responsabilité."
+/>
+
+<Quiz
+  question="Tu trouves un comportement risqué dans une PR (validation manquante côté API). Comment le formuler ?"
+  options={[
+    '« C\'est complètement faux, refais »',
+    '« issue (blocking): la validation côté API est absente, un client malveillant peut envoyer un payload arbitraire — pourrais-tu ajouter la validation Zod ? Suggestion : voir le pattern utilisé sur /orders »',
+    '« 👎 »',
+    'Le mentionner en réunion plus tard'
+  ]}
+  answerIndex={1}
+  explanation="Conventional Comments (`issue (blocking):` + justification + suggestion d'action) rend le commentaire actionnable et respectueux. Un « c'est faux » sec abîme la relation et ne dit pas quoi faire. Attendre la réunion = perdre du temps et créer un point de blocage évitable."
+/>
+
+<Quiz
+  question="L'équipe a une réunion récurrente « stand-up product » de 1h le lundi avec 12 personnes. Tu hérites de l'organisation. Que ferais-tu ?"
+  options={[
+    'Garder pareil pour ne pas perturber',
+    'Auditer : qui décide quoi ? Quelle décision sort en moyenne ? Si la réponse est « peu », couper en deux : 15 min sync décideurs + doc async pour le reste de l\'équipe (économie : ~10h/sem)',
+    'Allonger à 1h30',
+    'Passer en pair programming'
+  ]}
+  answerIndex={1}
+  explanation="12 personnes × 1h = 12h hommes/semaine. Si la majorité écoute et ne contribue pas, c'est une diffusion d'info qui peut se faire en async. Une bonne pratique : minorité décideuse en sync court, le reste en doc + thread Slack. Le coût des réunions est invisible mais énorme."
+/>
+
+<Quiz
+  question="Lors d'un post-mortem, tu remarques qu'un dev cache la cause exacte de l'incident. Que faire ?"
+  options={[
+    'Le confronter publiquement',
+    'En 1:1 ensuite : explorer pourquoi il n\'est pas à l\'aise (peur de blâme, contexte personnel ?). Travailler la sécurité psychologique de l\'équipe sur le long terme — sans ça, les post-mortems ne servent à rien',
+    'Accepter et passer à la suite',
+    'Demander à le sanctionner'
+  ]}
+  answerIndex={1}
+  explanation="Cacher la vérité est presque toujours un signal de manque de sécurité psychologique. La confrontation publique aggrave. Un 1:1 bienveillant explore la cause. À l'échelle de l'équipe, travailler les rituels (rétro, blameless) et donner l'exemple (les leads reconnaissent leurs erreurs publiquement). Sans sécurité psy, les post-mortems sont du théâtre."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *The Pragmatic Programmer* — Hunt & Thomas
+- *Crucial Conversations* — Patterson et al. (feedback difficile)
+- *The Fearless Organization* — Amy Edmondson (sécurité psychologique)
+- *Conventional Comments* — [conventionalcomments.org](https://conventionalcomments.org/)
+- *RFCs at Cloudflare / Stripe* — articles publics
+- *ADR Tools* — [github.com/npryce/adr-tools](https://github.com/npryce/adr-tools)
+- *Loom* / *Tella* — vidéo async
+
+---
+
+**Suite** : [15.4 — Apprendre à apprendre](/15-methodes-soft-skills/04-apprendre/) — méthodes durables pour rester pertinent.

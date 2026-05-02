@@ -1,0 +1,46 @@
+---
+/**
+ * Composant Scenario — bloc d'épisode du fil rouge.
+ *
+ * Le contenu n'est affiché côté client que si le parcours choisi par
+ * le lecteur (stocké dans localStorage par <ScenarioTabs/> ou
+ * <ScenarioPicker/>) correspond au parcours du bloc.
+ *
+ * Tant qu'aucun choix n'est fait, le parcours A est affiché par défaut.
+ *
+ * Usage :
+ *   <Scenario parcours="A" episode="1">
+ *     Marie commence par maquetter la page d'accueil…
+ *   </Scenario>
+ */
+
+interface Props {
+  parcours: 'A' | 'B' | 'C' | 'D' | 'E';
+  episode: number | string;
+  title?: string;
+}
+
+const { parcours, episode, title } = Astro.props;
+
+const META: Record<string, { name: string; icon: string; subject: string }> = {
+  A: { name: 'Marie', icon: '🥖', subject: 'la Boulangerie de Lina' },
+  B: { name: 'Hugo',  icon: '🧘', subject: 'Studio Pulse' },
+  C: { name: 'Sami',  icon: '🥬', subject: 'GreenBox' },
+  D: { name: 'Léa',   icon: '🤝', subject: 'CoupDeMain' },
+  E: { name: 'Yanis', icon: '📋', subject: 'Tasky' },
+};
+
+const meta = META[parcours];
+const finalTitle = title ?? `Où en est ${meta.name}`;
+---
+
+<aside class="scenario" data-parcours={parcours} aria-label={`Épisode ${episode} — ${meta.subject}`}>
+  <header class="scenario-header">
+    <span class="scenario-icon" aria-hidden="true">{meta.icon}</span>
+    <span class="scenario-title">{finalTitle}</span>
+    <span class="scenario-episode">épisode {episode} · {meta.subject}</span>
+  </header>
+  <div class="scenario-body">
+    <slot />
+  </div>
+</aside>

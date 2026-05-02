@@ -1,0 +1,269 @@
+/* ✅ Palette retravaillée : tous les ratios de contraste ≥ 4.5:1 */
+:root {
+  --brand: #c2410c;       /* contraste ~5.4:1 sur blanc — OK */
+  --brand-bg: #fff7ed;
+  --text: #1f2937;        /* contraste ~13:1 — OK */
+  --muted: #4b5563;       /* contraste ~7.5:1 — OK pour aide secondaire */
+  --bg: #ffffff;
+  --card-bg: #f9fafb;
+  --border: #d1d5db;
+  --error: #b91c1c;       /* rouge accessible */
+  --focus: #2563eb;       /* bleu focus net */
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+h1, h2, h3 {
+  font-family: 'Playfair Display', 'Times New Roman', serif;
+  /* ✅ alignement de fallback métriquement compatible — limite le CLS */
+}
+
+/* ✅ A-008 : focus visible distinct, jamais coupé */
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+a { color: var(--brand); text-decoration: underline; }
+a:hover { text-decoration: none; }
+
+/* Skip link (sortie au focus) */
+.skip-link {
+  position: absolute;
+  inset-inline-start: -200vw;
+  inset-block-start: 0.5rem;
+  background: var(--text);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  z-index: 1000;
+}
+.skip-link:focus { inset-inline-start: 0.5rem; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ✅ I-001 : propriétés logiques partout (RTL friendly) */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-block: 1rem;
+  padding-inline: 2rem;
+  border-block-end: 1px solid var(--border);
+}
+.topbar .logo {
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--brand);
+  text-decoration: none;
+  margin-inline-end: auto;
+}
+.topbar nav {
+  display: flex;
+  gap: 1.5rem;
+}
+.topbar nav a {
+  color: var(--text);
+  text-decoration: none;
+}
+.topbar nav a:hover { text-decoration: underline; }
+
+.lang-switcher select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: white;
+  font: inherit;
+}
+
+.hero {
+  text-align: center;
+  padding-block: 4rem;
+  padding-inline: 1rem;
+  /* ✅ P-005 : on réserve l'espace pour la bannière cookies → pas de CLS */
+  padding-block-end: 6rem;
+}
+.hero p { color: var(--muted); margin-block-end: 2rem; }
+.hero picture { display: block; margin-inline: auto; max-inline-size: 1200px; }
+.hero img { inline-size: 100%; block-size: auto; aspect-ratio: 5 / 3; }
+
+.cta {
+  display: inline-block;
+  padding-block: 0.9rem;
+  padding-inline: 1.8rem;
+  background: var(--brand);
+  color: white;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  /* ✅ A-013 : taille de cible ≥ 24×24 px */
+  min-block-size: 44px;
+  min-inline-size: 44px;
+}
+.cta:hover { filter: brightness(0.95); }
+
+.menu {
+  padding-inline: 2rem;
+  padding-block: 3rem;
+}
+.menu h2 { text-align: center; margin-block-end: 2rem; }
+.menu-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.5rem;
+}
+
+.card {
+  background: var(--card-bg);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border);
+}
+.card img {
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 3 / 2;
+  display: block;
+}
+.card h3 { margin: 1rem; }
+.card .price { margin: 0 1rem 1rem; color: var(--brand); font-weight: 600; }
+.card .add {
+  position: absolute;
+  inset-inline-end: 0.5rem;
+  inset-block-end: 0.5rem;
+  inline-size: 44px;
+  block-size: 44px;
+  background: var(--brand);
+  color: white;
+  border: 0;
+  border-radius: 50%;
+  font-size: 1.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#cookie-banner {
+  position: fixed;
+  inset-block-end: 0;
+  inset-inline: 0;
+  background: var(--text);
+  color: white;
+  padding-block: 1rem;
+  padding-inline: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  /* ✅ Hauteur fixe → pas de CLS quand on l'affiche */
+  block-size: 4rem;
+}
+#cookie-banner[hidden] { display: none; }
+#cookie-banner button {
+  background: var(--brand);
+  color: white;
+  border: 0;
+  border-radius: 0.4rem;
+  padding-block: 0.5rem;
+  padding-inline: 1rem;
+  cursor: pointer;
+}
+
+.contact {
+  padding-block: 3rem;
+  padding-inline: 2rem;
+  text-align: center;
+  background: var(--brand-bg);
+}
+.contact form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-inline-size: 360px;
+  margin-inline: auto;
+  text-align: start;
+}
+.contact label { font-weight: 600; }
+.contact input {
+  padding-block: 0.7rem;
+  padding-inline: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  font: inherit;
+}
+.contact input[aria-invalid="true"] {
+  border-color: var(--error);
+  outline: 2px solid var(--error);
+  outline-offset: 1px;
+}
+#email-help { color: var(--muted); }
+#email-error { color: var(--error); font-weight: 600; }
+
+#cart-status {
+  position: fixed;
+  inset-block-start: 1rem;
+  inset-inline-end: 1rem;
+  background: white;
+  padding-block: 0.5rem;
+  padding-inline: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-weight: 600;
+}
+
+dialog#modal {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 2rem;
+  max-inline-size: 400px;
+}
+dialog#modal::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+footer {
+  text-align: center;
+  padding-block: 2rem;
+  color: var(--muted);
+}
+
+/* ✅ A-011 : respect prefers-reduced-motion */
+.cta { transition: filter 150ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ✅ I-005 : variantes RTL — la majorité est gérée par les propriétés logiques.
+              Les exceptions visuelles (icônes, ombres) se font ici. */
+[dir="rtl"] .topbar nav { flex-direction: row-reverse; }

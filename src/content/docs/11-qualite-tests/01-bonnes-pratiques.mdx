@@ -1,0 +1,361 @@
+---
+title: 11.1 — Bonnes pratiques
+description: Clean Code, SOLID, DRY/KISS/YAGNI — sans dogme, avec contexte.
+sidebar:
+  order: 1
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : écrire du code que **toi** dans 6 mois remerciera **toi** d'aujourd'hui. Et savoir reconnaître les conseils utiles des conseils dogmatiques.
+
+<ObjectiveList items={[
+  "Connaître les principes : Clean Code, SOLID, DRY, KISS, YAGNI, Rule of Three",
+  "Nommer correctement variables, fonctions, classes",
+  "Reconnaître les code smells courants",
+  "Donner et recevoir une revue de code constructive",
+  "Écrire des messages de commit selon Conventional Commits"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axes 5-10 lus" />
+
+
+## La règle d'or — le code est lu 10× plus qu'il n'est écrit
+
+Tu écris une fonction en 10 minutes. **Toi-même** la reliras des dizaines de fois. **D'autres** la reliront aussi. Optimise pour la **lecture**.
+
+> *« Programs must be written for people to read, and only incidentally for machines to execute. »*
+> — Harold Abelson, *SICP* (1985)
+
+## Naming — le levier le plus puissant
+
+### Mauvais → bon
+
+```ts
+// ❌
+function fn(d: Date) {
+  const r = [];
+  for (const u of getUsers()) {
+    if (u.cd > d) r.push(u);
+  }
+  return r;
+}
+
+// ✅
+function findUsersCreatedAfter(date: Date): User[] {
+  return getUsers().filter(user => user.createdAt > date);
+}
+```
+
+### Conventions
+
+| Type | Convention | Exemple |
+|------|-----------|---------|
+| Variable, fonction | `camelCase` | `userCount`, `findActiveUsers` |
+| Constante | `SCREAMING_SNAKE_CASE` | `MAX_RETRIES` |
+| Classe, type, interface | `PascalCase` | `UserService`, `OrderStatus` |
+| Booléen | préfixe `is/has/can/should` | `isActive`, `hasPermission` |
+| Fonction async | suffixe pas obligatoire en TS, `Async` en C# / Java | `fetchUser` |
+| Privé (TS) | `#name` ou `_name` | `#count`, `_internal` |
+
+### Nommer = définir l'intention
+
+- `getUser` → tu retournes un user, **synchrone et certain**.
+- `findUser` → tu cherches, peut-être pas trouvé (`User | null`).
+- `loadUser` → souvent async, charge depuis externe.
+- `fetchUser` → souvent async via réseau.
+
+Un nom **précis** te dispense d'une demi-douzaine de commentaires.
+
+## Clean Code — les règles utiles
+
+### Fonctions courtes
+
+> *« Functions should do one thing, do it well, do it only. »* — Robert C. Martin
+
+Indicateur pratique : **si tu as besoin de scroller pour lire la fonction, elle est trop longue**. Cible 15-30 lignes max. **Pas un dogme**, mais un signal.
+
+### Une seule abstraction par fonction
+
+```ts
+// ❌ Mélange validation, logique métier, formatage
+function processOrder(input: any) {
+  if (!input.email || !input.email.includes('@')) throw new Error();
+  const total = input.items.reduce((s, i) => s + i.price * i.qty, 0);
+  const discount = input.code === 'SUMMER' ? 0.1 : 0;
+  return {
+    customer: input.email.toLowerCase(),
+    total: total * (1 - discount),
+    formatted: `$${(total * (1 - discount)).toFixed(2)}`,
+  };
+}
+
+// ✅ Séparé par préoccupation
+function processOrder(input: OrderInput): OrderResult {
+  validateOrder(input);
+  const total = computeTotal(input.items);
+  const discounted = applyDiscount(total, input.code);
+  return formatOrder(input.email, discounted);
+}
+```
+
+### Niveaux d'abstraction homogènes
+
+Une fonction de haut niveau doit lire comme une **table des matières** : pas de détails techniques mélangés à la logique métier.
+
+```ts
+// ✅ Lisible comme une recette
+async function publishArticle(article: Article) {
+  await validateArticle(article);
+  await saveToDatabase(article);
+  await notifySubscribers(article);
+  await invalidateCache(article.id);
+}
+```
+
+Chaque fonction appelée descend ensuite à un niveau de détail plus bas.
+
+## SOLID — sans dogme
+
+5 principes nés en POO, applicables (avec souplesse) à la programmation moderne.
+
+### S — Single Responsibility Principle
+
+**Une classe (ou module) a une seule raison de changer.**
+
+```ts
+// ❌ La classe change si les règles métier OU le format JSON OU l'envoi email changent
+class OrderManager {
+  validate(o: Order) { ... }
+  toJSON(o: Order) { ... }
+  sendConfirmationEmail(o: Order) { ... }
+}
+
+// ✅ Découpé
+class OrderValidator { validate(o: Order) { ... } }
+class OrderSerializer { toJSON(o: Order) { ... } }
+class OrderEmailer { sendConfirmation(o: Order) { ... } }
+```
+
+### O — Open/Closed Principle
+
+**Ouvert à l'extension, fermé à la modification.** En pratique 2026 : les types unions et le pattern matching remplacent souvent les hiérarchies.
+
+```ts
+// ❌ Doit modifier la fonction pour ajouter un type
+function area(shape: { kind: string; w?: number; h?: number; r?: number }) {
+  if (shape.kind === 'rect') return shape.w! * shape.h!;
+  if (shape.kind === 'circle') return Math.PI * shape.r! ** 2;
+}
+
+// ✅ Discriminated union — TypeScript force l'exhaustivité
+type Shape =
+  | { kind: 'rect'; w: number; h: number }
+  | { kind: 'circle'; r: number };
+
+function area(shape: Shape): number {
+  switch (shape.kind) {
+    case 'rect':   return shape.w * shape.h;
+    case 'circle': return Math.PI * shape.r ** 2;
+  }
+}
+```
+
+### L — Liskov Substitution Principle
+
+**Une sous-classe doit pouvoir remplacer la classe parente sans casser le code.** Le bug classique : `Square extends Rectangle` qui casse `setWidth/setHeight`.
+
+En pratique : si une override surprend l'utilisateur du parent, c'est un L violation.
+
+### I — Interface Segregation
+
+**Plusieurs petites interfaces > une grosse interface.**
+
+```ts
+// ❌ Le composant qui veut juste lire est forcé d'implémenter write
+interface Storage { read(); write(); delete(); list(); }
+
+// ✅ Tu déclares ce dont tu as besoin
+interface Readable { read(); }
+interface Writable { write(); }
+```
+
+### D — Dependency Inversion
+
+**Dépends d'abstractions, pas de classes concrètes.** En TS : passe des **types interfaces** plutôt que des classes spécifiques.
+
+```ts
+// ❌ Couplage fort
+class UserService {
+  private db = new PrismaClient();
+}
+
+// ✅ Inversion : on injecte
+class UserService {
+  constructor(private db: UserRepository) {}
+}
+```
+
+Bénéfice : tests faciles (mock du repo), changement de DB sans toucher au service.
+
+<Aside type="caution" title="SOLID n'est pas une religion">
+SOLID est utile quand le projet **grandit**. Sur un petit script ou un MVP, l'appliquer mécaniquement crée de l'over-engineering. **Comprends les principes, applique-les là où la complexité le justifie.**
+</Aside>
+
+## DRY, KISS, YAGNI — les 3 acronymes vitaux
+
+### DRY — Don't Repeat Yourself
+
+Si tu copies-colles 3 fois → extrais une fonction. Mais **attention** :
+
+```ts
+// Ces deux fonctions partagent du code MAIS représentent des concepts DIFFÉRENTS
+function formatInvoiceTotal(amount: number) {
+  return `Total: $${amount.toFixed(2)}`;
+}
+
+function formatProductPrice(amount: number) {
+  return `Price: $${amount.toFixed(2)}`;
+}
+```
+
+Si demain l'invoice doit afficher avec virgule et le prix avec point, l'extraction t'aurait piégé. **Wrong abstraction is more costly than duplication.**
+
+### KISS — Keep It Simple, Stupid
+
+Préfère **toujours** la solution simple si elle suffit. Pas de framework abstrait pour 3 routes.
+
+### YAGNI — You Aren't Gonna Need It
+
+N'écris **pas** de code « au cas où ». Écris ce qu'**aujourd'hui** demande. Quand le besoin réel arrive, tu adaptes.
+
+```ts
+// ❌ YAGNI violation — tu n'as JAMAIS eu besoin de role
+function createUser(email: string, role?: 'user' | 'admin' | 'super-admin' | 'moderator') {
+  // ...
+}
+
+// ✅ Quand tu auras 2 rôles, tu les ajouteras
+function createUser(email: string) { ... }
+```
+
+### Rule of Three
+
+**Tu peux dupliquer 2 fois. À la 3e, tu extrais.** Ça évite les abstractions prématurées.
+
+## Code smells — à reconnaître
+
+| Smell | Symptôme | Refactor |
+|-------|---------|----------|
+| **God class** | Classe de 1000 lignes qui fait tout | Découper par responsabilité |
+| **Long method** | Fonction de 100+ lignes | Extraire des sous-fonctions |
+| **Long parameter list** | `fn(a, b, c, d, e, f, g)` | Objet de paramètres |
+| **Primitive obsession** | Tout en string/number, perte de sens | Branded types, value objects |
+| **Feature envy** | Méthode qui utilise plus l'autre classe que la sienne | Déplacer la méthode |
+| **Switch/case géant** | 12 cases avec logique différente | Polymorphisme ou map de fonctions |
+| **Comments expliquant le code** | `// incrémente le compteur` | Renommer la variable |
+| **Dead code** | Fonctions/variables jamais utilisées | Supprimer |
+| **Magic numbers** | `if (x > 86400)` | Constante : `SECONDS_PER_DAY` |
+| **Shotgun surgery** | Une modif demande de toucher 10 fichiers | Reorganiser, regrouper |
+
+## Code review — donner et recevoir
+
+### Donner une bonne review
+
+1. **Sois rapide** : reviews stagnantes = équipe bloquée. < 24 h idéal.
+2. **Distingue préférence et exigence** :
+   - `nit:` (nitpick) — préférence personnelle, pas bloquant.
+   - `suggestion:` — idée, pas obligatoire.
+   - `question:` — j'ai pas compris, explique-moi.
+   - `blocking:` — doit être corrigé avant merge.
+3. **Sois précis et bienveillant** : *« Je préfère X parce que Y »* > *« non, fais X »*.
+4. **Approve si globalement OK**, même avec des nits — le PR-author traitera.
+
+### Conventional Comments
+
+[Convention](https://conventionalcomments.org/) standard pour structurer les commentaires :
+
+```
+nit: utilise `const` au lieu de `let`
+suggestion: extraire dans une fonction `formatMoney()`
+question: pourquoi pas `Map` plutôt qu'objet ?
+blocking: cette query est vulnérable à l'injection SQL
+praise: belle simplification du flow !
+```
+
+### Recevoir une review
+
+- **Ne te défends pas** automatiquement — la review est sur le code, pas sur toi.
+- **Pose des questions** si tu n'es pas d'accord plutôt que d'argumenter.
+- **Refuse poliment** quand tu sais ce que tu fais : *« Je préfère garder X parce que Y »*.
+
+## Conventional Commits — déjà vu en axe 4.2
+
+Rappel rapide :
+
+```
+feat(auth): add password reset flow
+fix: prevent crash when user has no avatar
+docs: update README with new env vars
+refactor(orders): extract pricing logic
+test(api): cover login error cases
+chore: bump dependencies
+```
+
+**Bénéfices** :
+- Changelog auto-généré (`changesets`, `semantic-release`).
+- Versioning sémantique automatique (`feat` → minor, `fix` → patch, `BREAKING CHANGE` → major).
+- Historique grep-able.
+
+## Auto-évaluation
+
+<Quiz
+  question='Tu vois 3 fonctions qui partagent 5 lignes identiques. Ton réflexe ?'
+  options={[
+    'DRY ! Extraire immédiatement une fonction commune',
+    'Évaluer si le code partagé représente le MÊME concept ou une coïncidence — Rule of Three + sémantique. Une mauvaise abstraction est plus chère que la duplication',
+    'Laisser tel quel, ça marche',
+    'Mettre un commentaire'
+  ]}
+  answerIndex={1}
+  explanation="C'est le piège DRY le plus fréquent. Si les 3 fonctions calculent un loyer mensuel, OK extraire. Si elles ont juste 5 lignes qui se ressemblent par hasard, l'extraction crée un couplage qui te piégera quand l'une devra évoluer différemment. La Rule of Three (attendre la 3e occurrence pour confirmer le pattern) aide. Sémantique > syntaxe."
+/>
+
+<Quiz
+  question='Tu vois `function fn(a, b, c, d, e, f) { ... }`. Smell ?'
+  options={[
+    'Aucun, c\'est juste une fonction',
+    'Long parameter list — refactor en passant un OBJET de paramètres ({ a, b, c, ... }) qui sera typé, lisible à l\'appel, et extensible',
+    'Trop de variables locales',
+    'Le nom est trop court'
+  ]}
+  answerIndex={1}
+  explanation="Long parameter list rend l'appel illisible (fn(true, 5, null, 'foo', undefined)) et fragile à l'ordre. Solution : passer un objet : fn({ retry: true, max: 5, fallback: null, label: 'foo' }). TypeScript force le type, le call site est explicite, ajouter un param ne casse rien."
+/>
+
+<Quiz
+  question='Tu commits "fix login bug". Avis ?'
+  options={[
+    'Parfait, message clair',
+    'Améliore avec Conventional Commits : `fix(auth): prevent crash when password contains special chars`. Bénéfice : changelog auto, scope explicite, historique grep-able',
+    'Trop verbeux',
+    'Manque l\'auteur'
+  ]}
+  answerIndex={1}
+  explanation='Conventional Commits ajoutent type (fix), scope (auth), description précise. Avec ces conventions : changesets/semantic-release génèrent automatiquement le CHANGELOG et bumpent la version. Tu peux grep "fix(auth)" pour retrouver tous les bugs auth. Sans coût supplémentaire pour toi.'
+/>
+
+## Pour aller plus loin
+
+- *Clean Code* — Robert C. Martin (à lire avec esprit critique)
+- *The Pragmatic Programmer* — Hunt & Thomas
+- *A Philosophy of Software Design* — John Ousterhout (le livre moderne, plus nuancé que Clean Code)
+- *Refactoring* — Martin Fowler (le catalogue des refactors)
+- *Conventional Comments* — [conventionalcomments.org](https://conventionalcomments.org/)
+
+---
+
+**Suite** : [11.2 — Tests](/11-qualite-tests/02-tests/) — pyramide, Vitest, Pest, Playwright.

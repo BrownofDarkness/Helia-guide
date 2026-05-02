@@ -1,0 +1,489 @@
+---
+title: 13.5 — Internationalisation
+description: i18next, next-intl, FormatJS, ICU MessageFormat, pluralisation, dates et devises, RTL, organisation des traductions.
+sidebar:
+  order: 5
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Scenario from '../../../components/Scenario.astro';
+import ScenarioTabs from '../../../components/ScenarioTabs.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="20">
+Lina veut faire du tourisme — un client espagnol lui a demandé pendant un week-end. Marie regarde i18n : ce n'est pas urgent (Lina sert local), mais elle code dès maintenant en utilisant `Intl.NumberFormat` pour les prix et structure les strings de façon traduisible.
+</Scenario>
+
+<Scenario parcours="B" episode="19">
+Hugo ouvre Studio Pulse à des cours en anglais (élèves expat lyonnais). Il pose `next-intl` : 2 locales (fr / en). Pluralisation pour « 1 cours / 5 cours » via ICU MessageFormat.
+</Scenario>
+
+<Scenario parcours="C" episode="20">
+GreenBox Paris seulement pour la V1, mais Sami structure tout en i18n dès le départ — il a en tête une expansion européenne (Bruxelles, Amsterdam) à 18 mois.
+</Scenario>
+
+<Scenario parcours="D" episode="20">
+Le quartier de Léa est multiculturel. Plusieurs voisines parlent peu français. Elle ajoute français + anglais + arabe (RTL). C'est une **fonctionnalité d'inclusion**, pas une option marketing.
+</Scenario>
+
+<Scenario parcours="E" episode="20">
+Yanis n'a pas d'i18n besoin pour Tasky (asso 100 % FR). Mais il sait que côté pro, c'est une compétence valorisée. Il pose `next-intl` en prévision, structure pour 2 locales même s'il n'en utilise qu'une pour l'instant.
+</Scenario>
+
+> 🎯 **Objectif** : préparer une app à servir plusieurs langues et cultures sans tout réécrire à chaque ajout. i18n n'est pas qu'un dictionnaire de strings : c'est de la pluralisation, des dates, des devises, du RTL et de l'organisation.
+
+<ObjectiveList items={[
+  "Distinguer i18n (préparer le code) et l10n (traduire pour un marché)",
+  "Choisir entre i18next, next-intl, FormatJS / react-intl, vue-i18n",
+  "Écrire des messages ICU MessageFormat avec pluralisation et genre",
+  "Formater dates, nombres et devises avec Intl.* natif",
+  "Gérer une application en RTL (arabe, hébreu) sans dupliquer les composants"
+]} />
+
+<Level value="confirmé" reading="11 min" prereq="axes 5-9 lus" />
+
+
+## i18n vs l10n — deux disciplines liées
+
+| Terme | Sens | Acteurs |
+|-------|------|---------|
+| **i18n** (internationalization) | Préparer le code à supporter plusieurs langues / cultures | Développeurs |
+| **l10n** (localization) | Traduire et adapter à un marché précis | Traducteurs, marketing |
+| **g11n** (globalization) | i18n + l10n + go-to-market | Direction produit |
+
+Tu codes l'i18n une fois ; la l10n se rajoute marché par marché.
+
+> *« 18 lettres entre i et n »* → i18n. Idem pour l10n et a11y. Convention universelle.
+
+---
+
+## Le périmètre i18n — bien plus que des strings
+
+| Domaine | Exemple |
+|---------|---------|
+| **Strings UI** | « Add to cart » → « Ajouter au panier » |
+| **Pluriels** | 1 article / 2 articles / 0 article (FR ≠ EN ≠ AR) |
+| **Genre grammatical** | « Bonjour Marie » vs « Bonjour Pierre » |
+| **Dates** | 30/04/2026 (FR) vs 04/30/2026 (EN-US) vs 2026-04-30 (ISO) |
+| **Heures** | 14:30 (FR) vs 2:30 PM (EN-US) |
+| **Nombres** | 1 234,56 (FR) vs 1,234.56 (EN-US) vs 1.234,56 (DE) |
+| **Devises** | 1 234,56 € vs $1,234.56 vs ¥1,235 (pas de décimales en JPY) |
+| **Téléphones, adresses** | Format pays |
+| **RTL** | Arabe, hébreu : direction inversée + miroir UI |
+| **Pluralisation** | EN : 2 formes (singular/plural). FR : 2-3. AR : 6 formes ! |
+| **Tri / ordre alphabétique** | É vient avec E en FR, après Z en SV |
+
+---
+
+## L'API native `Intl` — souvent suffisante
+
+Avant d'embarquer une lib, regarde ce que `Intl` fait nativement (universel en 2026).
+
+```ts
+// Dates
+new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' })
+  .format(new Date());                            // 30 avril 2026
+
+new Intl.DateTimeFormat('en-US', { dateStyle: 'long' })
+  .format(new Date());                            // April 30, 2026
+
+// Relative time — « il y a 2 jours »
+new Intl.RelativeTimeFormat('fr', { numeric: 'auto' })
+  .format(-2, 'day');                             // avant-hier
+
+// Nombres
+new Intl.NumberFormat('fr-FR').format(1234.5);    // "1 234,5"
+
+// Devises
+new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' })
+  .format(1234.56);                               // "1 234,56 €"
+
+// Pluriels (sans message — pour brancher manuellement)
+new Intl.PluralRules('fr').select(2);             // "other" (2 = pluriel)
+new Intl.PluralRules('ar').select(11);            // "many" (l'arabe en a 6)
+
+// Listes
+new Intl.ListFormat('fr').format(['a', 'b', 'c']); // "a, b et c"
+
+// Segments (graphèmes, mots, phrases)
+[...new Intl.Segmenter('fr', { granularity: 'word' }).segment('Bonjour le monde')];
+```
+
+`Intl` est déjà 80 % du job. Reste à gérer les **strings** (le dictionnaire) et la **pluralisation des messages**.
+
+---
+
+## Choisir une bibliothèque i18n
+
+| Lib | Stack | Force | Faiblesse |
+|-----|-------|-------|-----------|
+| **next-intl** | Next.js (App Router) | Excellente DX, ICU natif, SSR-friendly, RSC | Couplé à Next |
+| **i18next** | Universel (React, Vue, Svelte, vanilla) | Écosystème énorme (plugins, backends, ICU) | Moins typé par défaut |
+| **FormatJS / react-intl** | React | ICU first, format natif, types stricts | Boilerplate plus lourd |
+| **vue-i18n** | Vue 3 | Officiel Vue, ICU support | Vue uniquement |
+| **Lingui** | React | Macros à la compilation, bundle minuscule | Setup initial plus complexe |
+| **Paraglide** (Inlang) | Universel | Type-safe à 100 %, tree-shakable, message par fonction | Plus jeune, écosystème moindre |
+
+### Repères 2026
+
+- **Next.js 16 App Router + RSC** → `next-intl` est le défaut.
+- **Astro** → `astro-i18next` ou natif via `[lang]/...` + `i18next`.
+- **Vite + React standalone** → `i18next` ou **Paraglide** (montant).
+- **Vue 3** → `vue-i18n@9+` (Composition API).
+
+---
+
+## ICU MessageFormat — le format universel
+
+Le standard ICU (par Unicode) couvre pluralisation, sélection, genre, nombres :
+
+```icu
+{count, plural,
+  =0 {Aucun message}
+  one {# message}
+  other {# messages}
+}
+```
+
+```icu
+{gender, select,
+  female {Bienvenue, {name} ! Elle est connectée.}
+  male   {Bienvenue, {name} ! Il est connecté.}
+  other  {Bienvenue, {name} ! Connexion réussie.}
+}
+```
+
+Combiné :
+
+```icu
+{count, plural,
+  =0 {Aucune commande}
+  one {1 commande, livrée le {date, date, ::yMMMMd}}
+  other {# commandes, livrées le {date, date, ::yMMMMd}}
+}
+```
+
+Le formatteur ICU choisit la bonne forme **selon la langue** (l'arabe a 6 formes : `zero`, `one`, `two`, `few`, `many`, `other`).
+
+---
+
+## Exemple complet — next-intl (Next.js 16)
+
+### Structure
+
+```
+messages/
+  fr.json
+  en.json
+  ar.json
+src/app/[locale]/
+  layout.tsx
+  page.tsx
+src/i18n.ts
+middleware.ts
+```
+
+### messages/fr.json
+
+```json
+{
+  "Home": {
+    "title": "Bienvenue {name}",
+    "cart": "{count, plural, =0 {Panier vide} one {1 article} other {# articles}}",
+    "lastLogin": "Dernière connexion : {date, date, long}"
+  }
+}
+```
+
+### Component
+
+```tsx
+import { useTranslations, useFormatter } from 'next-intl';
+
+export default function Home() {
+  const t = useTranslations('Home');
+  const format = useFormatter();
+  return (
+    <main>
+      <h1>{t('title', { name: 'Marie' })}</h1>
+      <p>{t('cart', { count: 3 })}</p>
+      <p>{t('lastLogin', { date: new Date() })}</p>
+      <p>{format.dateTime(new Date(), { dateStyle: 'long' })}</p>
+    </main>
+  );
+}
+```
+
+`next-intl` est **type-safe** : si tu utilises une clé qui n'existe pas en `fr.json`, TypeScript t'engueule à la compilation.
+
+### Routing localisé
+
+```ts
+// src/i18n.ts
+export const locales = ['fr', 'en', 'ar'] as const;
+export const defaultLocale = 'fr';
+```
+
+Tes URLs deviennent `/fr/products`, `/en/products`, `/ar/products`. Le middleware redirige `/products` → `/fr/products` selon `Accept-Language`.
+
+---
+
+## Exemple complet — i18next (universel)
+
+```ts
+// i18n.ts
+import i18next from 'i18next';
+import HttpBackend from 'i18next-http-backend';
+import LanguageDetector from 'i18next-browser-languagedetector';
+import ICU from 'i18next-icu';
+
+await i18next
+  .use(HttpBackend)
+  .use(LanguageDetector)
+  .use(ICU)
+  .init({
+    fallbackLng: 'fr',
+    supportedLngs: ['fr', 'en', 'ar'],
+    backend: { loadPath: '/locales/{{lng}}/{{ns}}.json' },
+    interpolation: { escapeValue: false },
+  });
+```
+
+```ts
+i18next.t('cart', { count: 0 });
+// → "Aucun article" (selon /locales/fr/translation.json)
+```
+
+Plugins utiles :
+
+- `i18next-http-backend` — charge les traductions à la demande.
+- `i18next-icu` — active la syntaxe ICU.
+- `i18next-resources-to-backend` — bundle local sans HTTP.
+- `i18next-browser-languagedetector` — détecte la langue navigateur.
+
+---
+
+## Organisation des fichiers de traduction
+
+### Par feature, pas par locale
+
+```
+✅ Bon
+features/
+  cart/
+    locales/
+      fr.json
+      en.json
+  products/
+    locales/...
+
+❌ Mauvais (dépendances croisées)
+locales/
+  fr/
+    cart.json
+    products.json
+    profile.json
+```
+
+### Namespaces
+
+```json
+{
+  "cart.title": "Panier",
+  "cart.empty": "Votre panier est vide"
+}
+```
+
+Charger uniquement les namespaces de la page courante = bundle JSON plus petit.
+
+### Source de vérité
+
+| Stratégie | Pour qui |
+|-----------|----------|
+| **JSON dans le repo** | Petits projets, peu de traductions |
+| **TMS** (Crowdin, Lokalise, Phrase, Tolgee) | Équipes avec traducteurs externes |
+| **Tolgee** (OSS, possible self-host) | Compromis devs / traducteurs |
+| **i18nexus, Locize** | i18next + cloud sync |
+
+Workflow standard : devs poussent les clés en EN (source), traducteurs traduisent dans le TMS, sync vers le repo via CI.
+
+---
+
+## RTL — droite-à-gauche
+
+L'arabe, l'hébreu, l'ourdou s'écrivent de droite à gauche. Bonne nouvelle : le navigateur fait l'essentiel.
+
+```html
+<html dir="rtl" lang="ar">
+```
+
+CSS moderne 2026 utilise les **propriétés logiques** qui s'inversent automatiquement :
+
+```css
+/* ❌ Cassé en RTL */
+.card { margin-left: 1rem; padding-right: 2rem; }
+
+/* ✅ Inverse automatique */
+.card { margin-inline-start: 1rem; padding-inline-end: 2rem; }
+```
+
+| Propriété physique | Propriété logique |
+|--------------------|-------------------|
+| `margin-left` | `margin-inline-start` |
+| `padding-right` | `padding-inline-end` |
+| `border-bottom` | `border-block-end` |
+| `text-align: left` | `text-align: start` |
+| `left: 0` | `inset-inline-start: 0` |
+| `width` | `inline-size` |
+| `height` | `block-size` |
+
+**Tailwind v4** propose les utilitaires logiques par défaut : `ms-4`, `me-4`, `ps-4`, `pe-4`...
+
+### Icônes directionnelles
+
+Les flèches (`→`, `←`, breadcrumbs, sliders) doivent **se mirorer** en RTL :
+
+```css
+[dir="rtl"] .icon-arrow {
+  transform: scaleX(-1);
+}
+```
+
+Mais attention : un check ✓ ou un avatar **ne doivent PAS** se miroirer. Réfléchis pour chaque icône.
+
+### Tester le RTL
+
+DevTools → Settings → Devices → ajoute un device avec `dir="rtl"`. Ou ajoute manuellement `<html dir="rtl">` et observe les régressions.
+
+---
+
+## Pièges classiques
+
+### 1. Concaténation de strings
+
+```ts
+// ❌ Pas tous les langues mettent le verbe à la fin
+const msg = t('hello') + ' ' + name + '!';
+
+// ✅ Variable dans le message — l'ordre est langue-dépendant
+t('hello', { name }); // "Bonjour {name} !" → "{name}さん、こんにちは！"
+```
+
+### 2. Pluriel par if
+
+```ts
+// ❌ Marche en EN/FR, faux en AR/RU/PL
+const msg = count === 1 ? '1 item' : `${count} items`;
+
+// ✅ ICU plural
+t('cart', { count });
+```
+
+### 3. Strings inlinées dans le code
+
+Une string codée en dur ne sera **jamais** traduite. Outils :
+
+- `eslint-plugin-i18next` — alerte sur les strings non extraites.
+- Lingui macros — extraction automatique au build.
+
+### 4. Emails / PDFs / push
+
+L'email de confirmation, le PDF de facture, la notif push doivent aussi être traduits — ils ont leur propre tunnel. Centralise les templates par locale.
+
+### 5. Numéros de téléphone, codes postaux
+
+```ts
+import parsePhoneNumber from 'libphonenumber-js';
+const num = parsePhoneNumber('+33612345678');
+num.formatInternational(); // "+33 6 12 34 56 78"
+num.formatNational();      // "06 12 34 56 78"
+```
+
+### 6. Dates qui voyagent
+
+Stocke en UTC (ISO 8601) en base, formate au rendu. Évite à tout prix de stocker `30/04/2026` (ambigu : 30 avril ou 4 mars ?).
+
+---
+
+## SEO multilingue
+
+```html
+<!-- Indique à Google que cette page a des équivalents -->
+<link rel="alternate" hreflang="fr" href="https://example.com/fr/products" />
+<link rel="alternate" hreflang="en" href="https://example.com/en/products" />
+<link rel="alternate" hreflang="ar" href="https://example.com/ar/products" />
+<link rel="alternate" hreflang="x-default" href="https://example.com/products" />
+```
+
+Ajoute aussi le `Content-Language` header HTTP et `lang` sur `<html>`.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu écris : `count === 1 ? '1 article' : `${count} articles``. Pourquoi est-ce un anti-pattern i18n ?"
+  options={[
+    'Il n\'y en a pas, c\'est correct',
+    'Les pluriels varient selon la langue : l\'arabe en a 6 formes, le russe 3-4, le français parfois 3 (zero, one, other) — il faut un format ICU',
+    'Le ternaire est lent',
+    'Il faut utiliser `===` strict'
+  ]}
+  answerIndex={1}
+  explanation="Hardcoder le pluriel marche pour l'anglais, partiellement pour le français, et casse complètement pour les langues à pluriels multiples (arabe, polonais, russe). ICU MessageFormat (`{count, plural, ...}`) gère les règles Unicode CLDR pour chaque langue."
+/>
+
+<Quiz
+  question="Pour formater une date avec « il y a 3 jours » en français et son équivalent espagnol / arabe, quelle solution est recommandée en 2026 ?"
+  options={[
+    'Une lib comme moment.js',
+    'Intl.RelativeTimeFormat natif (universel, sans dépendance)',
+    'Un dictionnaire de strings hardcodées',
+    'Recoder la logique manuellement'
+  ]}
+  answerIndex={1}
+  explanation="Intl.RelativeTimeFormat est natif, supporté partout en 2026, et utilise les données CLDR Unicode (donc correct pour TOUTES les locales). Moment.js est déprécié depuis 2020. Date-fns ou Day.js restent valables si tu fais beaucoup de manipulations, mais pour le rendu pur, Intl suffit."
+/>
+
+<Quiz
+  question="Tu déploies une version arabe et l'UI est cassée : marges décalées, icônes flèches dans le mauvais sens. Quelle est la cause la plus probable ?"
+  options={[
+    'CSS bug spécifique au navigateur',
+    'Tu utilises des propriétés CSS physiques (margin-left, etc.) au lieu des propriétés logiques (margin-inline-start)',
+    'L\'arabe ne marche qu\'en SSR',
+    'Il faut changer la police'
+  ]}
+  answerIndex={1}
+  explanation="En RTL avec dir='rtl' sur <html>, les propriétés logiques (margin-inline-start, padding-inline-end, text-align: start) s'inversent automatiquement. Les propriétés physiques (margin-left) restent figées. Migrer vers les propriétés logiques (Tailwind v4 le fait par défaut) règle la majorité des bugs RTL. Pour les icônes directionnelles, scaleX(-1) avec [dir='rtl'] s'occupe du miroir."
+/>
+
+<Quiz
+  question="Sur un projet Next.js 16 App Router multilingue, quelle solution est la plus adaptée en 2026 ?"
+  options={[
+    'react-intl avec un wrapper custom',
+    'next-intl (intégration native App Router, support RSC, ICU, type-safe)',
+    'Coder son propre middleware',
+    'i18next sans plugin'
+  ]}
+  answerIndex={1}
+  explanation="next-intl est conçu pour l'App Router, supporte les Server Components, l'ICU MessageFormat, et fournit du typage strict des clés. Sur Next 16, c'est le défaut. i18next reste excellent pour des stacks plus génériques (Vite, Astro, vanilla)."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *next-intl* — [next-intl-docs.vercel.app](https://next-intl-docs.vercel.app/)
+- *i18next* — [i18next.com](https://www.i18next.com/)
+- *ICU MessageFormat* — [unicode.org/.../messageFormat](https://unicode-org.github.io/icu/userguide/format_parse/messages/)
+- *MDN Intl* — [developer.mozilla.org/.../Intl](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl)
+- *RTL Styling 101* — Ahmad Shadeed
+- *Inlang / Paraglide* — i18n type-safe nouvelle génération
+
+---
+
+**Retour** : [Index axe 13](/13-performance-a11y/) — applique tout ça via le projet de l'axe.

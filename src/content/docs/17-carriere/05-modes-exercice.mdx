@@ -1,0 +1,400 @@
+---
+title: 17.5 — Modes d'exercice
+description: Salarié, freelance, entrepreneur, indie hacker — choisir et combiner. Statuts (FR / EU), fiscalité, TJM, contrats, transitions entre modes.
+sidebar:
+  order: 5
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : connaître les 4 modes d'exercice principaux (salarié, freelance, entrepreneur, indie hacker), comprendre leur économie réelle, choisir celui qui correspond à TA situation à un instant donné — et savoir transitioner.
+
+<ObjectiveList items={[
+  "Comprendre les 4 modes principaux et leurs trade-offs",
+  "Connaître les statuts juridiques courants en France et UE (auto-entrepreneur, EI, EURL, SASU, portage)",
+  "Estimer un TJM cohérent (charges + risque + valeur)",
+  "Lire un contrat de freelance (clauses critiques)",
+  "Combiner les modes (salarié + side, freelance + indie hacker)"
+]} />
+
+<Level value="confirmé" reading="14 min" prereq="aucun (parallélisable dès l'axe 4)" />
+
+
+<Aside type="caution" title="Disclaimer">
+Cet axe couvre la France et l'UE en 2026. **Les règles évoluent** (notamment sur l'auto-entrepreneur, la TVA, les seuils CFE) — vérifie sur urssaf.fr / impots.gouv.fr et **consulte un comptable** avant de t'engager. Hors France/UE, les structures et fiscalités sont différentes.
+</Aside>
+
+## Les 4 modes principaux
+
+| Mode | Risque | Revenu plafond | Indépendance | Recommandé |
+|------|--------|----------------|--------------|------------|
+| **Salarié** | Faible | Plafond ~ marché + 30 % seniorité | Faible | Apprentissage, stabilité, vie perso |
+| **Freelance** | Moyen | TJM × jours travaillés (~2-4× salaire à TJM mid) | Forte | 5+ ans XP, autonomie, mobilité |
+| **Entrepreneur** | Fort | Pas de plafond (mais fort possibilité de 0) | Très forte | Idée + résilience |
+| **Indie hacker** | Variable | Long-tail (1-50 k€ MRR atteignable solo) | Très forte | Curiosité produit + patience |
+
+> Tu peux **combiner**. Salarié + side-project. Freelance + micro-SaaS. Personne ne reste 30 ans dans un seul mode.
+
+---
+
+## Salarié — la voie majoritaire
+
+### Ce que tu obtiens
+
+- Salaire mensuel **prévisible**.
+- **Couverture sociale** (sécu, chômage, retraite) automatique.
+- **Formation** payée par l'employeur (CPF, etc.).
+- **Équipe** : apprentissage, mentorat, soft skills.
+- **Stabilité** pour la banque, le bail, le crédit.
+
+### Ce que tu donnes
+
+- Plafond de **revenu** lié à la grille interne.
+- **Liberté** de choix du projet.
+- Du **temps** (35-40 h/sem typiquement).
+- Une partie du **partage de valeur** (Big Tech : equity ; PME : peu).
+
+### Pour qui
+
+- Tu débutes (apprentissage).
+- Tu veux la stabilité (vie perso, projet familial, immobilier).
+- Tu valorises le contexte d'équipe.
+- Tu n'as pas envie de la complexité administrative.
+
+### Composantes du package — 2026
+
+| Composante | Détails FR |
+|------------|------------|
+| **Brut annuel** | Sur 12 ou 13 mois |
+| **Variable / bonus** | 5-25 % de la base, atteignable ou cible |
+| **BSPCE / actions** (startup) | Vesting 3-4 ans, cliff 1 an |
+| **PEE / PERCO** | Épargne salariale avec abondement |
+| **Tickets restaurant** | ~ 9-13 €/jour, 60 % employeur |
+| **Mutuelle** | Au moins 50 % employeur |
+| **Télétravail** | 0-5 j / sem, à négocier |
+| **Formation** | CPF + budget formation |
+| **Congés** | 25 jours + RTT (souvent 8-12) |
+
+> En 2026, **le télétravail** est devenu un facteur de choix majeur. 100 % remote, hybride 2-3 j, 100 % présentiel : ce sont 3 produits différents.
+
+---
+
+## Freelance — l'indépendance avec contrats
+
+### Ce que tu obtiens
+
+- **TJM** : 400-1500 €/jour selon spé et XP.
+- **Choix** des missions, des clients.
+- **Mobilité** géographique souvent.
+- **Apprentissage** rapide (clients variés).
+
+### Ce que tu donnes
+
+- **Pas de chômage** standard (sauf via portage ou ATI freelance).
+- Charges sociales + impôts à **gérer toi-même**.
+- **Cycles** de prospection en plus des missions.
+- **Solitude** possible (compense via communautés).
+- **Trésorerie** : 30-60 jours de délai paiement standard.
+
+### Statuts juridiques courants — FR 2026
+
+| Statut | Plafond CA | Charges | Quand |
+|--------|------------|---------|-------|
+| **Micro-entrepreneur** | 77 700 €/an (services) | ~22 % CA | Démarrer simple, mono-client interdit (URSSAF veille) |
+| **EI** (Entreprise individuelle) | Aucun | Réel | Au-delà du plafond micro |
+| **EURL** | Aucun | Réel + IS option | Patrimoine séparé, optimisation IS |
+| **SASU** | Aucun | Réel élevé (~80 % salaire/dividende) | Pour optimiser dividendes vs salaire |
+| **Portage salarial** | Aucun | ~50 % du facturé | Sécurité salariée + autonomie freelance, plus cher |
+
+> Le **micro** est super pour démarrer (simplicité, faibles charges). Au-delà de ~50-60 k€ CA, les autres deviennent plus avantageux fiscalement. **Consulte un comptable** vers 50 k€/an.
+
+### Calculer ton TJM cible
+
+```
+TJM cible = (Salaire net souhaité × 2,5) / Jours facturables par an
+```
+
+Hypothèses :
+
+- ~ 220 jours travaillables (52 sem × 5 j - vacances - jours fériés).
+- Taux d'occupation réaliste : **65-80 %** (le reste : prospection, admin, formation, maladie).
+- Soit ~150-180 jours facturables / an.
+- Charges + impôts : ~50 % du CA (varie selon statut).
+- Marge sécurité : reste de l'année 2 mois sans mission ?
+
+| Salaire net souhaité | TJM mini |
+|----------------------|----------|
+| 2 500 €/mois | 350-450 |
+| 3 500 €/mois | 500-600 |
+| 5 000 €/mois | 700-850 |
+| 7 000 €/mois | 1 000-1 200 |
+
+> Ces fourchettes sont **indicatives** — varient selon zone géo, niche, niveau d'XP, taille des clients.
+
+### Trouver des missions
+
+| Canal | Force | Faiblesse |
+|-------|-------|-----------|
+| **Réseau direct** | Convertit le mieux | Demande temps de cultiver |
+| **LinkedIn** | Recruteurs te trouvent | Bruit |
+| **Malt / Comet** | Volume FR | 10-20 % de commission |
+| **Toptal / Upwork** | International | Sélection dure / commission |
+| **Welcome to the Jungle Freelance** | Curé | Volume modéré |
+| **Talent.io / Hello Charly** | Mid-market | Spécifique IT |
+
+### Lire un contrat freelance — clauses critiques
+
+| Clause | À vérifier |
+|--------|------------|
+| **Périmètre** | Qu'est-ce qui est inclus / exclu ? |
+| **Durée + renouvellement** | Tacite ? Limite ? |
+| **TJM ou forfait** | Régie (TJM) > forfait souvent |
+| **Délai de paiement** | 30 jours max légal en France |
+| **Pénalités de retard** | Tu peux les facturer (taux ~10 %/an) |
+| **Propriété intellectuelle** | Cession ou licence ? |
+| **Non-concurrence** | Durée / périmètre / zone — souvent abusif |
+| **Clause de sous-traitance** | Tu peux déléguer ? |
+| **Résiliation** | Préavis (15-30 j habituel) |
+| **RGPD** | Si tu manipules des données perso |
+
+> **Faire relire** par un avocat ton premier contrat type, à amortir sur tes 10-20 missions suivantes.
+
+### Anti-patterns freelance
+
+- **Mono-client** prolongé → risque URSSAF (requalification en salarié déguisé).
+- **Pas de provision impôts** → mauvaise surprise en mai.
+- **Trop chargé sur un client** → vulnérable à la rupture.
+- **Dépasser le plafond micro** sans changer de statut.
+- **Pas de mutuelle / prévoyance** → un mois d'arrêt et tu coules.
+- **Facturer après livrer 100 %** → cash flow tendu. Préfère 30 % à la signature, 30 % à mi-parcours, 40 % à la livraison.
+
+---
+
+## Entrepreneur — créer une entreprise avec ambition
+
+### Ce que ça veut dire
+
+Tu **crées une boîte** : équipe, levée de fonds éventuelle, clients, croissance, scale, exit ou pas. Différent du freelance (toi seul) et de l'indie hacker (petit, mais sans levée).
+
+### Stack 2026 d'un fondateur tech
+
+- **MVP** rapide (Next.js + Supabase + Stripe + Vercel typique).
+- **YC / Techstars / startup studios** pour l'accompagnement.
+- **First check** : friends & family ou pre-seed business angels (50-300 k€).
+- **Seed** : 1-3 M€ (focus product-market fit).
+- **Series A** : 5-15 M€ (focus growth).
+
+### Statuts FR
+
+| Statut | Quand |
+|--------|-------|
+| **SAS / SASU** | Standard startup tech |
+| **SARL / EURL** | PME plus traditionnel |
+| **Société européenne (SE)** | Si scope EU dès le départ |
+
+### Réalité crue
+
+| Statistique | Approximative |
+|-------------|---------------|
+| % startups qui survivent à 3 ans | 30-50 % |
+| % startups qui font une exit > 10 M$ | < 1 % |
+| Salaire fondateur typique avant Seed | < SMIC |
+| Heures travaillées / sem | 50-80 |
+| Stress / santé mentale | Élevés |
+
+> *« Don't take a startup salary unless you can afford to lose it. »*
+
+### Pour qui
+
+- Tu as une **idée** + une **conviction** durable (pas juste l'envie de jouer au CEO).
+- Tu acceptes 3-5 ans de **revenus bas** + risque échec.
+- Tu sais **vendre** (50 % du job tech-fondateur, c'est commercial).
+- Tu peux **te financer** (épargne, conjoint, famille).
+
+---
+
+## Indie hacker — petit, autonome, profitable
+
+### Ce que c'est
+
+Tu construis et vends ton propre produit, **seul ou en petite équipe (1-5)**, sans levée de fonds. Cible : MRR (Monthly Recurring Revenue) qui te permet de vivre. Pas de scale à tout prix.
+
+### Cibles réalistes 2026
+
+| MRR | Ce que ça veut dire |
+|-----|---------------------|
+| 1 k€/mois | Side income, complément |
+| 5-10 k€/mois | Tu peux vivre dessus à temps plein |
+| 20-50 k€/mois | Petit business sain, équipe 1-3 |
+| 50 k€+/mois | Tu commences à être convoité par des acheteurs |
+
+### Avantages
+
+- **Liberté** maximale.
+- Pas de **dilution**, tu gardes 100 %.
+- **Apprentissage** transverse (produit, marketing, sales).
+- **Exit** possible (Indie acquisition : 2-5× ARR vers MicroAcquire, Acquire.com).
+
+### Inconvénients
+
+- **Marketing** : tu dois savoir distribuer ton produit (SEO, content, communauté).
+- **Solitude** : pas de cofounder = porte tout.
+- **Cycle long** : 12-24 mois pour atteindre des seuils intéressants.
+- **Pas de filet de sécurité**.
+
+### Stack indie 2026
+
+- **Astro / Next** + **Supabase** + **Stripe** + **Resend** + **Tailwind**.
+- **Cloudflare Pages / Vercel** pour l'hébergement.
+- **PostHog** pour l'analytics.
+- **Beehiiv / Buttondown** pour la newsletter.
+- **Twitter / X / Bluesky** pour la communauté.
+
+### Communauté & ressources
+
+- **Indie Hackers** ([indiehackers.com](https://www.indiehackers.com/))
+- **MicroConf** — conférences indie / bootstrap.
+- **Pieter Levels** ([levels.io](https://levels.io/)) — référence du genre.
+- **MicroAcquire / Acquire.com** — marketplace pour vendre.
+
+---
+
+## Combiner les modes
+
+### Combos courants
+
+| Combo | Quand |
+|-------|-------|
+| **Salarié + side-project** | Apprentissage, valider une idée sans risque |
+| **Salarié → freelance** (transition) | Après 3-7 ans XP, niche identifiée |
+| **Freelance + micro-SaaS** | Diversifier les revenus, sortir du temps-vendu |
+| **Freelance + portage** | Sécuriser pendant levée d'un projet |
+| **Indie hacker + freelance** | Couvrir le bas du runway pendant que le SaaS monte |
+| **Entrepreneur après salariat** | Le plus courant des fondateurs sérieux |
+
+> Personne ne reste 30 ans dans un seul mode. La carrière saine est une **suite de transitions** réfléchies.
+
+### Conditions de la transition salarié → freelance
+
+- ✅ 3-7 ans d'XP minimum (sinon TJM trop bas).
+- ✅ Une **niche** identifiée (Next.js, IA / RAG, Three.js, Postgres tuning…).
+- ✅ Réseau (anciens collègues, communauté tech, LinkedIn vivant).
+- ✅ Épargne **6-12 mois** de dépenses (cushion).
+- ✅ Idéalement une 1ère mission **avant** de quitter.
+
+### Conditions de la transition freelance → indie hacker
+
+- ✅ 1-2 ans de freelance avec un cushion solide.
+- ✅ Une idée **validée** (pas juste « j'aimerais bien »).
+- ✅ Capacité à passer 6-18 mois sans revenu produit.
+- ✅ Réseau pour les missions de fallback.
+
+---
+
+## Fiscalité — l'essentiel à comprendre
+
+### Pour le salarié
+
+- **Prélèvement à la source** automatique.
+- Possibilité d'**investir** via PEE/PERCO/PER pour défiscaliser.
+- BSPCE / actions gratuites : régime fiscal spécifique.
+
+### Pour le freelance / indie
+
+| Chose | Quand y penser |
+|-------|----------------|
+| **Provision impôts** : mettre 30-40 % du CA de côté | Mensuel, sur compte séparé |
+| **TVA** : 20 % FR | Facturer dès dépassement seuils micro / IS |
+| **CFE** (Cotisation Foncière Entreprises) | Annuelle, ~ 200-2000 € |
+| **URSSAF** : trimestriel ou mensuel | Auto pour micro, déclaration sinon |
+| **IS (Impôt Sociétés)** vs IR | Selon statut |
+| **Réinvestir les dividendes** | Optimiser via PEA / PEE / PER |
+| **Comptable** | Indispensable au-delà du micro |
+
+> **Comptable** = ~80-300 €/mois. Ça **paie** : optimisations fiscales, sérénité administrative, tu codes pendant qu'il s'occupe du reste.
+
+---
+
+## Les indicateurs santé à surveiller
+
+| KPI | Pour qui | Cible |
+|-----|----------|-------|
+| **Taux d'occupation** | Freelance | 65-80 % |
+| **Délai de paiement moyen** | Freelance | < 45 jours |
+| **Pipeline (missions futures)** | Freelance | ≥ 2× capacité 3 mois |
+| **MRR / churn / CAC** | Indie hacker | Cf axe 17.4 |
+| **Runway** (mois de cash dispo) | Entrepreneur | ≥ 12 mois |
+| **Burn rate** | Entrepreneur | À surveiller mensuel |
+| **NPS personnel** : suis-je content ? | Tous | > 6/10 sur 6 mois roulants |
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu es salarié junior depuis 18 mois. Un client t'offre une mission freelance bien payée. Bonne idée d'arrêter le salariat ?"
+  options={[
+    'Oui, le freelance paie mieux',
+    'Probablement non : 18 mois = trop court pour avoir une niche solide ; le mono-client est risqué (URSSAF) ; pas de cushion. Mieux : continuer salarié, faire la mission en side avec accord employeur, et envisager freelance vers 3-5 ans XP avec plusieurs prospects',
+    'Oui mais en SASU',
+    'Demander 2× le salaire'
+  ]}
+  answerIndex={1}
+  explanation="18 mois XP = TJM bas, peu de réseau, niche pas claire, premier client = mono-client (signal rouge URSSAF requalification salariat déguisé). La transition freelance solide arrive plus tard (3-5+ ans). Et un cushion de 6-12 mois est presque non-négociable. Le side-project temporaire (avec accord employeur) est le bon compromis."
+/>
+
+<Quiz
+  question="Tu es freelance, ton CA 2026 va dépasser le plafond micro-entrepreneur (~77 700 €). Que faire ?"
+  options={[
+    'Continuer en micro et payer la pénalité',
+    'Anticiper le changement de statut : consulter un comptable, choisir entre EI réel, EURL ou SASU selon ton mode de rémunération souhaité (salaire vs dividendes), prévoir le passage à la TVA et la trésorerie',
+    'Refuser des missions',
+    'Facturer en personne physique'
+  ]}
+  answerIndex={1}
+  explanation="Dépasser le plafond te sort du régime micro. C'est NORMAL et même bon signe. Le bon timing est 6-12 mois avant : changement de statut, début de comptabilité réelle, gestion TVA. Refuser des missions « pour rester en micro » est un piège (cap artificiel sur ton revenu). Comptable indispensable à ce stade — son coût est largement amorti par les optimisations."
+/>
+
+<Quiz
+  question="Tu vises 4 000 € net/mois en freelance. Tu prévois ~ 180 jours facturables / an. Quel TJM mini cohérent ?"
+  options={[
+    'TJM 300 €',
+    'TJM 550-650 € (calcul rough : 4 000 × 12 × 2,5 / 180 = ~ 666 €). Plus large si tu débutes le freelance et veux du cushion',
+    'TJM 200 €',
+    'TJM 1 500 €'
+  ]}
+  answerIndex={1}
+  explanation="Formule rough : (net souhaité × 2,5) / jours facturables. Le 2,5 couvre charges sociales + impôts + provision + matériel + risque. Avec 4 000 net / 180 j → ~666 € TJM mini. Selon ta niche et seniority, peut viser 700-1000 €. 300 € te ferait travailler à perte vs salariat équivalent."
+/>
+
+<Quiz
+  question="Tu hésites entre quitter ton job pour faire un SaaS solo (idée que tu as testée 6 mois en side) ou rester salarié et continuer le side. Quel critère prioritaire ?"
+  options={[
+    'Le coup de cœur',
+    'Le runway disponible : combien de mois TU peux vivre sans revenu ? Si < 12 mois, garde le salariat et continue à 10-15h/sem en side. Si > 18 mois ET le side fait déjà des premiers MRR (signal de validation), tu peux envisager full-time',
+    'Le tweet d\'un autre fondateur',
+    'L\'âge'
+  ]}
+  answerIndex={1}
+  explanation="L'indie hacker / startup solo échoue le plus souvent par manque de **runway** (cash) avant le PMF. 12 mois minimum, idéalement 18-24. Validation = premiers MRR (pas juste « les gens disent que c'est cool »). Quitter sans cushion ni traction réelle = forte probabilité d'échec qui te coûte 1-2 ans de carrière sans bénéfice."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Working in Public* — Nadia Eghbal (open source comme mode)
+- *The Indie Hackers Handbook* — [indiehackers.com](https://www.indiehackers.com/)
+- *MicroConf talks* — YouTube
+- *Patrick McKenzie blog* — kalzumeus.com (négo et freelance)
+- *Gergely Orosz — Pragmatic Engineer* — newsletter sur la carrière tech
+- *Levels.io* — référence indie
+- *legalstart / Captain Contrat* — outils création de structure
+- *URSSAF.fr* / *impots.gouv.fr* — sources officielles FR
+
+---
+
+**Suite** : [17.6 — Éthique & durabilité](/17-carriere/06-ethique/) — A11y comme exigence, sobriété, RGPD, IA responsable.

@@ -1,0 +1,76 @@
+---
+title: Axe 4 — Outils du développeur
+description: IDE, Git, gestionnaires de paquets, Docker, terminal — l'environnement productif.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : disposer d'un environnement de travail reproductible, versionné et confortable.
+
+## Prérequis
+
+Axe 1.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Manipuler Git en confiance : branches, merge, rebase, cherry-pick, reflog",
+  "Mettre en place un workflow GitHub avec PR et code review",
+  "Configurer VS Code avec extensions, snippets, debugger",
+  "Conteneuriser une application avec Docker et Docker Compose",
+  "Comprendre semver et les lockfiles npm/pnpm",
+  "Versionner ses dotfiles et travailler efficacement au terminal"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="4.1 — Éditeur / IDE"
+    href="/04-outils/01-ide/"
+    description="VS Code, extensions, raccourcis qui changent tout, multi-curseur, debugger, snippets."
+  />
+  <LinkCard
+    title="4.2 — Git en profondeur"
+    href="/04-outils/02-git/"
+    description="Concepts, workflow, merge vs rebase, reflog, GitHub Flow, conventional commits."
+  />
+  <LinkCard
+    title="4.3 — Gestion de paquets"
+    href="/04-outils/03-paquets/"
+    description="package.json, semver, lockfile, npm vs pnpm vs yarn, monorepos, nvm/fnm."
+  />
+  <LinkCard
+    title="4.4 — Conteneurisation (Docker)"
+    href="/04-outils/04-docker/"
+    description="Images, conteneurs, volumes, multi-stage, Docker Compose, hot-reload."
+  />
+  <LinkCard
+    title="4.5 — Productivité"
+    href="/04-outils/05-productivite/"
+    description="Dotfiles, Wezterm, ripgrep, fd, fzf, bat, eza, tmux, zoxide, starship."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Stack conteneurisée full-stack** — un `docker compose up` qui démarre Postgres + Redis + une API Node + un front Vite, avec hot-reload partout, healthchecks, volumes persistants, multi-stage et user non-root.
+
+<ExerciseDownload
+  axe="04-outils"
+  slug="01-stack-conteneurisee"
+  title="Stack conteneurisée Docker Compose"
+  description="Pré-requis : Docker Desktop installé. Tu vas vivre les 6 pièges Docker classiques (Vite qui bind sur 127.0.0.1, node_modules écrasé par bind mount, healthcheck trop tôt, root dans le container…) et apprendre à les éviter. Tests d'intégration inclus : 4 services UP, persistance après down/up, round-trip API↔DB."
+/>
+
+## Ressources clés
+
+- *Pro Git* — Scott Chacon (gratuit) — [git-scm.com/book/fr](https://git-scm.com/book/fr/v2)
+- *Oh Shit, Git!?!* — [ohshitgit.com](https://ohshitgit.com/)
+- *Docker — Get Started* — [docs.docker.com](https://docs.docker.com/get-started/)
+- *Modern Unix* — [github.com/ibraheemdev/modern-unix](https://github.com/ibraheemdev/modern-unix)
+- *Conventional Commits* — [conventionalcommits.org](https://www.conventionalcommits.org/)

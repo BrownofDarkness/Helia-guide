@@ -1,0 +1,96 @@
+---
+title: Axe 16 — Spécialisations
+description: Mobile, temps réel, 3D, IA appliquée, edge & WASM, Web3 — choisir une niche après le tronc commun.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : choisir une ou deux spécialisations pour te démarquer après avoir solidifié les axes 1 à 15. Chaque sous-section présente le marché, les briques, et le piège classique du domaine.
+
+## Prérequis
+
+Avoir fini la majorité des axes 1 à 14 — la spécialisation suppose un tronc commun maîtrisé.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Comprendre ce que recouvre chaque spécialisation et ses cas d'usage réels",
+  "Choisir 1 ou 2 spécialisations à approfondir selon tes goûts et opportunités",
+  "Repérer les pseudo-besoins qui conduisent à de mauvaises décisions de spé",
+  "Construire un projet de spécialisation à exposer dans ton portfolio"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="16.1 — Mobile & cross-platform"
+    href="/16-specialisations/01-mobile/"
+    description="PWA avancée (SW, Background Sync, Push), React Native / Expo, Flutter, Capacitor — choisir selon UX, équipe, time-to-market."
+  />
+  <LinkCard
+    title="16.2 — Temps réel & collaboratif"
+    href="/16-specialisations/02-temps-reel/"
+    description="WebSockets, SSE, WebRTC (LiveKit), CRDT (Yjs, Automerge), Liveblocks — patterns de scale, sticky sessions, fan-out."
+  />
+  <LinkCard
+    title="16.3 — 3D, jeu, créatif"
+    href="/16-specialisations/03-3d/"
+    description="Canvas 2D, WebGL, Three.js, React Three Fiber, WebGPU — perfs (draw calls, GPU instancing), accessibilité 3D, configurateurs produit."
+  />
+  <LinkCard
+    title="16.4 — IA appliquée au web"
+    href="/16-specialisations/04-ia/"
+    description="LLM (Claude, GPT, Gemini, Mistral), RAG + pgvector, function calling, agents, MCP, AI SDK Vercel, sécurité prompt et coûts."
+  />
+  <LinkCard
+    title="16.5 — Edge & WebAssembly"
+    href="/16-specialisations/05-edge-wasm/"
+    description="Cloudflare Workers, Deno Deploy, Bun, WebAssembly (Rust → WASM), WASI — quand l'edge change la donne, où WASM gagne 5-100×."
+  />
+  <LinkCard
+    title="16.6 — Web3 (si pertinent)"
+    href="/16-specialisations/06-web3/"
+    description="Wallets (MetaMask, AppKit), SIWE, viem / ethers, contrats ERC-20, gas, Account Abstraction. Et surtout : quand Web3 est pertinent."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Un mini-projet de spé** dans la spécialisation choisie :
+
+- **Mobile** : PWA installable + push notifications + offline.
+- **Temps réel** : éditeur collaboratif type Notion (Yjs).
+- **3D** : configurateur 3D produit (Three.js + R3F).
+- **IA** : assistant RAG sur ta propre doc (l'exercice fourni).
+- **Edge / WASM** : API mondiale Cloudflare Workers + traitement image WASM.
+- **Web3** : SIWE + dashboard de tokens lus via The Graph.
+
+<Aside type="tip" title="🎯 Tu peux attaquer ce projet dès la fin de 16.4">
+Le projet **Assistant RAG** s'appuie uniquement sur **16.4 (IA appliquée)**. Les sous-axes 16.5 (Edge/WASM) et 16.6 (Web3) sont des spécialisations **alternatives** qui ne servent pas à ce projet précis.
+
+Deux trajectoires valides :
+- **Pratique à chaud** : tu lis 16.4 puis attaques le RAG — la spé IA est ta voie principale.
+- **Tour d'horizon d'abord** : tu parcours 16.5 et 16.6 pour décider si une autre spé t'attire davantage avant de t'investir 8-12 h.
+</Aside>
+
+<ExerciseDownload
+  axe="16-specialisations"
+  slug="01-assistant-rag"
+  title="Assistant RAG sur ta propre doc"
+  description="Pré-requis : Docker (pgvector) + clés API Anthropic + OpenAI (free tier suffisent). Tu construis un assistant qui répond uniquement à partir de tes Markdown — pipeline complet : chunking, embeddings, recherche hybride vector + BM25 + RRF, citations forcées, garde-fous anti-hallucination, streaming. Schéma DB validé localement."
+/>
+
+## Ressources clés
+
+- *web.dev* — guides PWA & perf
+- *Yjs docs* — [docs.yjs.dev](https://docs.yjs.dev/)
+- *Three.js Journey* — Bruno Simon (3D)
+- *AI SDK Vercel* — [sdk.vercel.ai](https://sdk.vercel.ai/)
+- *Cloudflare Workers docs* — [developers.cloudflare.com/workers](https://developers.cloudflare.com/workers/)
+- *viem* — [viem.sh](https://viem.sh/)
+- *Specialisations courantes 2026* : IA appliquée, edge, real-time collab, mobile cross-platform.

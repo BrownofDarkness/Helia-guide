@@ -1,0 +1,384 @@
+---
+title: 9.3 — ORM & query builders
+description: Prisma 7, Drizzle, SQLAlchemy 2, Eloquent, Doctrine — choisir et utiliser sans tomber dans le N+1.
+sidebar:
+  order: 3
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : utiliser un ORM en confiance, savoir descendre en SQL brut quand nécessaire, et **toujours** détecter le problème N+1.
+
+<ObjectiveList items={[
+  "Distinguer ORM (Active Record vs Data Mapper) et query builder",
+  "Choisir Prisma 7, Drizzle, SQLAlchemy, Eloquent, Doctrine selon le contexte",
+  "Identifier et fixer un problème N+1",
+  "Utiliser des transactions, des bulks inserts, du raw SQL quand pertinent",
+  "Configurer migrations, seeds, factories"
+]} />
+
+<Level value="confirmé" reading="10 min" prereq="axe 8 lu" />
+
+
+## ORM, query builder, raw SQL — distinction
+
+| Niveau | Exemple | Forces |
+|--------|---------|--------|
+| **Raw SQL** | `db.exec('SELECT * FROM users WHERE id = $1', [42])` | Contrôle total, perfs maximales |
+| **Query builder** | `db.select().from(users).where(eq(users.id, 42))` | Composabilité, type-safety, plus lisible que SQL string |
+| **ORM Active Record** | `User.find(42)`, `user.posts` | Productivité, relations magiques |
+| **ORM Data Mapper** | `entityManager.find(User, 42)` | Séparation domaine ↔ persistance, propre en DDD |
+
+Tu peux **mixer** les niveaux — tous les ORMs modernes permettent du raw SQL quand nécessaire.
+
+## Le paysage 2026
+
+### Node.js / TypeScript
+
+| Outil | Style | Note |
+|-------|-------|------|
+| **Prisma 7** | Schema-first, ORM | Productivité maximale, doc top, **engine TS/WASM** depuis v7 |
+| **Drizzle** | Query builder TS-first | Edge-ready, proche du SQL, bundle minuscule |
+| **Kysely** | Pure query builder | Type-safety extrême, pas d'ORM |
+| **TypeORM** | Active Record / Data Mapper | Style Java, NestJS-friendly, en perte de vitesse |
+| **MikroORM** | Data Mapper proche de Doctrine | Niche, utile si tu viens de PHP |
+
+### Python
+
+| Outil | Style | Note |
+|-------|-------|------|
+| **SQLAlchemy 2** | Data Mapper, sync ou async | Le plus puissant, verbose |
+| **SQLModel** | SQLAlchemy + Pydantic | Le mariage parfait pour FastAPI |
+| **Tortoise ORM** | Active Record async, inspiré Django | Pour FastAPI sans SQLAlchemy |
+| **Django ORM** | Active Record | Inclus dans Django, très productif |
+
+### PHP
+
+| Outil | Style | Note |
+|-------|-------|------|
+| **Eloquent** (Laravel) | Active Record | Productivité maximale |
+| **Doctrine** (Symfony) | Data Mapper | Style Java/Hibernate, très puissant |
+
+### Verdict 2026
+
+| Si tu... | Choisis |
+|----------|---------|
+| Démarres en Node + Postgres avec équipe productive | **Prisma 7** |
+| Vises l'edge (Cloudflare Workers) ou veux du contrôle SQL | **Drizzle** |
+| Es en FastAPI | **SQLAlchemy 2 async** ou **SQLModel** |
+| Es en Django | Django ORM (pas de choix) |
+| Es en Laravel | Eloquent (pas de choix) |
+| Es en Symfony | Doctrine ORM |
+
+## Le problème N+1 — LA bête noire
+
+C'est **THE** bug ORM le plus répandu. Il fait passer une page de 50 ms à 5 secondes.
+
+```ts
+// ❌ N+1 PROBLEM
+const orders = await prisma.order.findMany({ take: 100 });
+for (const order of orders) {
+  console.log(order.customer.name);   // 100 requêtes SQL supplémentaires !
+}
+// Total : 1 + 100 = 101 requêtes
+```
+
+```ts
+// ✅ Eager loading — 1 seule requête (avec JOIN)
+const orders = await prisma.order.findMany({
+  take: 100,
+  include: { customer: true },
+});
+for (const order of orders) {
+  console.log(order.customer.name);   // pas de requête supplémentaire
+}
+// Total : 1 requête
+```
+
+### Détecter N+1
+
+**Toujours** activer les logs SQL en dev :
+
+```ts
+// Prisma
+const prisma = new PrismaClient({ log: ['query'] });
+```
+
+Tu vois exactement les requêtes générées. Si tu vois la **même requête** se répéter 50 fois → N+1.
+
+Outils :
+- **Prisma Studio** + log
+- **Laravel Debugbar** (PHP)
+- **Django Debug Toolbar** (Python)
+- **PgHero** (PostgreSQL — analyse les slow queries)
+
+## Prisma 7 — l'option productive
+
+```bash
+npm install prisma @prisma/client
+npx prisma init
+```
+
+```prisma
+// schema.prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Customer {
+  id         Int      @id @default(autoincrement())
+  email      String   @unique
+  name       String
+  orders     Order[]
+  createdAt  DateTime @default(now())
+}
+
+model Order {
+  id          Int      @id @default(autoincrement())
+  customer    Customer @relation(fields: [customerId], references: [id])
+  customerId  Int
+  status      OrderStatus @default(pending)
+  totalCents  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([customerId, createdAt])
+}
+
+enum OrderStatus {
+  pending
+  paid
+  shipped
+  cancelled
+}
+```
+
+```bash
+npx prisma migrate dev --name init
+npx prisma generate
+```
+
+```ts
+// Usage
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+
+// Lecture
+const orders = await prisma.order.findMany({
+  where: { customerId: 42, status: 'paid' },
+  include: { customer: true },
+  orderBy: { createdAt: 'desc' },
+  take: 20,
+});
+
+// Écriture
+const order = await prisma.order.create({
+  data: {
+    customerId: 42,
+    totalCents: 2990,
+    status: 'pending',
+  },
+});
+
+// Transaction
+await prisma.$transaction(async (tx) => {
+  await tx.order.update({ where: { id: 1 }, data: { status: 'paid' } });
+  await tx.product.update({ where: { id: 5 }, data: { stock: { decrement: 1 } } });
+});
+
+// Raw SQL quand nécessaire
+const result = await prisma.$queryRaw<{ total: number }[]>`
+  SELECT SUM(total_cents) AS total FROM orders WHERE status = 'paid'
+`;
+```
+
+### Prisma 7 — engine TS/WASM
+
+Depuis Prisma 7 (2026), l'engine Rust est remplacé par un engine **TypeScript + WebAssembly**. Bénéfices :
+
+- Bundle ~85 % plus léger (1.6 Mo vs 11 Mo).
+- Performances ~3× meilleures sur grandes requêtes.
+- Compatible **edge** (Cloudflare Workers, Vercel Edge).
+- Plus de processus séparé à gérer.
+
+C'est le saut générationnel qui rend Prisma viable sur edge runtime.
+
+## Drizzle — le query builder TS
+
+```bash
+npm install drizzle-orm postgres
+npm install -D drizzle-kit
+```
+
+```ts
+// schema.ts
+import { pgTable, serial, text, integer, timestamp, pgEnum, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { sql, relations } from 'drizzle-orm';
+
+export const orderStatus = pgEnum('order_status', ['pending', 'paid', 'shipped', 'cancelled']);
+
+export const customers = pgTable('customers', {
+  id: serial('id').primaryKey(),
+  email: text('email').notNull(),
+  name: text('name').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  emailIdx: uniqueIndex('customers_email_idx').on(t.email),
+}));
+
+export const orders = pgTable('orders', {
+  id: serial('id').primaryKey(),
+  customerId: integer('customer_id').notNull().references(() => customers.id),
+  status: orderStatus('status').notNull().default('pending'),
+  totalCents: integer('total_cents').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  customerCreatedIdx: index('orders_customer_created_idx').on(t.customerId, t.createdAt),
+}));
+
+export const customersRelations = relations(customers, ({ many }) => ({
+  orders: many(orders),
+}));
+
+export const ordersRelations = relations(orders, ({ one }) => ({
+  customer: one(customers, {
+    fields: [orders.customerId],
+    references: [customers.id],
+  }),
+}));
+```
+
+```ts
+// Code
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { eq, and, desc } from 'drizzle-orm';
+
+const client = postgres(process.env.DATABASE_URL!);
+const db = drizzle(client, { schema });
+
+const recentOrders = await db.query.orders.findMany({
+  where: and(
+    eq(orders.customerId, 42),
+    eq(orders.status, 'paid')
+  ),
+  with: { customer: true },        // eager loading
+  orderBy: desc(orders.createdAt),
+  limit: 20,
+});
+```
+
+### Migrations Drizzle
+
+```bash
+npx drizzle-kit generate    # génère le SQL diff
+npx drizzle-kit migrate      # applique
+```
+
+## Bulks et perf
+
+Insérer 10 000 lignes une par une = 10 000 requêtes = catastrophe. **Toujours bulk** :
+
+```ts
+// Prisma
+await prisma.product.createMany({ data: arrayOf10kProducts });
+
+// Drizzle
+await db.insert(products).values(arrayOf10kProducts);
+
+// SQL brut
+INSERT INTO products (sku, name, price) VALUES
+  ('A', 'Foo', 100),
+  ('B', 'Bar', 200),
+  ('C', 'Baz', 300),
+  ...;
+```
+
+Postgres permet aussi `COPY` pour des imports massifs (millions de lignes en quelques secondes).
+
+## Quand descendre en SQL brut
+
+Cas où le SQL natif est meilleur que l'ORM :
+
+1. **Reporting complexe** : window functions, CTE imbriquées, agrégats.
+2. **Performances critiques** : éviter les abstractions.
+3. **Features spécifiques DB** : `LISTEN/NOTIFY`, `pg_advisory_lock`, etc.
+4. **Migration de données** : `INSERT ... SELECT ... ON CONFLICT`.
+5. **Recherche full-text avancée** : `tsvector`, `tsquery`.
+
+```ts
+// Prisma raw SQL (typé)
+const result = await prisma.$queryRaw<{ month: Date; total: number }[]>`
+  SELECT
+    DATE_TRUNC('month', created_at) AS month,
+    SUM(total_cents) AS total
+  FROM orders
+  WHERE created_at >= NOW() - INTERVAL '12 months'
+  GROUP BY 1
+  ORDER BY 1;
+`;
+```
+
+`$queryRaw` (Prisma) ou `db.execute(sql\`...\`)` (Drizzle) **paramétrise automatiquement** les valeurs interpolées — pas de SQL injection.
+
+## Migrations — ne JAMAIS éditer une migration appliquée
+
+> Une migration appliquée en prod est **immuable**. Si tu as besoin de corriger, **crée une nouvelle migration**.
+
+Sinon les environnements dérivent (dev a une version, staging une autre, prod encore une autre) et **plus rien ne marche**.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu loades 100 commandes puis affiches le nom du client de chacune. Sans précaution, tu vois 101 requêtes SQL. Comment fixer ?"
+  options={[
+    'Mettre un cache Redis',
+    'Eager loading : `findMany({ include: { customer: true } })` Prisma, ou `with: { customer: true }` Drizzle — fait UNE requête avec JOIN',
+    'Augmenter la RAM',
+    'Désactiver les relations'
+  ]}
+  answerIndex={1}
+  explanation="C'est THE bug ORM. Solution : eager loading déclaratif. Prisma : include ou select. Drizzle : with. SQLAlchemy : selectinload / joinedload. Eloquent : with. Toujours surveiller les logs SQL en dev pour détecter ce pattern."
+/>
+
+<Quiz
+  question="Tu insères 50 000 produits depuis un fichier CSV avec un boucle for { prisma.product.create(...) }. Que se passe-t-il ?"
+  options={[
+    'Aucun problème, c\'est rapide',
+    'Catastrophe — 50 000 requêtes SQL séparées, opération qui prend des minutes. Utilise createMany ou COPY',
+    'Prisma optimise automatiquement',
+    'Cela dépend de la base'
+  ]}
+  answerIndex={1}
+  explanation="Une création par ligne = 50 000 round-trips réseau + 50 000 commits. Pour des bulks massifs : createMany (Prisma), insert().values([]) (Drizzle), ou directement COPY en SQL pur (millions de lignes en secondes). Bénéfice : 100-1000× plus rapide."
+/>
+
+<Quiz
+  question="Tu modifies une migration déjà appliquée en prod (tu changes son SQL). Conséquence ?"
+  options={[
+    'Aucune, l\'ORM la rejouera',
+    'Désastre : les environnements dérivent. La table de migrations Postgres connaît le hash original ; ton nouveau SQL ne sera jamais réappliqué. Crée une NOUVELLE migration qui corrige',
+    'Cela dépend de l\'ORM',
+    'PostgreSQL refuse l\'opération'
+  ]}
+  answerIndex={1}
+  explanation="L'outil de migration garde un fingerprint de chaque migration appliquée (Prisma `_prisma_migrations`, Alembic `alembic_version`, etc.). Modifier une migration appliquée crée une divergence : le hash ne correspond plus. La règle est ABSOLUE : jamais modifier une migration appliquée. Toujours créer une nouvelle migration qui corrige."
+/>
+
+## Pour aller plus loin
+
+- *Prisma Documentation* — [prisma.io/docs](https://www.prisma.io/docs)
+- *Drizzle ORM* — [orm.drizzle.team](https://orm.drizzle.team/)
+- *SQLAlchemy 2.0 Tutorial* — [docs.sqlalchemy.org](https://docs.sqlalchemy.org/en/20/tutorial/index.html)
+- *Patterns of Enterprise Application Architecture* — Martin Fowler (Active Record vs Data Mapper)
+
+---
+
+**Suite** : [9.4 — Données opérationnelles](/09-bases-de-donnees/04-operations/) — sauvegardes, réplication, sharding.

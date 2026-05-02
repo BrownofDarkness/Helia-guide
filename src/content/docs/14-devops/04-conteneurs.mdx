@@ -1,0 +1,586 @@
+---
+title: 14.4 — Conteneurs en production
+description: Dockerfile prod (multi-stage, non-root, scan), registres signés, Kubernetes essentiels (pods, deployments, services, ingress, HPA), Helm et Argo CD pour le GitOps.
+sidebar:
+  order: 4
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : passer du `docker run` local à des conteneurs robustes en prod. Docker pour packager, Kubernetes pour orchestrer (quand tu en as besoin) — sans tomber dans le piège du « K8s pour tout, tout de suite ».
+
+<ObjectiveList items={[
+  "Écrire un Dockerfile multi-stage propre, petit, non-root et reproductible",
+  "Signer et scanner ses images avant de les déployer",
+  "Comprendre les briques K8s : pod, deployment, service, ingress, HPA, secret",
+  "Choisir entre K8s managé et alternative plus simple",
+  "Mettre en place du GitOps avec Argo CD ou Flux"
+]} />
+
+<Level value="confirmé" reading="12 min" prereq="axes 4 et 8 lus" />
+
+
+## D'abord — as-tu vraiment besoin de Kubernetes ?
+
+K8s est un excellent outil. Il est aussi **excessivement coûteux** en complexité pour 80 % des projets.
+
+| Tu as | Tu n'as pas besoin de K8s |
+|-------|---------------------------|
+| 1-3 services à scaler | ECS Fargate, Cloud Run, Render, Fly suffisent |
+| Une équipe < 5 devs | Le coût cognitif K8s ralentit l'équipe |
+| Un produit en MVP | K8s = 3 mois de setup au lieu de feature |
+| < 100 req/s | Un VPS bien configuré tient |
+
+**Tu as besoin de K8s** si :
+
+- 20+ microservices avec interdépendances complexes.
+- Multi-tenant avec isolation forte par namespace.
+- Compliance qui exige des contrôles fins (NetworkPolicies, RBAC granulaire).
+- Équipe ops dédiée.
+- Charge variable et critique avec auto-scaling fin.
+
+> *« Kubernetes est un système distribué qui transforme un autre système distribué en un troisième système distribué. »* — un SRE anonyme
+
+Cette section couvre les deux mondes : **Docker industrialisé** (la base utile à tout le monde), puis **Kubernetes** (quand le besoin est avéré).
+
+---
+
+## Dockerfile production-ready
+
+### Anti-patterns à éviter
+
+```dockerfile
+# ❌ — image massive, root, npm install full
+FROM node:24
+WORKDIR /app
+COPY . .
+RUN npm install
+CMD ["node", "server.js"]
+```
+
+Problèmes :
+
+- Image > 1 GB (image Node full).
+- Root par défaut (escalation possible).
+- `npm install` installe les `devDependencies`.
+- `COPY . .` casse le cache à chaque modif.
+
+### Multi-stage propre
+
+```dockerfile
+# syntax=docker/dockerfile:1.7
+
+# ----- builder -----
+FROM node:24-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
+COPY . .
+RUN npm run build && npm prune --omit=dev
+
+# ----- runtime -----
+FROM node:24-alpine AS runtime
+WORKDIR /app
+
+# Utilisateur non-root
+RUN addgroup -S app && adduser -S app -G app
+USER app
+
+ENV NODE_ENV=production \
+    NODE_OPTIONS="--enable-source-maps"
+
+COPY --from=builder --chown=app:app /app/node_modules ./node_modules
+COPY --from=builder --chown=app:app /app/dist ./dist
+COPY --from=builder --chown=app:app /app/package.json ./
+
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
+  CMD wget -qO- http://127.0.0.1:3000/health || exit 1
+
+CMD ["node", "dist/server.js"]
+```
+
+Bénéfices :
+
+| Levier | Effet |
+|--------|-------|
+| **Multi-stage** | L'image finale ne contient pas les outils de build |
+| **alpine** | -200 à -800 MB |
+| **`--mount=type=cache`** | Cache npm/pnpm partagé entre builds |
+| **Layer order** : `package*.json` avant `COPY . .` | Cache hit sur dépendances inchangées |
+| **`USER app`** | Non-root → moins de surface d'attaque |
+| **`HEALTHCHECK`** | K8s / Render savent quand le container est prêt |
+| **`npm ci` + `--omit=dev`** | Pas de devDependencies en prod |
+
+### .dockerignore obligatoire
+
+```
+node_modules
+.git
+.env
+.env.*
+dist
+*.log
+.DS_Store
+coverage
+.next
+```
+
+Sans lui, `COPY . .` envoie 500 MB de `node_modules` local au build context.
+
+### Distroless / Chainguard pour aller plus loin
+
+```dockerfile
+FROM gcr.io/distroless/nodejs24-debian12:nonroot
+# ou
+FROM cgr.dev/chainguard/node:latest
+```
+
+Images minimales sans shell, sans apt, sans utilitaires. **Aucune surface d'attaque**, image typiquement < 100 MB.
+
+Inconvénient : pas de `sh` pour debug → tu utilises `kubectl debug` avec une image éphémère.
+
+---
+
+## Registre — où vivent tes images
+
+| Registre | Force |
+|----------|-------|
+| **GitHub Container Registry (ghcr.io)** | Gratuit, intégré CI, par repo |
+| **Docker Hub** | Le plus connu, mais quotas pull serrés |
+| **Amazon ECR** | Intégré IAM, pas d'egress depuis EC2 |
+| **GCP Artifact Registry** | Idem côté GCP |
+| **Cloudflare Registry** | Pull depuis edge mondial |
+| **Self-hosted (Harbor)** | Pour compliance fort |
+
+### Push depuis GitHub Actions vers ghcr.io
+
+```yaml
+- uses: docker/login-action@v3
+  with:
+    registry: ghcr.io
+    username: ${{ github.actor }}
+    password: ${{ secrets.GITHUB_TOKEN }}
+
+- uses: docker/build-push-action@v6
+  with:
+    context: .
+    push: true
+    tags: |
+      ghcr.io/${{ github.repository }}:latest
+      ghcr.io/${{ github.repository }}:${{ github.sha }}
+    cache-from: type=gha
+    cache-to: type=gha,mode=max
+    platforms: linux/amd64,linux/arm64
+```
+
+`platforms: linux/amd64,linux/arm64` : multi-arch dès le départ — utile pour les Mac M-series locaux et serveurs ARM (Hetzner ARM Ampere, Graviton).
+
+---
+
+## Sécurité d'image — scanner & signer
+
+### Scan de vulnérabilités
+
+| Outil | Quoi |
+|-------|------|
+| **Trivy** | OSS de référence, scan deps + OS + secrets + IaC |
+| **Grype** | Idem, par Anchore |
+| **Snyk Container** | Commercial, intégré DevSecOps |
+| **Docker Scout** | Intégré Docker Desktop |
+
+```bash
+trivy image ghcr.io/myorg/myapp:1.2.0
+# CRITICAL: 0
+# HIGH: 2
+# ...
+```
+
+Bloque la PR si un CRITICAL est détecté :
+
+```yaml
+- run: trivy image --severity CRITICAL --exit-code 1 ghcr.io/myorg/myapp:${{ github.sha }}
+```
+
+### Signature — Sigstore / cosign
+
+Signer une image prouve qu'elle vient bien de toi (et pas d'un attaquant qui a compromis le registre).
+
+```bash
+cosign sign --yes ghcr.io/myorg/myapp:1.2.0
+cosign verify --certificate-identity=... ghcr.io/myorg/myapp:1.2.0
+```
+
+Avec OIDC GitHub Actions, la signature est faite **sans clé long-lived** — la chaîne `keyless` Sigstore est l'option moderne.
+
+### SBOM — Software Bill of Materials
+
+Liste de toutes les dépendances de ton image. Obligatoire pour certains contextes (Cyber Resilience Act EU, US Executive Order).
+
+```bash
+syft ghcr.io/myorg/myapp:1.2.0 -o spdx-json > sbom.json
+```
+
+---
+
+## Kubernetes — les briques essentielles
+
+<Diagram
+  caption="Hiérarchie des objets K8s utiles à 95 % des cas"
+  code={`
+    flowchart TD
+      Ingress -->|HTTP| Service
+      Service -->|TCP| Pod
+      Deployment -->|gère| Pod
+      Pod -->|consomme| ConfigMap
+      Pod -->|consomme| Secret
+      HPA -->|scale| Deployment
+      PVC -->|monté dans| Pod
+  `}
+/>
+
+### Pod
+
+L'unité de base : 1+ conteneurs co-localisés (même IP, même volume éphémère).
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata: { name: myapp-xyz }
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/myorg/myapp:1.2.0
+      ports: [{ containerPort: 3000 }]
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits:   { cpu: 500m, memory: 512Mi }
+```
+
+> **Tu n'écris jamais des pods directement** en prod. Tu écris des Deployments qui les gèrent.
+
+### Deployment — pods qui se ré-créent
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: myapp }
+spec:
+  replicas: 3
+  selector: { matchLabels: { app: myapp } }
+  template:
+    metadata: { labels: { app: myapp } }
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/myorg/myapp:1.2.0
+          ports: [{ containerPort: 3000 }]
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+          readinessProbe:
+            httpGet: { path: /health, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 3000 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+```
+
+| Probe | Effet |
+|-------|-------|
+| **readinessProbe** | Tant que ❌ → le pod ne reçoit pas de trafic |
+| **livenessProbe** | Si ❌ persistant → kill et redémarre le pod |
+| **startupProbe** | Pour apps longues à démarrer (évite que liveness kill avant ready) |
+
+### Service — IP stable devant les pods
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata: { name: myapp }
+spec:
+  type: ClusterIP
+  selector: { app: myapp }
+  ports:
+    - port: 80
+      targetPort: 3000
+```
+
+Le service expose `myapp.namespace.svc.cluster.local`, load-balance les pods sains. `type: LoadBalancer` provisionne un LB cloud (AWS NLB, GCP LB, etc.).
+
+### Ingress — routage HTTP
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: myapp
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [api.example.com]
+      secretName: myapp-tls
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: myapp, port: { number: 80 } } }
+```
+
+Composant indispensable : un **ingress controller** installé (NGINX, Traefik, HAProxy, ALB Controller). Et **cert-manager** pour TLS auto.
+
+### HPA — autoscaling horizontal
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: myapp }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: myapp }
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
+```
+
+Plus avancé : **KEDA** scale aussi sur des métriques custom (queue length, requêtes Prometheus).
+
+### ConfigMap & Secret
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: myapp-config }
+data:
+  LOG_LEVEL: info
+---
+apiVersion: v1
+kind: Secret
+metadata: { name: myapp-secrets }
+type: Opaque
+stringData:
+  DATABASE_URL: postgres://user:pw@db/myapp
+```
+
+> **Les Secrets K8s ne sont pas chiffrés par défaut**, juste base64-encodés. Pour vraiment chiffrer : **Sealed Secrets** (Bitnami), **External Secrets Operator** (lit depuis Vault/AWS Secrets Manager), ou **SOPS**.
+
+---
+
+## K8s managé — qui choisir
+
+| Service | Force |
+|---------|-------|
+| **EKS** (AWS) | Mature, intégré IAM/VPC, cher |
+| **GKE** (GCP) | Le plus mûr (K8s vient de Google), Autopilot mode |
+| **AKS** (Azure) | Bien intégré AD, support entreprise |
+| **DigitalOcean Kubernetes** | Simple, ~30 €/mois pour un petit cluster |
+| **Civo** | Cluster en 90 s, bon prix |
+| **Scaleway Kapsule** | Souverain FR/UE |
+
+**Évite** d'auto-héberger ton cluster K8s en 2026 sauf besoin précis. Le control plane managé coûte ~70 $/mois et te fait gagner des semaines.
+
+---
+
+## Helm — packages réutilisables
+
+```bash
+# Installer
+helm install myapp ./chart --values values-prod.yaml
+
+# Mettre à jour
+helm upgrade myapp ./chart --values values-prod.yaml --atomic
+
+# Rollback
+helm rollback myapp 1
+```
+
+Un **chart** est un dossier YAML templaté + `values.yaml` :
+
+```
+chart/
+├── Chart.yaml
+├── values.yaml
+└── templates/
+    ├── deployment.yaml
+    ├── service.yaml
+    ├── ingress.yaml
+    └── hpa.yaml
+```
+
+```yaml
+# templates/deployment.yaml (extrait)
+spec:
+  replicas: {{ .Values.replicas }}
+  template:
+    spec:
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+```
+
+Helm est **standard** pour distribuer des apps réutilisables (ingress controllers, monitoring stacks). Pour ta propre app, **kustomize** est souvent plus simple — pas de templating, juste des overlays.
+
+---
+
+## GitOps — Argo CD ou Flux
+
+Modèle :
+
+1. Le **état désiré** vit dans un repo Git (manifests YAML / Helm).
+2. Argo CD / Flux **observe** ce repo et **réconcilie** le cluster vers cet état.
+3. Tout déploiement est un **commit** — auditable, reversible.
+
+```
+┌──────────────┐   git push   ┌────────────┐
+│   Dev/CI     │ ───────────> │   Repo Git │
+└──────────────┘              │ (manifests)│
+                              └─────┬──────┘
+                                    │ pull (toutes les 3 min)
+                                    ▼
+                              ┌────────────┐
+                              │  Argo CD   │
+                              └─────┬──────┘
+                                    │ kubectl apply
+                                    ▼
+                              ┌────────────┐
+                              │   Cluster  │
+                              └────────────┘
+```
+
+Avantages :
+
+- **Observabilité** : drift visible dans le UI Argo CD.
+- **Rollback** = `git revert`.
+- **Multi-cluster** sans recréer de pipelines.
+- Aucun secret cloud côté CI (le cluster pulle).
+
+### Application minimale Argo CD
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: myapp, namespace: argocd }
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/myorg/myapp-manifests
+    targetRevision: HEAD
+    path: chart
+    helm:
+      valueFiles: [values-prod.yaml]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: myapp
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+```
+
+---
+
+## Resource limits — la base d'un cluster sain
+
+Sans `requests`/`limits`, un pod peut consommer toute la RAM d'un node et tuer ses voisins. **Toujours définir** :
+
+| Ressource | Effet |
+|-----------|-------|
+| `requests.cpu` | Réservé pour le scheduler |
+| `requests.memory` | Idem, + déclenche eviction si dépassé |
+| `limits.cpu` | Plafond — le pod est throttle si dépassé |
+| `limits.memory` | Plafond — **OOMKilled** si dépassé |
+
+Trop bas → ton app rame. Trop haut → tu paies pour rien. **Mesure** avant de fixer (Prometheus + Grafana, Goldilocks).
+
+---
+
+## Déploiements progressifs
+
+| Stratégie | Quoi |
+|-----------|------|
+| **Rolling update** (défaut Deployment) | Rollout pod par pod |
+| **Blue-Green** | 2 versions en parallèle, switch ingress |
+| **Canary** | 5 % du trafic sur la nouvelle, monitorer, ramp up |
+| **Feature flags** | Découplage déploiement / activation (LaunchDarkly, Unleash) |
+
+Pour faire du canary sans Istio, **Argo Rollouts** est l'outil de référence — déploiement piloté par métriques.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu lances un nouveau projet B2B avec 2 services et une équipe de 4 devs sans expérience K8s. Quelle plateforme privilégier ?"
+  options={[
+    'Cluster K8s managé EKS pour bien commencer',
+    'PaaS (Render, Fly.io) ou ECS Fargate / Cloud Run — pas de surcharge K8s tant que la complexité ne le justifie pas',
+    'Bare-metal en self-hosting',
+    'Vercel Functions exclusivement'
+  ]}
+  answerIndex={1}
+  explanation="K8s est puissant mais coûte 1-3 mois d'apprentissage et un control plane managé ~70 $/mois. Pour 2 services et 4 devs, une PaaS ou un container service (ECS Fargate, Cloud Run) couvre 95 % des besoins sans surcharge cognitive. Tu basculeras vers K8s quand le besoin sera clair."
+/>
+
+<Quiz
+  question="Ton Dockerfile fait 1.4 GB. Tu mets `node:24-alpine`, l'image fait 380 MB. Quelle prochaine optimisation simple ?"
+  options={[
+    'Convertir en Python',
+    'Multi-stage : un stage builder qui contient devDependencies + sources, un stage runtime minimal qui copie uniquement dist/ et node_modules de production',
+    'Compiler en Rust',
+    'Utiliser un serveur plus puissant'
+  ]}
+  answerIndex={1}
+  explanation="Multi-stage est le levier standard. Le stage final ne contient que ce que prod a besoin (build + node_modules sans devDeps). Pour aller plus loin : distroless ou Chainguard nodejs (~100 MB), ou compilation native (vercel/nft, esbuild bundle)."
+/>
+
+<Quiz
+  question="Sur K8s, ton pod a `resources.limits.memory: 256Mi`. Ton app dépasse 256 MB en charge. Que se passe-t-il ?"
+  options={[
+    'L\'app est throttle',
+    'OOMKilled — le kernel tue le process et K8s relance le pod',
+    'L\'app continue à tourner mais lentement',
+    'K8s ajoute automatiquement de la RAM'
+  ]}
+  answerIndex={1}
+  explanation="`limits.memory` est un plafond dur. Au dépassement, le pod est tué (OOMKilled, exit 137). C'est très différent du CPU qui est juste throttle. Bien dimensionner les limits évite des restarts permanents (CrashLoopBackOff) — mesure avec Prometheus/Goldilocks avant de fixer."
+/>
+
+<Quiz
+  question="Pourquoi le GitOps avec Argo CD est-il préféré au `kubectl apply` depuis la CI sur des clusters de prod ?"
+  options={[
+    'C\'est plus rapide',
+    'Aucun secret cluster côté CI (le cluster pulle), drift détecté automatiquement, rollback = git revert, audit complet via l\'historique Git',
+    'kubectl est déprécié',
+    'C\'est obligatoire avec K8s'
+  ]}
+  answerIndex={1}
+  explanation="GitOps inverse le sens du flux (cluster pulle, plutôt que CI pousse), ce qui élimine le besoin d'avoir des kubeconfig prod côté GitHub. Argo CD réconcilie en continu : un drift manuel est détecté, et le rollback est trivial. C'est la pratique standard 2026 sur K8s sérieux."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *Docker Best Practices* — [docs.docker.com/develop/develop-images/dockerfile_best-practices](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/)
+- *Kubernetes Patterns* — Bilgin Ibryam (très bon livre)
+- *Argo CD docs* — [argo-cd.readthedocs.io](https://argo-cd.readthedocs.io/)
+- *Helm Charts* — [helm.sh](https://helm.sh/)
+- *Sigstore / cosign* — [sigstore.dev](https://www.sigstore.dev/)
+- *Trivy* — [aquasecurity.github.io/trivy](https://aquasecurity.github.io/trivy/)
+- *Goldilocks* — [github.com/FairwindsOps/goldilocks](https://github.com/FairwindsOps/goldilocks)
+
+---
+
+**Suite** : [14.5 — Observabilité](/14-devops/05-observabilite/) pour voir ce qui se passe en prod.

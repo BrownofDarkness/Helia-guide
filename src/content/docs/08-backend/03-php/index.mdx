@@ -1,0 +1,309 @@
+---
+title: Parcours PHP
+description: PHP 8.4 natif, Laravel 12 (LTS), Symfony 7.4 LTS — l'écosystème mature et productif.
+sidebar:
+  order: 4
+---
+
+import ObjectiveList from '../../../../components/ObjectiveList.astro';
+import Quiz from '../../../../components/Quiz.astro';
+import Scenario from '../../../../components/Scenario.astro';
+import ScenarioTabs from '../../../../components/ScenarioTabs.astro';
+import Level from '../../../../components/Level.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+<Level value="confirmé" reading="20 min" prereq="axes 5-7 + 8.0 lus" />
+
+<ScenarioTabs />
+
+<Scenario parcours="A" episode="13c">
+Marie connaît un ami qui a fait l'app de sa pâtisserie en Laravel — admin Filament, Stripe, déploiement OVH classique. Pour la boulangerie de Lina, ce serait un choix très valable. Marie reste néanmoins sur Hono pour rester en TypeScript de bout en bout.
+</Scenario>
+
+<Scenario parcours="B" episode="12c">
+Hugo regarde Laravel : Sanctum pour l'auth, Cashier pour Stripe, Mail pour les emails — tout est inclus. Pour Studio Pulse, ce serait sans doute plus rapide à livrer qu'en Hono. Mais il reste cohérent avec son stack TS.
+</Scenario>
+
+<Scenario parcours="C" episode="13c">
+Sami sait que Laravel est le bon choix pour beaucoup de SaaS — Filament Admin pour le back-office, écosystème e-commerce mûr. Pour GreenBox, il aurait pu choisir Laravel + Inertia + React. Il garde Hono / TS pour l'edge.
+</Scenario>
+
+<Scenario parcours="D" episode="13c">
+Léa a une amie qui héberge une plateforme d'entraide en Symfony 7.4. Pour CoupDeMain, le real-time temps réel est plus naturel en Node + WebSocket. PHP/Symfony serait pertinent pour la partie admin / signalement, pas pour le chat live.
+</Scenario>
+
+<Scenario parcours="E" episode="13c">
+Yanis sait qu'en boîte, beaucoup d'apps internes legacy sont en Symfony (banques, assurance, secteur public). Lire du PHP pro est une compétence utile. Tasky reste en Hono mais il garde ce parcours en culture générale.
+</Scenario>
+
+> 🎯 **Objectif** : choisir entre PHP natif, Laravel et Symfony selon le contexte. PHP 8.4 est moderne, performant et reste **le langage backend le plus déployé au monde** (~75 % des sites web).
+
+<ObjectiveList items={[
+  "Comprendre l'évolution récente de PHP (8.x → 8.4) et ses caractéristiques modernes",
+  "Maîtriser Composer (le gestionnaire de paquets PHP)",
+  "Distinguer Laravel et Symfony sur 5 critères clés",
+  "Choisir entre PHP-FPM derrière Nginx, Frankenphp, ou serveur applicatif",
+  "Connaître les outils 2026 : PHPUnit / Pest, Xdebug, Laravel Pint / PHP-CS-Fixer"
+]} />
+
+## Pourquoi PHP en 2026 ?
+
+| Pour | Contre |
+|------|--------|
+| **75 % du web** tourne en PHP (WordPress, Shopify, Wikipedia, Slack…) | Réputation injuste de « langage poussiéreux » — alors que PHP 8.x est moderne |
+| **Hébergement ultra-bon marché** (mutualisé < 5 €/mois) | Beaucoup de code legacy à maintenir dans l'écosystème |
+| Frameworks **ultra-mûrs** : Laravel 2011, Symfony 2005 | Moins « hype » que Node ou Python — talent pool junior plus restreint |
+| **Productivité massive** : Laravel/Symfony livrent en jours ce qui prend semaines ailleurs | Async limité (mais ReactPHP, Swoole, Frankenphp existent) |
+| **Marché de l'emploi** énorme et stable | Image dégradée injustement — les recrutements jeunes sont parfois durs |
+
+**Verdict 2026** : PHP est un excellent choix pour un **CMS, un e-commerce, un SaaS classique**. Pas pour de l'edge ou du temps réel intense (mais possible avec Frankenphp/Swoole).
+
+## PHP 8.4 — l'évolution récente
+
+PHP a été révolutionné depuis la 7.0 (2015) et continue. Aperçu :
+
+| Version | Sortie | Apports clés |
+|---------|--------|--------------|
+| 7.0 (2015) | | Performance ×2, types scalaires |
+| 7.4 (2019) | | Typed properties, arrow functions |
+| 8.0 (2020) | | JIT, named arguments, attributs, match, nullsafe `?->` |
+| 8.1 (2021) | | **Enums**, readonly, never type |
+| 8.2 (2022) | | Readonly classes, types disjonctifs |
+| 8.3 (2023) | | Typed class constants, json_validate |
+| **8.4** (2024) | | Property hooks, asymmetric visibility, deprecate functions |
+
+**PHP 8.4 reste en active support jusqu'au 31 décembre 2026.** Cible 8.3+ pour les nouveaux projets.
+
+### Exemple de PHP moderne (8.4)
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain;
+
+enum TaskStatus: string
+{
+    case Pending = 'pending';
+    case Done = 'done';
+    case Archived = 'archived';
+}
+
+readonly class Task
+{
+    public function __construct(
+        public int $id,
+        public string $title,
+        public ?string $description,
+        public TaskStatus $status,
+        public \DateTimeImmutable $createdAt,
+    ) {}
+
+    public function isCompleted(): bool
+    {
+        return $this->status === TaskStatus::Done;
+    }
+}
+
+// Usage
+$task = new Task(
+    id: 1,
+    title: 'Apprendre PHP 8.4',
+    description: null,
+    status: TaskStatus::Pending,
+    createdAt: new \DateTimeImmutable(),
+);
+```
+
+C'est **du PHP** — typé strict, immutable, enums, named arguments. Loin des stéréotypes.
+
+## Composer — le pip/npm de PHP
+
+[Composer](https://getcomposer.org/) gère les dépendances PHP. C'est l'équivalent de pip/npm.
+
+### Installation
+
+```bash
+# macOS / Linux / WSL
+curl -sS https://getcomposer.org/installer | php
+sudo mv composer.phar /usr/local/bin/composer
+
+# Windows : installeur depuis getcomposer.org
+```
+
+### Usage
+
+```bash
+composer init                         # nouveau projet → crée composer.json
+composer require monolog/monolog       # ajouter une dépendance
+composer require --dev phpunit/phpunit # dépendance dev
+composer install                       # installer depuis composer.lock
+composer update                        # mettre à jour
+composer dump-autoload                 # régénérer l'autoloader
+```
+
+### `composer.json` typique
+
+```json
+{
+  "name": "vendor/projet",
+  "type": "project",
+  "require": {
+    "php": "^8.3",
+    "guzzlehttp/guzzle": "^7.9"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^11.0"
+  },
+  "autoload": {
+    "psr-4": { "App\\": "src/" }
+  }
+}
+```
+
+**Autoload PSR-4** : `App\Domain\Task` → `src/Domain/Task.php` automatiquement. Plus aucun `require_once` à écrire.
+
+## Choisir son framework
+
+| Critère | **PHP natif** | **Laravel 12** | **Symfony 7.4 LTS** |
+|---------|---------------|------------------|----------------------|
+| Style | Tu codes tout | "Batteries-included", DSL Laravel | Modulaire (bundles), opinion forte |
+| Productivité CRUD | Faible (à toi de tout coder) | **Excellente** (artisan, Eloquent, Blade) | Excellente (API Platform, Twig) |
+| Courbe d'apprentissage | Faible (langage seul) | Moyenne | Plus élevée |
+| Performance | Maximale | Bonne | Bonne |
+| Marché | Niche (WordPress) | Énorme (startups, agences) | Énorme (entreprise, banques, gouvernements) |
+| Cas typique | Microservice, plugin WP | SaaS, e-commerce, app rapide | Gros projet long-terme, équipes nombreuses |
+
+### Décision rapide
+
+| Si tu veux... | Choisis |
+|---------------|---------|
+| Un SaaS rapide, équipe < 10 devs, MVP en 2 mois | **Laravel** |
+| Un projet enterprise long-terme, équipe > 10 devs, architecture stricte | **Symfony** |
+| Un microservice ciblé, un script web | **PHP natif** |
+| Un CMS / blog | **WordPress** ou **Statamic** (Laravel-based) |
+
+## Versions et compatibilité (2026)
+
+| Framework | Version courante | PHP min |
+|-----------|------------------|---------|
+| **Laravel 12** (LTS) | janvier 2025 | PHP 8.2+ |
+| **Laravel 13** | mars 2026 | PHP 8.3+ |
+| **Symfony 7.4** (LTS) | novembre 2025 | PHP 8.2+ |
+| **Symfony 8.0** | novembre 2025 (avec 7.4) | PHP 8.4+ |
+
+<Aside type="caution" title="Laravel 11 est en fin de support">
+**Laravel 11 a perdu son support sécurité en mars 2026.** Si tu hérites d'un projet Laravel 11, **migre rapidement vers Laravel 12 LTS** ou 13. Ne démarre pas un nouveau projet en Laravel 11.
+</Aside>
+
+## Hébergement et déploiement
+
+| Solution | Avis |
+|----------|------|
+| **Mutualisé** (OVH, IONOS) | Ultra-bon marché, idéal débutant — Apache + PHP-FPM auto |
+| **VPS** (DigitalOcean, Hetzner) | Nginx + PHP-FPM, contrôle total |
+| **Forge** (Laravel) | Provisionne et déploie automatiquement sur ton VPS, sweet spot pour Laravel |
+| **Vapor** (Laravel + AWS Lambda) | Serverless Laravel, scale-to-zero |
+| **PaaS** (Render, Railway, Platform.sh) | Déploiement Git-driven |
+| **Frankenphp** | Serveur PHP moderne tout-en-un (basé Caddy), worker mode pour Symfony/Laravel |
+
+### Frankenphp — la modernité
+
+[Frankenphp](https://frankenphp.dev/) est un serveur PHP moderne qui :
+
+- **Inclut Caddy** (HTTPS automatique).
+- Lance PHP en **worker mode** : code chargé en mémoire entre requêtes (Laravel Octane / Symfony Runtime).
+- Supporte HTTP/3.
+- Conteneur Docker prêt à l'emploi.
+
+```bash
+docker run -p 80:80 -p 443:443 -v $PWD:/app dunglas/frankenphp
+```
+
+Pour la prod 2026, Frankenphp + worker mode = **3 à 10× les perfs** d'un PHP-FPM classique.
+
+## Outils du dev PHP 2026
+
+| Catégorie | Outil |
+|-----------|-------|
+| Lint / format | **Laravel Pint** (Laravel-friendly) ou **PHP-CS-Fixer** |
+| Static analysis | **PHPStan** (level 1-9) ou **Psalm** |
+| Tests | **PHPUnit 11** (standard) ou **Pest** (DSL plus expressif) |
+| Debug | **Xdebug** + extension VS Code |
+| Profiler | **Blackfire**, Tideways |
+
+```bash
+# Stack moderne 2026 d'un projet Laravel/Symfony
+composer require --dev phpunit/phpunit phpstan/phpstan laravel/pint
+```
+
+## Asyncio en PHP — l'état des lieux
+
+PHP est traditionnellement **synchrone**. Mais :
+
+- **ReactPHP** (event loop) — niche.
+- **Swoole** (extension C) — utilisé par certains frameworks asynchrones.
+- **Laravel Octane** — lance Laravel sur Swoole/RoadRunner/FrankenPHP, ×3-10 perfs.
+- **Symfony + Frankenphp worker mode** — équivalent côté Symfony.
+
+**En 2026**, la plupart des projets PHP restent en mode requête-réponse classique. Pour des perfs très élevées sans changer de langage, **Frankenphp** est la voie privilégiée.
+
+## Le projet `taskly-api` en PHP
+
+L'exercice de référence sera implémenté en **Laravel 12** (productivité maximale, le plus utilisé). Si tu choisis Symfony, suis la doc API Platform avec un schéma équivalent.
+
+> 📁 **Code** : `exercises/08-backend/03-php/laravel/taskly-api/`
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu démarres un SaaS en 2026 avec une équipe de 3 devs PHP. Choix idéal ?"
+  options={[
+    'PHP natif — pas de framework, contrôle total',
+    'Laravel 12 — productivité maximale, écosystème pour CRUD/auth/queues prêts à l\'emploi',
+    'WordPress',
+    'Symfony pour une équipe enterprise'
+  ]}
+  answerIndex={1}
+  explanation="Pour une petite équipe SaaS, Laravel délivre énormément en un temps record : auth, queues, mailing, broadcasting, tests, déploiement Forge — tout est intégré. Symfony est plus adapté aux gros projets long-terme. PHP natif demanderait de tout réinventer."
+/>
+
+<Quiz
+  question="Tu hérites d'un projet Laravel 11 en avril 2026. Quel impact ?"
+  options={[
+    'Pas grave, Laravel 11 est encore moderne',
+    'Laravel 11 a perdu son support sécurité en mars 2026 — migration urgente vers 12 LTS recommandée',
+    'Laravel 11 est encore en LTS',
+    'Cela dépend de la base de données'
+  ]}
+  answerIndex={1}
+  explanation="Le calendrier Laravel : Laravel 12 (LTS) sortie janvier 2025, Laravel 13 sortie mars 2026, Laravel 11 fin de sécurité mars 2026. Continuer en 11 = vulnérabilités CVE non patchées + dépendances qui ne se mettent plus à jour. Migration vers 12 LTS est l'option la plus sage."
+/>
+
+<Quiz
+  question="Tu veux multiplier par 5 les perfs d'une app Laravel sans réécrire. Solution moderne 2026 ?"
+  options={[
+    'Réécrire en Go',
+    'Frankenphp en mode worker (ou Laravel Octane) — code chargé en mémoire entre requêtes, plus de bootstrap par requête',
+    'Acheter plus de serveurs',
+    'Désactiver Eloquent'
+  ]}
+  answerIndex={1}
+  explanation="Le mode worker (Frankenphp, Octane, RoadRunner) supprime le coût du bootstrap PHP par requête. Le framework reste chargé en mémoire entre les requêtes. C'est la solution moderne pour booster Laravel/Symfony sans réécrire — 3 à 10× plus de req/s typiquement."
+/>
+
+## Pour aller plus loin
+
+- *PHP: The Right Way* — [phptherightway.com](https://phptherightway.com/) — bonnes pratiques
+- *Composer Documentation* — [getcomposer.org/doc](https://getcomposer.org/doc/)
+- *Frankenphp* — [frankenphp.dev](https://frankenphp.dev/)
+- *Awesome PHP* — [github.com/ziadoz/awesome-php](https://github.com/ziadoz/awesome-php)
+
+---
+
+Choisis ton sous-parcours :
+
+- [PHP natif](/08-backend/03-php/php-natif/) — comprendre le langage avant le framework
+- [Laravel 12](/08-backend/03-php/laravel/) — productivité maximale, le plus utilisé
+- [Symfony 7.4 LTS](/08-backend/03-php/symfony/) — robustesse enterprise

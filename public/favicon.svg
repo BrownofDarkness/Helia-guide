@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Helia">
+  <title>Helia</title>
+  <defs>
+    <radialGradient id="helia-sun-fav" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fef3c7" />
+      <stop offset="60%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </radialGradient>
+  </defs>
+
+  <!-- 5 chevrons en orbite — stroke un poil plus épais (4.5) pour lisibilité 16x16 -->
+  <g fill="none" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 25 17 L 32 8 L 39 17" stroke="#c97744" transform="rotate(0 32 32)" />
+    <path d="M 25 17 L 32 8 L 39 17" stroke="#4a8aaf" transform="rotate(72 32 32)" />
+    <path d="M 25 17 L 32 8 L 39 17" stroke="#5a9469" transform="rotate(144 32 32)" />
+    <path d="M 25 17 L 32 8 L 39 17" stroke="#b974a8" transform="rotate(216 32 32)" />
+    <path d="M 25 17 L 32 8 L 39 17" stroke="#7569a5" transform="rotate(288 32 32)" />
+  </g>
+
+  <!-- Soleil central -->
+  <circle cx="32" cy="32" r="7" fill="url(#helia-sun-fav)" />
+  <circle cx="30" cy="30" r="2" fill="#ffffff" opacity="0.5" />
+</svg>

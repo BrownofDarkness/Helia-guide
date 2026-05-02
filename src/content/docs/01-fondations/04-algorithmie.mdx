@@ -1,0 +1,362 @@
+---
+title: 1.4 — Algorithmie & complexité
+description: Structures de données, algorithmes classiques, notation Big-O — la boîte à outils mentale du dev.
+sidebar:
+  order: 4
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : avoir une intuition correcte des coûts. Tu n'as pas besoin de réinventer le tri rapide ; tu dois savoir quand un `for` dans un `for` est dangereux et pourquoi `Set` bat `Array.includes` pour de la déduplication.
+
+<ObjectiveList items={[
+  "Choisir entre tableau, liste, Map, Set, pile, file selon le besoin",
+  "Reconnaître les complexités O(1), O(log n), O(n), O(n log n), O(n²)",
+  "Savoir pourquoi la recherche binaire bat la recherche linéaire",
+  "Comprendre la récursion et savoir quand l'éviter",
+  "Estimer si une boucle imbriquée est acceptable selon le volume de données"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="aucun" />
+
+
+## Structures de données
+
+Une structure de données = une façon d'organiser des informations en mémoire pour rendre certaines opérations efficaces.
+
+### Tableau (Array)
+
+Une suite de cases contiguës en mémoire, indexées par un entier.
+
+```js
+const fruits = ['pomme', 'banane', 'kiwi'];
+fruits[0]              // 'pomme'  — O(1)
+fruits.push('mangue')  // ajoute à la fin — O(1) amorti
+fruits.unshift('fraise') // ajoute au début — O(n) (décale tout)
+fruits.includes('kiwi') // O(n) (parcourt jusqu'à trouver)
+```
+
+**Forces** : accès indexé instantané, parcours efficace.
+**Faiblesses** : insertion/suppression au milieu coûteuses.
+
+### Liste chaînée
+
+Chaque élément (« nœud ») pointe vers le suivant. Pas de mémoire contiguë.
+
+```
+[10|·] → [20|·] → [30|null]
+```
+
+**Forces** : insertion/suppression en milieu = O(1) si tu as déjà le pointeur.
+**Faiblesses** : pas d'accès indexé, parcours linéaire seulement, plus de mémoire (pointeurs).
+
+En JS, il n'y a pas de liste chaînée native — l'`Array` couvre 95 % des cas.
+
+### Pile (Stack)
+
+LIFO : *Last In, First Out*. Tu empiles, tu dépiles depuis le sommet.
+
+```js
+const stack = [];
+stack.push(1);    // [1]
+stack.push(2);    // [1, 2]
+stack.pop();      // 2 → [1]
+```
+
+**Cas d'usage** : pile d'appels d'une fonction, undo/redo, parsing.
+
+### File (Queue)
+
+FIFO : *First In, First Out*. Tu ajoutes au bout, tu retires en tête.
+
+```js
+const queue = [];
+queue.push(1);     // [1]
+queue.push(2);     // [1, 2]
+queue.shift();     // 1 → [2]   (mais shift est O(n) sur un Array !)
+```
+
+Pour une vraie file performante, utilise une `Deque` (double-ended queue) ou une lib dédiée.
+
+**Cas d'usage** : files de tâches, BFS dans un graphe, événements à traiter dans l'ordre.
+
+### Dictionnaire / Map
+
+Associations clé → valeur, accès en O(1) en moyenne (table de hachage).
+
+```js
+const ages = new Map();
+ages.set('Alice', 30);
+ages.set('Bob', 25);
+ages.get('Alice');     // 30 — O(1)
+ages.has('Alice');     // true — O(1)
+```
+
+**Conseil** : préfère `Map` à un objet JS pour les vrais dictionnaires (pas de pollution prototype, clés de tout type, ordre d'insertion garanti).
+
+### Ensemble (Set)
+
+Une collection sans doublons, recherche en O(1).
+
+```js
+const tags = new Set(['js', 'web', 'js']);
+tags.size              // 2
+tags.has('js')         // true — O(1) (vs O(n) avec Array.includes)
+```
+
+**Cas d'usage** : déduplication, vérification d'appartenance.
+
+### Arbre
+
+Hiérarchie : un nœud racine, des enfants, qui ont eux-mêmes des enfants.
+
+<Diagram
+  caption="Un arbre — exemple : DOM HTML"
+  code={`
+    flowchart TD
+      html --> head & body
+      head --> title
+      body --> h1 & div
+      div --> p1[p] & p2[p]
+  `}
+/>
+
+Cas particulier : **arbre binaire de recherche** où chaque nœud a au plus 2 enfants, et l'enfant gauche < parent < enfant droit. Recherche en O(log n) si équilibré.
+
+### Graphe
+
+Nœuds reliés par des arêtes, sans hiérarchie obligatoire.
+
+**Cas d'usage** : réseaux sociaux, GPS, dépendances entre tâches, pages web (PageRank).
+
+### Quand utiliser quoi ?
+
+| Besoin | Structure idéale |
+|--------|------------------|
+| Liste ordonnée, accès par index | `Array` |
+| Vérifier l'appartenance rapidement | `Set` |
+| Associer une valeur à une clé | `Map` |
+| Empiler/dépiler | Stack (Array + push/pop) |
+| File d'attente | Queue (utilise une lib pour les vraies perfs) |
+| Hiérarchie | Arbre |
+| Relations arbitraires | Graphe |
+
+## Notation Big-O
+
+C'est une façon d'exprimer **comment le temps (ou la mémoire) grandit avec la taille de l'entrée**, en ignorant les constantes.
+
+<Diagram
+  caption="Croissance des principales complexités"
+  code={`
+    xychart-beta
+      title "Temps en fonction de n"
+      x-axis "n" [10, 50, 100, 500, 1000]
+      y-axis "operations"
+      line [3, 6, 7, 9, 10]
+      line [10, 50, 100, 500, 1000]
+      line [33, 282, 664, 4483, 9966]
+      line [100, 2500, 10000, 250000, 1000000]
+  `}
+/>
+
+(De bas en haut : O(log n), O(n), O(n log n), O(n²).)
+
+### Les 5 complexités à connaître
+
+#### O(1) — constant
+
+Indépendant de la taille de l'entrée.
+
+```js
+arr[42]            // accès tableau
+map.get(key)       // accès Map
+arr.push(x)        // ajout en fin (amorti)
+```
+
+#### O(log n) — logarithmique
+
+Divise le problème par 2 à chaque étape. Très efficace.
+
+```js
+// Recherche binaire dans un tableau trié
+function binarySearch(arr, target) {
+  let lo = 0, hi = arr.length - 1;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (arr[mid] === target) return mid;
+    if (arr[mid] < target) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return -1;
+}
+```
+
+Pour 1 milliard d'éléments : ~30 comparaisons.
+
+#### O(n) — linéaire
+
+Parcours simple.
+
+```js
+arr.includes(x)    // parcourt jusqu'à trouver
+arr.filter(...)    // parcourt tout
+str.split(',')     // parcourt la chaîne
+```
+
+#### O(n log n) — quasi-linéaire
+
+Les bons tris (mergesort, heapsort, le tri natif de JS).
+
+```js
+arr.sort()         // O(n log n)
+```
+
+#### O(n²) — quadratique
+
+Une boucle dans une boucle qui parcourent tous deux les données.
+
+```js
+// Trouver les doublons — naïf, O(n²)
+for (let i = 0; i < arr.length; i++) {
+  for (let j = i + 1; j < arr.length; j++) {
+    if (arr[i] === arr[j]) console.log('doublon');
+  }
+}
+```
+
+Pour 100 000 éléments : 10 milliards d'opérations. **Catastrophique** au-delà de quelques milliers d'éléments.
+
+**La même chose en O(n)** :
+
+```js
+const seen = new Set();
+for (const x of arr) {
+  if (seen.has(x)) console.log('doublon');
+  seen.add(x);
+}
+```
+
+### Combien c'est rapide en pratique ?
+
+Sur une machine moderne (~10⁸ opérations simples par seconde) :
+
+| n | O(n) | O(n log n) | O(n²) | O(2ⁿ) |
+|---|------|------------|-------|-------|
+| 100 | instant | instant | instant | inenvisageable |
+| 10 000 | instant | instant | 1 s | — |
+| 1 000 000 | 0.01 s | 0.2 s | 3 h | — |
+| 1 000 000 000 | 10 s | 5 min | 300 ans | — |
+
+<Aside type="tip" title="Règle pratique">
+- < 1 000 éléments : on s'en fout, O(n²) passe.
+- 1 000 à 1 000 000 : O(n) ou O(n log n) requis.
+- > 1 000 000 : O(log n) ou O(1), via index/cache/structure adaptée.
+</Aside>
+
+## Récursion
+
+Une fonction qui s'appelle elle-même. Naturelle pour les structures arborescentes.
+
+```js
+function factoriel(n) {
+  if (n <= 1) return 1;        // cas de base
+  return n * factoriel(n - 1); // appel récursif
+}
+```
+
+**Pièges** :
+- Oublier le cas de base → boucle infinie → *stack overflow*.
+- Pile d'appels limitée (~10 000 niveaux en JS).
+- Récursion redondante → exponentielle (Fibonacci naïf : O(2ⁿ)).
+
+**Solution** : memoïsation (cache des résultats) ou itération.
+
+```js
+// Fibonacci naïf — O(2ⁿ) catastrophique
+function fib(n) {
+  if (n < 2) return n;
+  return fib(n - 1) + fib(n - 2);
+}
+
+// Avec mémoïsation — O(n)
+const memo = new Map();
+function fibMemo(n) {
+  if (n < 2) return n;
+  if (memo.has(n)) return memo.get(n);
+  const result = fibMemo(n - 1) + fibMemo(n - 2);
+  memo.set(n, result);
+  return result;
+}
+
+// Itératif — O(n) sans pile
+function fibIter(n) {
+  let a = 0, b = 1;
+  for (let i = 0; i < n; i++) [a, b] = [b, a + b];
+  return a;
+}
+```
+
+## Tris classiques (à connaître de loin)
+
+| Tri | Complexité | À retenir |
+|-----|-----------|-----------|
+| Tri à bulles | O(n²) | Pédagogique, jamais en prod |
+| Tri par insertion | O(n²) mais O(n) si presque trié | Bon sur petits tableaux |
+| Tri rapide (quicksort) | O(n log n) moyen, O(n²) pire | Très utilisé en pratique |
+| Tri fusion (mergesort) | O(n log n) garanti | Stable, parallélisable |
+| Tri par tas (heapsort) | O(n log n) | Pas stable, mais sur place |
+
+**En pratique** : tu utilises `arr.sort()`. Le moteur (V8, par exemple) implémente *Timsort* (O(n log n), stable, optimisé). Tu n'as presque jamais à coder un tri.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu as un tableau de 100 000 IDs. Tu veux vérifier si un ID donné est présent. Meilleur choix ?"
+  options={[
+    'arr.includes(id) — simple et lisible',
+    'Construire un Set une fois et faire set.has(id) ensuite',
+    'Trier puis recherche binaire',
+    'Une boucle for manuelle'
+  ]}
+  answerIndex={1}
+  explanation="includes est O(n) à chaque appel. Construire un Set coûte O(n) une fois, mais ensuite chaque has(id) est O(1). Si tu vérifies plusieurs fois, le Set gagne dès la 2ᵉ requête."
+/>
+
+<Quiz
+  question="Quelle est la complexité de cette fonction ? function f(n) { for (let i = 0; i < n; i++) for (let j = i; j < n; j++) doSomething(); }"
+  options={[
+    'O(n)',
+    'O(n log n)',
+    'O(n²)',
+    'O(2ⁿ)'
+  ]}
+  answerIndex={2}
+  explanation="Deux boucles imbriquées qui dépendent de n donnent O(n²), même si la 2ᵉ commence à i. Le total des opérations est n + (n-1) + ... + 1 = n(n+1)/2 ≈ n²/2 ∈ O(n²)."
+/>
+
+<Quiz
+  question="Tu reçois un fichier CSV de 1 milliard de lignes. Tu veux vérifier si une valeur donnée est présente. Approche raisonnable ?"
+  options={[
+    'Charger tout en mémoire et faire arr.includes()',
+    'Parcourir ligne par ligne en streaming, comparer chaque ligne',
+    'Les deux marchent pareil',
+    'Trier le fichier puis recherche binaire en mémoire'
+  ]}
+  answerIndex={1}
+  explanation="1 milliard de lignes ne tiennent pas en RAM. Le streaming (lecture ligne par ligne) garde la mémoire constante. Si tu dois requêter plusieurs fois, mieux : importer dans une base indexée (PostgreSQL, SQLite)."
+/>
+
+## Pour aller plus loin
+
+- *Big-O Cheat Sheet* — [bigocheatsheet.com](https://www.bigocheatsheet.com/)
+- *Algorithms* — Robert Sedgewick (le manuel de référence)
+- *Grokking Algorithms* — Aditya Bhargava (le plus accessible, illustré)
+- LeetCode (avec mesure : ne tombe pas dans le grind, ~50 problèmes bien choisis suffisent pour les bases)
+
+---
+
+C'est la fin de l'**axe 1**. Direction l'[axe 2 — Comment fonctionne le Web](/02-web/), ou attaque l'[exercice « Tri des téléchargements »](/01-fondations/#projet-de-laxe).

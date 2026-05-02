@@ -1,0 +1,537 @@
+---
+title: 8.5 — Protocols API modernes
+description: REST, GraphQL, gRPC, tRPC, WebSockets, SSE, WebHooks — choisir le bon protocole pour le bon cas.
+sidebar:
+  order: 5
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import Term from '../../../components/Term.astro';
+import Pitfall from '../../../components/Pitfall.astro';
+import Level from '../../../components/Level.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+<Level value="confirmé" reading="40 min" prereq="axe 8 (concepts-communs + un parcours backend)" />
+
+> 🎯 **Objectif** : connaître les 6 grands protocoles API, savoir les comparer, et **choisir le bon pour ton contexte**. Pas une encyclopédie technique — une boussole de décision.
+
+<ObjectiveList items={[
+  "Comparer REST, GraphQL, gRPC, tRPC : forces, faiblesses, cas d'usage",
+  "Implémenter une API GraphQL minimale (schéma, query, mutation) avec Apollo ou Yoga",
+  "Comprendre gRPC + Protobuf et savoir quand l'utiliser (microservices internes)",
+  "Distinguer WebSocket vs Server-Sent Events selon le pattern de comm",
+  "Recevoir et émettre des WebHooks signés, idempotents, retryables",
+  "Choisir le protocole adapté en 2 minutes pour n'importe quel cas"
+]} />
+
+> 💡 **Termes glossaire** : <Term>GraphQL</Term>, <Term>gRPC</Term>, <Term>SSE</Term>, <Term>WebSocket</Term>, <Term>RPC</Term>, <Term>Protobuf</Term>.
+
+## 1. Vue d'ensemble — la matrice de choix
+
+| Protocole | Transport | Format | Quand l'utiliser |
+|-----------|-----------|--------|------------------|
+| **REST** | HTTP | JSON | API publique standard, CRUD simple, cacheable HTTP |
+| **GraphQL** | HTTP (POST) | JSON | Frontend qui consomme N entités liées, équipes front autonomes |
+| **gRPC** | HTTP/2 | Protobuf binaire | Microservices internes, throughput élevé, langages multiples |
+| **tRPC** | HTTP | JSON typé | Monorepo TS full-stack, types partagés sans codegen |
+| **WebSocket** | TCP upgrade | Texte/binaire | Bi-directionnel temps réel : chat, jeu, collab live |
+| **SSE** | HTTP keepalive | Text events | Server → client unidirectionnel : notifications, progress, LLM streaming |
+| **WebHook** | HTTP POST | JSON | Notification asynchrone vers un système externe (Stripe, Clerk, GitHub) |
+
+### Décideur en 4 questions
+
+1. **Communication client ↔ serveur ou serveur ↔ serveur ?**
+   - Client ↔ serveur web → REST, GraphQL, tRPC
+   - Serveur ↔ serveur (microservices) → gRPC
+
+2. **Le client a-t-il besoin de N relations imbriquées en 1 call ?**
+   - Oui (graphes, listes filtrées profondes) → **GraphQL**
+   - Non (CRUD simple) → **REST**
+
+3. **Tu fais du bi-directionnel temps réel ?**
+   - Oui (chat, jeu, collab) → **WebSocket**
+   - Non, juste push serveur → client → **SSE** (plus simple, traverse mieux les proxys)
+
+4. **Tu notifies un système externe asynchrone ?**
+   - Oui → **WebHooks** (avec signature + idempotence)
+
+## 2. REST — ce que tout le monde connaît
+
+REST n'est pas un protocole, c'est un **style** : utiliser HTTP correctement.
+
+```
+GET    /tasks            ← lister
+GET    /tasks/42         ← détail
+POST   /tasks            ← créer
+PUT    /tasks/42         ← remplacer (idempotent)
+PATCH  /tasks/42         ← modifier partiellement
+DELETE /tasks/42         ← supprimer
+```
+
+**Ce qui distingue un bon REST d'un mauvais** :
+
+| Bon REST | Mauvais REST |
+|----------|--------------|
+| Codes HTTP sémantiques (200, 201, 204, 400, 404, 409, 422, 429, 500) | Tout en 200 avec `{success: false}` |
+| Idempotence respectée (PUT, DELETE multiples = même résultat) | DELETE qui crée un truc en cas d'absence |
+| Pagination cohérente (cursor ou page+limit) | Tout retourner d'un coup |
+| Versioning explicite (`/v1/tasks` ou `Accept: application/vnd.api.v1+json`) | Pas de versioning → breaking change cataclysmique |
+| HATEOAS si applicable (liens vers actions disponibles) | Doc humaine seulement |
+
+**Cas d'usage type** : API publique consommée par N clients hétérogènes (web, mobile, partenaires B2B).
+
+## 3. GraphQL — un seul endpoint, le client choisit ses champs
+
+### Le pivot mental
+
+Au lieu d'avoir 50 endpoints REST, tu as **1 endpoint** (`/graphql`) et le **client envoie une query** qui décrit ce qu'il veut.
+
+```graphql
+# Le client envoie cette query
+query {
+  user(id: "42") {
+    id
+    name
+    posts(limit: 5) {
+      title
+      comments(limit: 3) {
+        author { name }
+      }
+    }
+  }
+}
+
+# Le serveur retourne exactement ces champs, rien d'autre
+```
+
+### Schema — le contrat typé
+
+```graphql
+type User {
+  id: ID!
+  name: String!
+  email: String!
+  posts(limit: Int): [Post!]!
+}
+
+type Post {
+  id: ID!
+  title: String!
+  author: User!
+  comments(limit: Int): [Comment!]!
+}
+
+type Query {
+  user(id: ID!): User
+  searchPosts(q: String!): [Post!]!
+}
+
+type Mutation {
+  createPost(title: String!, content: String!): Post!
+}
+```
+
+### Implémentation minimale avec **GraphQL Yoga** (Node)
+
+```ts
+import { createYoga, createSchema } from 'graphql-yoga';
+import { createServer } from 'node:http';
+
+const yoga = createYoga({
+  schema: createSchema({
+    typeDefs: /* GraphQL */ `
+      type Query { hello(name: String): String! }
+    `,
+    resolvers: {
+      Query: {
+        hello: (_, { name }) => `Hello, ${name ?? 'world'}!`,
+      },
+    },
+  }),
+});
+
+createServer(yoga).listen(3000);
+```
+
+### Avantages vs inconvénients
+
+| ✅ | ❌ |
+|---|---|
+| 1 endpoint, le client choisit ses champs | Cache HTTP cassé (tout passe en POST) |
+| Schéma typé partagé front/back | Complexité opérationnelle (DataLoader, query depth limit) |
+| Évolution sans versioning (déprécation par champ) | Risque de **N+1 queries** sans optimisation manuelle |
+| Doc auto via introspection | Authorization plus complexe (granularité champ) |
+| Idéal pour BFF (Backend for Frontend) | Pas adapté aux APIs publiques larges |
+
+### Quand utiliser GraphQL
+
+- Tu as une **équipe frontend autonome** qui itère vite et veut piloter ses requêtes.
+- Ton domaine a **beaucoup de relations** (réseaux sociaux, e-commerce avec catalogues profonds).
+- Tu construis un **BFF** qui agrège plusieurs APIs REST internes pour un client mobile.
+
+### Quand **ne pas** l'utiliser
+
+- API publique simple type CRUD → REST suffit, plus cacheable.
+- Microservices internes → gRPC plus rapide et typé binaire.
+- Petite app monolith où front et back sont la même équipe → tRPC plus simple.
+
+<Pitfall title="Le piège N+1 en GraphQL" axe="8.5" category="perf">
+**Symptôme** : tu fais une query qui retourne 50 users avec leurs 5 posts chacun. Ton resolver fait 1 query DB pour les users, puis **50 queries DB pour les posts** (1 par user). Total = 51 queries.
+
+**Cause** : les resolvers GraphQL sont appelés **par champ**, sans connaissance des autres demandes en cours.
+
+**Fix** : utiliser **DataLoader** (lib officielle Facebook). Il batche les demandes individuelles en 1 query SQL `WHERE user_id IN (...)`. C'est **obligatoire** dès qu'on dépasse le tutoriel.
+</Pitfall>
+
+## 4. gRPC — RPC binaire haute performance
+
+### Le concept
+
+**RPC** = Remote Procedure Call. Ton client appelle `userService.GetUser({id: 42})` comme si c'était une fonction locale ; en dessous, ça transite via HTTP/2 + Protobuf binaire.
+
+### Schéma Protobuf
+
+```protobuf
+// user.proto
+syntax = "proto3";
+package taskly;
+
+service UserService {
+  rpc GetUser(GetUserRequest) returns (User);
+  rpc CreateUser(CreateUserRequest) returns (User);
+  rpc StreamUsers(StreamRequest) returns (stream User);  // streaming !
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+}
+
+message GetUserRequest {
+  string id = 1;
+}
+```
+
+Tu **génères** ensuite le code client + serveur pour Node, Python, Go, Java, etc. à partir de ce `.proto`. Le typage est **garanti à la compilation** côté client ET serveur.
+
+### Avantages vs REST/GraphQL
+
+| ✅ | ❌ |
+|---|---|
+| Binaire = 5-10× moins de bande passante que JSON | Pas browser-friendly (gRPC-Web exige proxy) |
+| Streaming bi-directionnel natif | Curl impossible (binaire) → debug plus dur |
+| Types stricts entre N langages | Codegen obligatoire (Buf, protoc) |
+| HTTP/2 multiplexing | Courbe d'apprentissage |
+| Standard pour microservices internes (Google, Netflix, Uber) | Pas adapté pour API publique web |
+
+### Cas d'usage type
+
+- **Microservices internes** : `auth-service` ↔ `payment-service` ↔ `email-service` en gRPC, avec un gateway HTTP REST/GraphQL exposé au public.
+- **Streaming** : le serveur push des updates en continu (logs, métriques, events).
+- **Polyglot** : tes services sont en Go, Python, Node — gRPC garantit le contrat.
+
+### Implémentation Node minimale
+
+```ts
+import { createServer } from 'node:http';
+import { createConnectRouter } from '@connectrpc/connect';
+import { UserService } from './gen/user_pb.js';
+
+const router = createConnectRouter();
+router.service(UserService, {
+  async getUser(req) {
+    return { id: req.id, email: 'user@example.com', name: 'Alice' };
+  },
+});
+```
+
+> **Note 2026** : `@connectrpc/connect` (Buf) est plus moderne que `grpc-js` officiel et marche bien dans le navigateur. Recommandé.
+
+## 5. tRPC — l'option « monorepo TypeScript »
+
+Si tu fais du **TS full-stack dans un monorepo**, tRPC est imbattable.
+
+```ts
+// server/router.ts
+import { initTRPC } from '@trpc/server';
+const t = initTRPC.create();
+
+export const appRouter = t.router({
+  user: t.router({
+    byId: t.procedure
+      .input(z.object({ id: z.string() }))
+      .query(async ({ input }) => {
+        return await db.users.findById(input.id);
+      }),
+  }),
+});
+
+export type AppRouter = typeof appRouter;
+```
+
+```ts
+// client.ts (importe juste le TYPE du serveur)
+import type { AppRouter } from '../server/router';
+import { createTRPCClient } from '@trpc/client';
+
+const client = createTRPCClient<AppRouter>({ /* ... */ });
+
+const user = await client.user.byId.query({ id: '42' });
+//          ↑ types autocomplétés depuis le serveur, sans codegen
+```
+
+**Différenciateur** : pas de schéma à écrire, pas de codegen — le **type du serveur** est importé directement par le client. C'est **REST en pure TypeScript**.
+
+| ✅ | ❌ |
+|---|---|
+| 0 codegen, 0 schéma à maintenir | Couplage TS-only — pas de mobile natif sans wrapper |
+| Auto-complétion parfaite end-to-end | Pas un standard (= recrutement plus dur) |
+| Validation Zod intégrée | Limité aux apps full-stack TS |
+
+### Quand l'utiliser
+
+Monorepo TS avec Next.js + Hono ou Fastify où **les mêmes équipes maintiennent front et back**. Hors de ce cas, REST ou GraphQL sont mieux.
+
+## 6. WebSocket — bi-directionnel temps réel
+
+Connexion **persistante** entre client et serveur. Les deux peuvent envoyer des messages à tout moment.
+
+### Cas d'usage type
+
+- **Chat** : client envoie `chat.send`, serveur push aux N autres.
+- **Jeu en ligne** : 60 messages/seconde dans les deux sens.
+- **Collaboration live** (Google Docs, Figma, Yjs) : opérations CRDT en push.
+- **Trading / monitoring** : prix temps réel.
+
+### Implémentation Node minimale (avec `ws`)
+
+```ts
+import { WebSocketServer } from 'ws';
+
+const wss = new WebSocketServer({ port: 3001 });
+
+wss.on('connection', (ws) => {
+  ws.on('message', (data) => {
+    const msg = JSON.parse(data.toString());
+    // Broadcast à tous les clients
+    wss.clients.forEach(c => c.send(JSON.stringify(msg)));
+  });
+  ws.send(JSON.stringify({ type: 'welcome' }));
+});
+```
+
+### Limites à connaître
+
+- **Pas de cache HTTP** (TCP brut après l'upgrade).
+- **Authentification au handshake** uniquement (pas de re-auth facile en cours).
+- **Reconnexion à gérer** côté client (réseau mobile coupe).
+- **Scaling horizontal** : besoin d'un broker (Redis Pub/Sub, NATS) pour relayer les messages entre instances.
+
+## 7. SSE — Server → Client en push HTTP
+
+Plus simple que WebSocket quand le client n'a **rien à envoyer en continu**.
+
+```http
+GET /events HTTP/1.1
+Accept: text/event-stream
+
+# Réponse :
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+Cache-Control: no-cache
+
+data: {"type":"notification","message":"Nouvelle commande"}
+
+data: {"type":"progress","value":42}
+
+event: error
+data: {"reason":"timeout"}
+```
+
+### Côté Node avec Hono
+
+```ts
+import { streamSSE } from 'hono/streaming';
+
+app.get('/events', (c) => {
+  return streamSSE(c, async (stream) => {
+    while (true) {
+      await stream.writeSSE({
+        data: JSON.stringify({ time: Date.now() }),
+        event: 'tick',
+      });
+      await stream.sleep(1000);
+    }
+  });
+});
+```
+
+### Côté client
+
+```js
+const es = new EventSource('/events');
+es.onmessage = (e) => console.log(JSON.parse(e.data));
+es.addEventListener('tick', (e) => console.log('tick:', e.data));
+```
+
+### SSE vs WebSocket — décideur
+
+| Critère | SSE | WebSocket |
+|---------|-----|-----------|
+| Direction | Server → Client uniquement | Bi-directionnel |
+| Protocole | HTTP standard | TCP upgrade |
+| Reconnexion auto | **Oui (natif)** | Non, à coder |
+| Traverse les proxys d'entreprise | **Oui** | Souvent bloqué |
+| Authent | Cookie HttpOnly natif | Tu dois passer le token au handshake |
+| Cas d'usage | Notifications, LLM streaming, progress, dashboard live | Chat, jeu, collab |
+
+**Règle 2026** : **SSE par défaut** pour le push serveur → client. WebSocket seulement si tu as besoin de bi-directionnel.
+
+## 8. WebHooks — notification asynchrone
+
+Tu fournis une URL à un service externe (Stripe, Clerk, GitHub). Quand un événement se produit chez eux, ils font un **POST** sur ton URL.
+
+### Anatomie d'un WebHook reçu
+
+```http
+POST /webhooks/stripe HTTP/1.1
+Stripe-Signature: t=1234567890,v1=abc123def456...
+Content-Type: application/json
+
+{"id":"evt_1","type":"checkout.session.completed","data":{...}}
+```
+
+### Les 4 règles d'or de la réception WebHook
+
+#### 1. **Vérifier la signature** (anti-spoofing)
+
+Sans signature, n'importe qui peut POSTer sur ton endpoint et déclencher tes actions métier.
+
+```ts
+// Stripe
+const event = stripe.webhooks.constructEvent(
+  rawBody,                                  // BODY BRUT, pas re-parsé !
+  c.req.header('stripe-signature')!,
+  process.env.STRIPE_WEBHOOK_SECRET!
+);
+```
+
+> ⚠️ **Toujours utiliser le body brut** (`request.text()`), pas `await c.req.json()`. Le HMAC est calculé sur les bytes exacts envoyés.
+
+#### 2. **Idempotence** — un event peut arriver 2 fois
+
+Le sender (Stripe, Clerk) peut **retry** si tu réponds lentement ou que ta connexion drop.
+
+```ts
+// Pattern : table `processed_events` avec contrainte unique
+const exists = await db.execute({
+  sql: 'SELECT 1 FROM processed_events WHERE event_id = ?',
+  args: [event.id],
+});
+if (exists.rows.length > 0) return c.json({ ok: true });   // déjà traité
+
+// Sinon, traiter + marquer
+await db.transaction(async (tx) => {
+  await businessLogic(event);
+  await tx.execute({
+    sql: 'INSERT INTO processed_events (event_id) VALUES (?)',
+    args: [event.id],
+  });
+});
+```
+
+Alternative : **upsert** sur la donnée métier (si l'effet est commutatif → mêmes données = même résultat → idempotent naturellement).
+
+#### 3. **Répondre vite (< 5s) ou découpler**
+
+Stripe / Clerk timeout à **30s** par défaut, retry si > 5s. Si ton traitement est long, **mets en queue** et réponds 200 immédiatement.
+
+```ts
+app.post('/webhooks/stripe', async (c) => {
+  const event = verifySignature(...);
+  await queue.publish('stripe.event', event);     // queue interne
+  return c.json({ received: true }, 200);          // réponds tout de suite
+});
+```
+
+#### 4. **Logger tous les events reçus** (incident postmortem)
+
+Garde un audit log avec `event_id`, `received_at`, `processed_at`, `status`. Quand un événement n'a pas été traité comme attendu, tu peux **rejouer** depuis le log.
+
+### Émettre des WebHooks (côté toi)
+
+Si **toi** tu émets des webhooks vers tes clients :
+
+| Règle | Pourquoi |
+|-------|----------|
+| **Signature HMAC** dans un header (`X-MyApp-Signature`) | Anti-spoofing chez ton client |
+| **`event_id` unique** dans le body | Permet l'idempotence côté client |
+| **Retries exponentiels** (1m, 5m, 30m, 2h, 24h) si client retourne 5xx | Résilience |
+| **Stop sur 4xx** (sauf 429) | 4xx = mauvaise URL ou client cassé, retry inutile |
+| **Dashboard pour replay manuel** | Quand un client a eu un downtime, il veut récupérer les events ratés |
+
+## 9. Comparatif décideur final
+
+| Cas | Choix recommandé |
+|-----|-------------------|
+| API publique B2B (consommée par partenaires) | **REST + OpenAPI** |
+| App web monolithe TS, équipe full-stack | **tRPC** |
+| App web avec relations complexes, équipe front autonome | **GraphQL + DataLoader** |
+| Microservices internes haute perf | **gRPC + Buf** |
+| Streaming LLM, notifications, progress bar | **SSE** |
+| Chat, jeu, collab live | **WebSocket** |
+| Notification depuis Stripe / Clerk / GitHub | **WebHooks** (signés + idempotents) |
+| Notification de toi vers tes clients | **WebHooks** émis (signés + retries) |
+
+**Règle d'or** : **commence en REST**. Migre vers GraphQL/gRPC/tRPC seulement quand tu as un cas concret qui justifie le coût. La majorité des apps web 2026 vivent très bien en REST + WebHooks.
+
+## 10. Auto-évaluation
+
+<Quiz
+  question="Tu construis une API consommée par un mobile iOS, un web React, et un partenaire B2B en Java. Quel protocole choisir ?"
+  options={[
+    "tRPC — types auto entre client et serveur",
+    "GraphQL — chaque client peut piloter ses queries",
+    "REST + OpenAPI — standard universel, codegen possible dans toutes les stacks",
+    "gRPC — performance binaire pour les 3 clients"
+  ]}
+  correct={2}
+  explanation="REST + OpenAPI est le standard pour les APIs publiques multi-clients. tRPC ne marche qu'en TS. GraphQL est pertinent mais surdimensionné si les clients consomment des CRUDs simples. gRPC est mauvais pour mobile iOS et navigateurs (proxy gRPC-Web obligatoire). REST + OpenAPI permet de générer SDK iOS, Java, JS automatiquement."
+/>
+
+<Quiz
+  question="Pourquoi vérifier la signature d'un WebHook reçu de Stripe ?"
+  options={[
+    "Pour s'assurer que le payload n'est pas corrompu en transit",
+    "Pour empêcher un attaquant de POSTer un faux événement sur ton endpoint et déclencher tes actions métier",
+    "Pour éviter les attaques DDoS",
+    "C'est facultatif si tu utilises HTTPS"
+  ]}
+  correct={1}
+  explanation="HTTPS protège la confidentialité et l'intégrité du message en transit, mais n'authentifie pas l'expéditeur. Sans signature HMAC, n'importe qui peut POSTer du JSON sur https://ton-app.com/webhooks/stripe en faisant croire que c'est Stripe — et déclencher activation d'abonnements, refunds, etc. La signature HMAC prouve que le sender connaît le secret partagé."
+/>
+
+<Quiz
+  question="Tu veux pousser des updates de progression LLM (token par token) du serveur vers le client. Quel protocole ?"
+  options={[
+    "WebSocket — bi-directionnel",
+    "Server-Sent Events (SSE) — unidirectionnel server → client, reconnexion auto, traverse les proxys",
+    "Polling toutes les 100ms",
+    "gRPC streaming"
+  ]}
+  correct={1}
+  explanation="SSE est conçu exactement pour ce cas : push server → client, reconnexion automatique, traverse les proxys d'entreprise. WebSocket ferait le job mais ajoute de la complexité (bi-directionnel non utilisé, reconnexion à coder). C'est pour ça que la plupart des APIs LLM (OpenAI, Anthropic) utilisent SSE pour le streaming et pas WebSocket."
+/>
+
+## Pour aller plus loin
+
+- **Stripe Webhooks docs** — la référence pour signer/idempotence — [stripe.com/docs/webhooks](https://stripe.com/docs/webhooks)
+- **GraphQL Yoga** — serveur GraphQL moderne, alternative à Apollo — [the-guild.dev/graphql/yoga-server](https://the-guild.dev/graphql/yoga-server)
+- **DataLoader** — pattern N+1 GraphQL — [github.com/graphql/dataloader](https://github.com/graphql/dataloader)
+- **Buf + Connect-RPC** — gRPC moderne navigateur-friendly — [connectrpc.com](https://connectrpc.com/)
+- **tRPC docs** — full-stack TS sans codegen — [trpc.io](https://trpc.io/)
+- **Server-Sent Events MDN** — référence SSE — [developer.mozilla.org](https://developer.mozilla.org/fr/docs/Web/API/Server-sent_events)
+- **WebSocket Standard** — [websockets.spec.whatwg.org](https://websockets.spec.whatwg.org/)
+- **Designing Web APIs** — Brenda Jin et al. (livre référence pour le design d'API)

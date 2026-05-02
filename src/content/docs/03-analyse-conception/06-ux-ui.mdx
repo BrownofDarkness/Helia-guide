@@ -1,0 +1,287 @@
+---
+title: 3.6 — UX/UI & maquettage
+description: Lois UX, wireframes, Figma, design tokens — concevoir l'interface avant d'écrire du CSS.
+sidebar:
+  order: 6
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : produire des maquettes lisibles, accessibles et productives, sans devenir designer professionnel mais en évitant les pièges grossiers que fait un dev qui « bricole en CSS direct ».
+
+<ObjectiveList items={[
+  "Connaître 5 lois UX qui changent les décisions de design",
+  "Distinguer wireframe basse fidélité, maquette haute fidélité, prototype",
+  "Construire une UI cohérente avec design tokens",
+  "Utiliser Figma au niveau utile pour un dev (auto-layout, composants, variants)",
+  "Itérer en testant sur 5 utilisateurs"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="aucun (parallélisable avec axe 1)" />
+
+
+## Pourquoi un dev doit comprendre l'UX
+
+Tu vas, dans ta carrière :
+
+1. Travailler sur des projets sans designer (90 % des side-projects, beaucoup de PME).
+2. Critiquer ou amender les maquettes d'un designer (collaboration).
+3. Implémenter du CSS qui respecte ou pas l'intention de design.
+
+Comprendre les **principes** te rend autonome dans ces 3 cas, et te fait gagner des heures de bricolage.
+
+## 5 lois UX qui changent tout
+
+### 1. Loi de Hick — moins de choix, décisions plus rapides
+
+Plus tu offres d'options, plus l'utilisateur met du temps à choisir.
+
+**Application** : un menu de 7 items > un menu de 30. Sur la page d'accueil, **un** call-to-action principal > 5 boutons concurrents.
+
+### 2. Loi de Fitts — la taille et la distance comptent
+
+Le temps pour cliquer sur une cible dépend de sa **taille** et de sa **distance**. Cibles petites et lointaines = lentes.
+
+**Application** :
+- Boutons primaires : ≥ 44 × 44 px (cible iOS/Android).
+- Action principale toujours visible, idéalement en bas sur mobile (zone du pouce).
+- Sur desktop, mettre des actions en haut/bord de l'écran les rend infiniment grandes (bord = cible infinie).
+
+### 3. Loi de Miller — 7 ± 2 items en mémoire de travail
+
+L'humain garde environ **7 items** en mémoire à court terme.
+
+**Application** :
+- Découper les formulaires longs en étapes de 5–7 champs.
+- Grouper visuellement les options par catégorie.
+- Pas plus de 7 items dans un menu de premier niveau.
+
+### 4. Loi de Jakob — les utilisateurs préfèrent ce qu'ils connaissent
+
+> *« Users spend most of their time on other sites. »* — Jakob Nielsen
+
+**Application** :
+- Le panier est en haut à droite (e-commerce).
+- Les liens sont soulignés et bleus (ou différenciés).
+- Le formulaire de contact est dans le footer.
+
+**Innover sur l'UX a un coût d'apprentissage.** Innove sur le produit, conformiste sur l'UX.
+
+### 5. Loi de Tesler — la complexité doit être quelque part
+
+> *« Toute application a une quantité minimale de complexité, qu'on ne peut pas réduire au-delà d'un certain seuil — on ne peut que la déplacer. »*
+
+Si tu simplifies l'UI, l'utilisateur paie ailleurs (par moins de contrôle, ou par confusion sur ce qui se passe). Si tu donnes trop d'options, **toi** payes en complexité de code et de support.
+
+**Bonus — la loi de la demo** :
+> Si quelque chose est crucial pour la démo, ça doit être **immédiat** dans l'UI. Pas caché derrière 3 clics.
+
+## Wireframes — basse fidélité, haute valeur
+
+Un **wireframe** est un schéma sans couleurs, sans typographie soignée, sans contenu réel. Juste des **cadres** et de la **structure**.
+
+```
+┌──────────────────────────────────────┐
+│  [Logo]    Accueil  Cat  Panier(2)  │
+├──────────────────────────────────────┤
+│                                      │
+│   ┌──────────┐   ┌──────────┐       │
+│   │  Image   │   │  Image   │       │
+│   │          │   │          │       │
+│   ├──────────┤   ├──────────┤       │
+│   │ Titre    │   │ Titre    │       │
+│   │ Prix     │   │ Prix     │       │
+│   └──────────┘   └──────────┘       │
+│                                      │
+│   ┌──────────┐   ┌──────────┐       │
+│   │  ...     │   │  ...     │       │
+│   └──────────┘   └──────────┘       │
+│                                      │
+├──────────────────────────────────────┤
+│      Footer · Contact · Legal        │
+└──────────────────────────────────────┘
+```
+
+**Outils** : Excalidraw, Balsamiq, ou Figma en mode wireframe.
+
+**Pourquoi basse fidélité** : si tu présentes une maquette pixel-perfect en bleu, le client te dira *« ah, je préfère en vert ». Avec un wireframe, il discute la **structure** (« ah il faudrait un filtre ici »), pas la couleur.
+
+## Maquettes haute fidélité
+
+Une fois la structure validée, tu passes en **haute fidélité** dans Figma : couleurs réelles, typographie, espacements précis, contenu réaliste.
+
+### Figma — le minimum vital pour un dev
+
+Tu n'as pas besoin de devenir designer dans Figma. Tu as besoin de :
+
+| Action | Pourquoi |
+|--------|----------|
+| **Inspecter** une maquette | Voir tailles, couleurs, espacements pour coder |
+| **Mesurer** entre deux éléments | Reproduire les espacements |
+| **Copier les CSS** d'un élément | Gagner du temps |
+| **Comprendre l'auto-layout** | Pour traduire en Flexbox/Grid |
+| **Voir les variants** d'un composant | Pour reproduire en code |
+
+Le tutoriel officiel Figma (1 h) suffit largement.
+
+### Auto-layout = Flexbox dans Figma
+
+Quand le designer utilise *auto-layout*, c'est **directement traduisible en Flexbox** :
+
+| Figma | CSS |
+|-------|-----|
+| `direction: vertical` | `flex-direction: column` |
+| `gap: 16` | `gap: 16px` |
+| `padding: 24` | `padding: 24px` |
+| `align: center` | `align-items: center` |
+| `fill container` | `width: 100%` |
+| `hug contents` | `width: fit-content` |
+
+## Design tokens — la pierre angulaire de la cohérence
+
+Un **design token** est une variable de design : couleurs, espacements, typographie. Plutôt que de coder en dur `color: #2563eb`, on déclare une fois `--color-primary: #2563eb`.
+
+```css
+:root {
+  /* Couleurs */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-text: #111827;
+  --color-text-muted: #6b7280;
+  --color-bg: #ffffff;
+  --color-bg-subtle: #f9fafb;
+  --color-border: #e5e7eb;
+  --color-success: #16a34a;
+  --color-warning: #ca8a04;
+  --color-error: #dc2626;
+
+  /* Espacements (système 4px) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Typographie */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+
+  /* Rayons */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Ombres */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 8px rgba(0,0,0,0.1);
+}
+```
+
+**Bénéfices** :
+- Mode sombre : redéfinir 10 variables au lieu de modifier 200 endroits.
+- Cohérence : impossible d'utiliser un bleu *presque* identique par accident.
+- Refonte : changer la palette en 1 commit.
+
+### Échelles vs valeurs arbitraires
+
+**Bonne pratique** : les espacements, tailles, ombres suivent une **échelle** (multiples de 4px par exemple). Pas de `padding: 13px` au pif.
+
+C'est exactement ce que fait Tailwind (`p-1` = 4px, `p-2` = 8px, `p-4` = 16px…). Si tu prends Tailwind, tu hérites d'un design system propre **gratis**.
+
+## Itérer — tester avec 5 utilisateurs
+
+Jakob Nielsen l'a démontré : **5 utilisateurs** suffisent pour détecter ~85 % des problèmes UX. Au-delà, le rendement décroît vite.
+
+### Protocole simple (test guérilla)
+
+1. **Choisis 5 personnes** vaguement représentatives de ton public.
+2. **Donne-leur une tâche** réelle : *« Trouve un appartement à louer 800 €/mois à Lyon ».*
+3. **Tais-toi**. Observe ce qu'ils font.
+4. **Note** les hésitations, allers-retours, abandons.
+5. **Demande après** : *« Qu'est-ce qui vous a fait hésiter à l'étape X ? »*
+
+Tu apprendras plus en 30 minutes que par 3 réunions de design.
+
+## Maquetter pour le mobile — mobile first
+
+> *« Designer la maquette desktop puis 'l'adapter' au mobile = échec. »*
+
+Commence par mobile. Si une feature ne tient pas sur mobile, c'est qu'elle est trop chargée. Le mobile force la **priorisation visuelle**.
+
+Trois breakpoints suffisent généralement :
+
+```css
+/* Mobile : par défaut */
+
+@media (min-width: 768px) {
+  /* Tablet et plus */
+}
+
+@media (min-width: 1024px) {
+  /* Desktop */
+}
+```
+
+Ne traque pas chaque appareil — laisse le contenu fluider entre.
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu présentes au client une maquette en haute fidélité. Il dit : « le bleu ne me plaît pas, mettez-le en vert ». Que devais-tu présenter d'abord ?"
+  options={[
+    'Une autre maquette en haute fidélité, en vert',
+    'Un wireframe basse fidélité, sans couleur, pour valider d\'abord la STRUCTURE — la couleur viendra ensuite',
+    'Un sondage utilisateur sur la couleur',
+    'Plusieurs maquettes haute fidélité dans 5 couleurs différentes'
+  ]}
+  answerIndex={1}
+  explanation="Les wireframes basse fidélité forcent la discussion sur la structure et l'organisation. Les maquettes haute fidélité génèrent des feedbacks superficiels (couleur, typo). C'est l'erreur classique : montrer trop tôt du fini = recevoir des commentaires de finition."
+/>
+
+<Quiz
+  question="Tu codes un nouveau composant et choisis une couleur de fond. Tu prends..."
+  options={[
+    '#3b82f6 — un beau bleu Tailwind',
+    'background: var(--color-primary), une variable de ton design system',
+    'rgba(59, 130, 246, 0.95) car c\'est plus subtil',
+    'Au feeling, ça se réajuste après'
+  ]}
+  answerIndex={1}
+  explanation="Toujours référencer un token. Si tu dois changer la palette, tu modifies une variable. Sinon tu vas chercher 47 valeurs de bleu dispersées et oublier la moitié. Les tokens sont le standard moderne."
+/>
+
+<Quiz
+  question="Tu présentes une nouvelle interface à 5 testeurs. Que fais-tu ?"
+  options={[
+    'Tu leur expliques comment marche l\'UI puis ils testent',
+    'Tu leur donnes une tâche réelle et tu te tais en observant',
+    'Tu remplis un questionnaire de satisfaction',
+    'Tu mesures uniquement le temps de complétion'
+  ]}
+  answerIndex={1}
+  explanation="C'est le test utilisateur classique : tâche réaliste, observation silencieuse, débrief après. Expliquer avant biaise tout (les utilisateurs réels n'auront pas tes explications). Un questionnaire ne révèle pas les frictions vécues."
+/>
+
+## Pour aller plus loin
+
+- *Refactoring UI* — Adam Wathan & Steve Schoger (le livre que doit lire tout dev pour faire du UI propre)
+- *Don't Make Me Think* — Steve Krug (UX, simple et fondamental)
+- *Laws of UX* — [lawsofux.com](https://lawsofux.com/) (catalogue illustré des lois)
+- *Figma for Developers* — tutoriel officiel
+- *Tailwind CSS* — système de design tokens prêt à l'emploi
+
+---
+
+**Fin de l'axe 3.** Direction l'[axe 4 — Outils du développeur](/04-outils/), ou attaque le projet « [Bibliothèque personnelle](/03-analyse-conception/#projet-de-laxe) » pour mettre tout cela en pratique.

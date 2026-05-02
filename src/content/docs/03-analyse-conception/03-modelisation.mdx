@@ -1,0 +1,373 @@
+---
+title: 3.3 — Modélisation (UML, C4, BPMN, Event Storming)
+description: Quatre familles de diagrammes — quand les utiliser, lesquels valent vraiment le détour.
+sidebar:
+  order: 3
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : choisir le bon diagramme pour le bon problème, sans tomber dans le piège de la « modélisation pour la modélisation ». Sur 14 diagrammes UML, **3 ou 4 te serviront vraiment**.
+
+<ObjectiveList items={[
+  "Distinguer les 4 grandes familles de diagrammes (UML, C4, BPMN, Event Storming)",
+  "Tracer un diagramme de cas d'usage UML",
+  "Tracer un diagramme de séquence pour expliquer un flux",
+  "Modéliser un système avec C4 (Context → Container → Component)",
+  "Mener un atelier d'Event Storming avec post-its (en équipe)"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="aucun (parallélisable avec axe 1)" />
+
+
+## Pourquoi modéliser ?
+
+3 raisons légitimes :
+
+1. **Communiquer** : un schéma vaut 1000 mots quand tu présentes une archi à un client.
+2. **Détecter** : modéliser révèle les incohérences avant le code.
+3. **Documenter** : 6 mois plus tard, tu retrouves la *raison* d'un choix architectural.
+
+3 raisons illégitimes :
+
+1. « C'est dans la méthodo » — la méthodo prescrit, ne décide pas pour toi.
+2. « Ça fait sérieux » — un diagramme inutile est juste du bruit.
+3. « Le client le réclame » — sauf en gros marché public, négocie le strict nécessaire.
+
+**Règle pratique** : un diagramme qui n'est pas mis à jour 1 mois après sa création est un mensonge documenté. Privilégie le **texte** (Mermaid, PlantUML) versionné dans le repo, plutôt qu'un PowerPoint qui dort dans un Drive.
+
+## UML — l'arsenal classique (en pratique : 3 sur 14)
+
+UML (Unified Modeling Language) propose 14 types de diagrammes. **N'en retiens que 3 ou 4** dans la vraie vie.
+
+### Diagramme de cas d'usage
+
+Pour la **vue d'ensemble fonctionnelle** : qui fait quoi.
+
+<Diagram
+  caption="Cas d'usage — boutique en ligne"
+  code={`
+    flowchart LR
+      Client((Client))
+      Admin((Admin))
+      Stripe((Stripe))
+
+      subgraph Système
+        UC1[Parcourir le catalogue]
+        UC2[Ajouter au panier]
+        UC3[Payer]
+        UC4[Suivre commande]
+        UC5[Gérer les produits]
+        UC6[Encaisser]
+      end
+
+      Client --> UC1
+      Client --> UC2
+      Client --> UC3
+      Client --> UC4
+      Admin --> UC5
+      UC3 --> Stripe
+      Stripe --> UC6
+  `}
+/>
+
+**Quand ?** Au début d'un projet, pour aligner avec le client sur le périmètre.
+
+### Diagramme de séquence
+
+Pour expliquer **un flux complexe** dans le temps : qui parle à qui, dans quel ordre.
+
+<Diagram
+  caption="Séquence — paiement Stripe avec 3D Secure"
+  code={`
+    sequenceDiagram
+      participant U as Utilisateur
+      participant F as Frontend
+      participant API as API
+      participant S as Stripe
+
+      U->>F: Clique "Payer"
+      F->>API: POST /payment-intent
+      API->>S: Create PaymentIntent
+      S-->>API: client_secret
+      API-->>F: client_secret
+      F->>S: stripe.confirmPayment(client_secret)
+      S-->>F: redirect to 3D Secure
+      U->>S: Code reçu par SMS
+      S-->>F: succeeded
+      F->>API: POST /confirm-order
+      API-->>F: order id
+      F-->>U: Confirmation
+  `}
+/>
+
+**Quand ?** Pour debug, faire un design review, ou expliquer un flux non-trivial à l'équipe.
+
+### Diagramme de classes
+
+Pour **le modèle objet** d'un domaine (POO).
+
+<Diagram
+  caption="Diagramme de classes — modèle de panier"
+  code={`
+    classDiagram
+      class Cart {
+        +items: CartItem[]
+        +addItem(product, quantity)
+        +removeItem(productId)
+        +total() Money
+      }
+      class CartItem {
+        +product: Product
+        +quantity: int
+        +subtotal() Money
+      }
+      class Product {
+        +id: ProductId
+        +name: string
+        +price: Money
+      }
+      Cart "1" *-- "*" CartItem
+      CartItem "*" --> "1" Product
+  `}
+/>
+
+**Quand ?** Pour modéliser un domaine métier en POO (Java, C#) ou en TypeScript orienté DDD.
+
+### Diagramme d'activité
+
+Pour **un processus** avec décisions.
+
+<Diagram
+  caption="Activité — création de compte"
+  code={`
+    flowchart TD
+      Start((Start)) --> Form[Saisir e-mail + MDP]
+      Form --> Valid{E-mail valide ?}
+      Valid -->|non| Form
+      Valid -->|oui| Exists{Compte existe ?}
+      Exists -->|oui| Login[Rediriger vers connexion]
+      Exists -->|non| Create[Créer compte]
+      Create --> Email[Envoyer email de vérif]
+      Email --> Wait[En attente activation]
+      Wait --> Click{Click sur lien ?}
+      Click -->|oui| Active[Compte activé]
+      Click -->|non, 24h| Expire[Compte supprimé]
+      Active --> End((End))
+      Expire --> End
+      Login --> End
+  `}
+/>
+
+**Quand ?** Workflows complexes avec branches conditionnelles et délais.
+
+### Les 10 autres
+
+Diagrammes de composants, de déploiement, de communication, d'objets, de timing, d'états-transitions… **tu peux ignorer la plupart** sans dommage. Si un cas particulier les exige, tu apprendras à ce moment-là.
+
+## C4 Model — la modélisation d'architecture moderne
+
+Créé par Simon Brown, **C4** propose 4 niveaux de zoom, du général au détaillé.
+
+<Diagram
+  caption="C4 Model — 4 niveaux de zoom"
+  code={`
+    flowchart LR
+      L1[Niveau 1 — Context<br/>le système et ses utilisateurs/<br/>systèmes externes]
+      L2[Niveau 2 — Container<br/>SPA, API, DB, queue —<br/>les blocs déployables]
+      L3[Niveau 3 — Component<br/>à l'intérieur d'un container]
+      L4[Niveau 4 — Code<br/>classes / fonctions]
+      L1 --> L2 --> L3 --> L4
+  `}
+/>
+
+### Niveau 1 — Context
+
+Boîte centrale = le système. Autour : utilisateurs et systèmes externes.
+
+<Diagram
+  caption="C4 niveau 1 — système de RDV médical"
+  code={`
+    flowchart TB
+      User((Patient))
+      Doc((Médecin))
+      Sec((Secrétaire))
+
+      subgraph Système
+        Sys[Système RDV en ligne]
+      end
+
+      Email[Service email<br/>SendGrid]
+      SMS[Service SMS<br/>Twilio]
+      LM[Logiciel métier<br/>existant]
+
+      User --> Sys
+      Doc --> Sys
+      Sec --> Sys
+      Sys --> Email
+      Sys --> SMS
+      Sys <--> LM
+  `}
+/>
+
+### Niveau 2 — Container
+
+Le système éclaté en blocs déployables.
+
+<Diagram
+  caption="C4 niveau 2 — containers"
+  code={`
+    flowchart TB
+      User((Patient))
+
+      subgraph Système
+        SPA[SPA Next.js<br/>navigateur]
+        API[API Node.js<br/>Fastify]
+        Worker[Worker Node<br/>BullMQ]
+        DB[(PostgreSQL)]
+        Cache[(Redis)]
+      end
+
+      Twilio[Twilio]
+
+      User --> SPA
+      SPA --> API
+      API --> DB
+      API --> Cache
+      API --> Worker
+      Worker --> Twilio
+      Worker --> DB
+  `}
+/>
+
+### Niveau 3 — Component
+
+À l'intérieur d'un container. Souvent inutile pour des petits projets.
+
+### Niveau 4 — Code
+
+Le code lui-même. Quasi jamais dessiné — les IDE le visualisent à la demande.
+
+<Aside type="tip" title="C4 en pratique">
+**Niveaux 1 et 2 suffisent** pour 95 % des projets. Maintenir un Niveau 3 à jour est coûteux ; le Niveau 4 est inutile (le code est sa propre source de vérité).
+
+Outils :
+- [Structurizr](https://structurizr.com/) — DSL textuelle officielle de Simon Brown.
+- [Mermaid](https://mermaid.js.org/) — comme dans ce site, simple et versionnable.
+- Excalidraw / Whimsical — plus libres mais non versionnés.
+</Aside>
+
+## BPMN — pour les processus métier
+
+**Business Process Model and Notation** : standard pour modéliser des processus en entreprise (workflow, validation, escalade…).
+
+<Diagram
+  caption="BPMN simplifié — processus de remboursement"
+  code={`
+    flowchart LR
+      Start((Demande)) --> Verif{Pièce justifiée ?}
+      Verif -->|non| Refuse[Refus + email]
+      Verif -->|oui| Mont{Montant ?}
+      Mont -->|< 100€| Auto[Validation auto]
+      Mont -->|>= 100€| Manager[Validation manager]
+      Manager -->|approuvé| Auto
+      Manager -->|refusé| Refuse
+      Auto --> Pay[Virement]
+      Pay --> End((Fin))
+      Refuse --> End
+  `}
+/>
+
+**Quand ?** Workflows métier où plusieurs acteurs interviennent (RH, achats, expense reports…). Souvent en projets ERP / banques / institutions.
+
+## Event Storming — pour les domaines complexes
+
+Atelier collaboratif inventé par Alberto Brandolini, parfait pour DDD (Domain-Driven Design).
+
+### Principe
+
+Une équipe (devs + métier) couvre un mur de **post-its colorés** par couleur :
+
+| Couleur | Symbolise |
+|---------|-----------|
+| 🟧 Orange | Événements métier (`OrderPlaced`, `PaymentReceived`) — au passé |
+| 🟦 Bleu | Commandes / actions (`PlaceOrder`, `RefundOrder`) — à l'impératif |
+| 🟨 Jaune | Acteurs (Client, Manager, Système externe) |
+| 🟪 Rose | Politiques / règles (« si X alors Y ») |
+| 🟩 Vert | Aggregates (entités métier qui changent d'état) |
+| 🟥 Rouge | Hot spots — questions ouvertes, problèmes |
+
+### Pourquoi c'est puissant
+
+- Les **événements au passé** forcent à parler comportement, pas implémentation.
+- Le **mur** rend visibles les zones d'ombre.
+- **Métier et tech** parlent enfin la même langue (Ubiquitous Language en DDD).
+
+### Quand l'utiliser
+
+Projets de taille moyenne à grande, domaine métier riche, équipe pluri-disciplinaire. Pour un blog perso : surdimensionné.
+
+## Choisir son outil de modélisation
+
+| Besoin | Outil recommandé |
+|--------|------------------|
+| Diagrammes versionnés dans le repo | **Mermaid** (texte → SVG) |
+| C4 strict avec collaboration | **Structurizr** |
+| Maquettes UI / wireframes | **Figma**, **Excalidraw** |
+| Schémas libres et collaboratifs | **Excalidraw**, **draw.io** |
+| Architecture cloud AWS/GCP | Icones officielles + draw.io |
+| BPMN pour clients corporate | **bpmn.io** (gratuit) |
+| Event Storming en remote | **Miro**, **Mural** |
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu dois expliquer à un nouveau dev comment fonctionne le flux de paiement Stripe (frontend, backend, webhook). Diagramme le plus utile ?"
+  options={[
+    'Diagramme de classes UML',
+    'Diagramme de séquence',
+    'C4 niveau 1 (Context)',
+    'BPMN'
+  ]}
+  answerIndex={1}
+  explanation="Le diagramme de séquence est conçu pour montrer un flux temporel entre acteurs (frontend, backend, Stripe), avec ordre des messages. C4 montrerait l'archi statique, le diagramme de classes le modèle objet — pas pertinents ici."
+/>
+
+<Quiz
+  question="Quel niveau C4 est le plus utile au quotidien ?"
+  options={[
+    'Niveau 1 (Context) et niveau 2 (Container)',
+    'Niveau 4 (Code)',
+    'Niveau 3 (Component) uniquement',
+    'Tous les niveaux ensemble'
+  ]}
+  answerIndex={0}
+  explanation="Les niveaux 1 et 2 montrent l'écosystème (qui parle au système) et les blocs déployables (SPA, API, DB). Le niveau 3 vieillit vite, le niveau 4 est inutile car le code est sa propre vérité."
+/>
+
+<Quiz
+  question="Tu démarres un atelier Event Storming. Le métier propose : « Le client peut commander, payer, recevoir, retourner ». Que mets-tu sur les post-its orange ?"
+  options={[
+    '"Commander", "Payer", "Recevoir", "Retourner"',
+    '"OrderPlaced", "PaymentReceived", "OrderShipped", "OrderReturned" (au passé)',
+    'Les noms des classes Java correspondantes',
+    'Les routes HTTP : POST /orders, POST /payments, etc.'
+  ]}
+  answerIndex={1}
+  explanation="Les post-its orange sont des ÉVÉNEMENTS métier au PASSÉ. Cela force à parler en termes de ce qui s'est produit, pas d'actions à faire ni d'implémentation. C'est la signature d'Event Storming."
+/>
+
+## Pour aller plus loin
+
+- *The C4 Model for visualising software architecture* — [c4model.com](https://c4model.com)
+- *UML Distilled* — Martin Fowler (le minimum vital)
+- *Event Storming* — Alberto Brandolini (gratuit en partie sur Leanpub)
+- *Domain-Driven Design Distilled* — Vaughn Vernon
+
+---
+
+**Suite** : [3.4 — Architecture](/03-analyse-conception/04-architecture/) — du modèle aux choix d'implémentation.

@@ -1,0 +1,459 @@
+---
+title: 13.2 — Optimisations frontend
+description: Images modernes, polices web, CSS critique, code splitting, prefetch/preload, CDN edge, RSC et islands.
+sidebar:
+  order: 2
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : appliquer les leviers qui font passer une page de 4 s à 1,5 s. Images, fonts, CSS, JS, cache, edge — chacun pèse, et leur combinaison fait la différence.
+
+<ObjectiveList items={[
+  "Servir des images modernes (AVIF/WebP) avec srcset et fetchpriority",
+  "Charger les polices sans FOIT/FOUT pénalisant",
+  "Réduire le JS critique : code splitting, dynamic import, RSC, islands",
+  "Inliner le CSS critique et différer le reste",
+  "Mettre en place un CDN edge avec cache HTTP correct"
+]} />
+
+<Level value="confirmé" reading="11 min" prereq="axes 5-9 lus" />
+
+
+## La hiérarchie des leviers
+
+Tous les leviers ne se valent pas. Voici l'ordre de gain habituel, du plus fort au plus faible :
+
+| Levier | Gain typique sur LCP/INP |
+|--------|--------------------------|
+| Images modernes + dimensionnement correct | -1 à -3 s LCP |
+| Réduction du JS critique (code splitting, RSC) | -1 à -2 s LCP, INP / 2 |
+| CDN + cache HTTP correct | -200 à -800 ms TTFB → LCP |
+| Polices optimisées (`font-display`, `preload`) | -200 à -500 ms FCP/LCP |
+| CSS critique inliné | -100 à -300 ms FCP |
+| Prefetch / preload | -50 à -200 ms LCP |
+| Compression Brotli | -10 à -30 % de poids |
+
+**Optimise dans cet ordre.** Inutile d'inliner 4 KB de CSS critique si ton bundle JS pèse 800 KB.
+
+---
+
+## Images — le plus gros levier
+
+### Formats modernes
+
+| Format | Compression vs JPEG | Compatibilité 2026 |
+|--------|---------------------|---------------------|
+| **AVIF** | ~50 % plus léger | Tous navigateurs majeurs |
+| **WebP** | ~30 % plus léger | Universal |
+| **JPEG progressif** | Ref | Universal — fallback |
+| **PNG** | À éviter pour les photos | Universal |
+
+Servir AVIF en priorité, WebP en fallback, JPEG en ultime fallback :
+
+```html
+<picture>
+  <source type="image/avif" srcset="hero.avif">
+  <source type="image/webp" srcset="hero.webp">
+  <img src="hero.jpg" alt="..." width="1200" height="675">
+</picture>
+```
+
+### Responsive avec `srcset` et `sizes`
+
+Servir une image de 4000 px à un mobile = gâchis. Le navigateur choisit la bonne taille avec `srcset` + `sizes` :
+
+```html
+<img
+  src="hero-800.avif"
+  srcset="hero-400.avif 400w, hero-800.avif 800w, hero-1600.avif 1600w"
+  sizes="(max-width: 768px) 100vw, 800px"
+  alt="..."
+  width="800"
+  height="450"
+  fetchpriority="high"
+  loading="eager"
+>
+```
+
+| Attribut | Rôle |
+|----------|------|
+| `srcset` | Liste des sources avec leur largeur réelle |
+| `sizes` | Indique la taille de rendu prévue selon viewport |
+| `width` / `height` | Réservent l'espace → pas de CLS |
+| `fetchpriority="high"` | Pour le LCP element uniquement |
+| `loading="lazy"` | Pour les images sous la fold |
+| `decoding="async"` | Décodage non-bloquant |
+
+<Aside type="tip" title="Frameworks à images">
+- **Next.js** : `<Image>` génère AVIF/WebP, gère `srcset` automatiquement.
+- **Astro** : `<Image>` du package `astro:assets`, pareil.
+- **Cloudflare Images / imgix / Cloudinary** : redimensionnement à la volée via URL.
+
+Si ton framework propose une primitive `<Image>`, **utilise-la**. Tu gagnes 80 % du travail manuel.
+</Aside>
+
+### CDN d'images : URL paramétrée
+
+Les CDN d'images (Cloudflare Images, imgix, Cloudinary, ImageKit) génèrent les variantes à la volée :
+
+```
+https://imgcdn.example/hero.jpg?w=800&fm=avif&q=70
+```
+
+Avantage : tu stockes **une seule** image, le CDN sert 50 variantes.
+
+---
+
+## Polices web — éviter FOIT et FOUT
+
+Deux problèmes connus :
+
+- **FOIT** (Flash of Invisible Text) : texte invisible pendant que la police charge. Pénalise LCP.
+- **FOUT** (Flash of Unstyled Text) : police fallback puis swap → CLS si métriques différentes.
+
+### Recettes 2026
+
+```css
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-var.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-display: swap;            /* éviter FOIT */
+  ascent-override: 90%;          /* aligner les métriques */
+  size-adjust: 105%;
+}
+```
+
+```html
+<link rel="preload" href="/fonts/inter-var.woff2" as="font"
+      type="font/woff2" crossorigin>
+```
+
+| Technique | Effet |
+|-----------|-------|
+| **`font-display: swap`** | Texte affiché avec fallback, swap à l'arrivée |
+| **`woff2`** + variable font | -30 à -70 % de poids vs polices statiques |
+| **`preload`** | Démarre le download dès le HTML parsé |
+| **`ascent-override` / `size-adjust`** | Le fallback a la même hauteur de ligne → pas de CLS |
+| **Self-host** | Élimine la latence du DNS Google Fonts |
+
+<Aside type="caution" title="Google Fonts : self-host par défaut">
+Charger Google Fonts via `<link href="https://fonts.googleapis.com/...">` ajoute 2 RTT externes (DNS + TLS). En 2026, **self-host** est la norme. Outils : [google-webfonts-helper](https://gwfh.mranftl.com/), `next/font`, `@fontsource/*`.
+</Aside>
+
+---
+
+## CSS — critique inliné, reste différé
+
+### Critical CSS
+
+Le CSS du **above-the-fold** (ce qui est visible sans scroller) est inliné directement dans le `<head>`. Le reste est chargé en `<link rel="stylesheet">` ou via JS.
+
+```html
+<head>
+  <style>/* CSS critique extrait : ~10 KB max */</style>
+  <link rel="preload" as="style" href="/main.css"
+        onload="this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/main.css"></noscript>
+</head>
+```
+
+Outils :
+
+- **Penthouse** / **critical** (npm) — extrait le CSS du fold.
+- **Astro** / **Next.js** — gèrent ça quasi-automatiquement avec leurs primitives.
+- **Tailwind v4** + JIT → CSS final ~10-15 KB sur une page typique : pas vraiment besoin de le splitter.
+
+### Bonus 2026 — `@layer` + `@scope`
+
+`@layer` permet de **piloter la cascade** sans `!important`, et `@scope` (Chromium) limite la portée d'un sélecteur :
+
+```css
+@layer reset, base, components, utilities;
+
+@scope (.card) {
+  h2 { font-size: 1.5rem; }
+}
+```
+
+Effet perf : moins de CSS overrides, moins de spécificité grimpante, donc moins de calcul de styles.
+
+---
+
+## JavaScript — la moitié du combat
+
+### Code splitting et dynamic imports
+
+Charger l'éditeur Markdown sur la page d'accueil = 200 KB de JS pour un visiteur qui ne l'utilisera jamais.
+
+```ts
+// Mauvais — chargé même si l'utilisateur n'ouvre jamais l'éditeur
+import { MarkdownEditor } from './MarkdownEditor';
+
+// Bon — chargé au clic sur "Éditer"
+const handleClick = async () => {
+  const { MarkdownEditor } = await import('./MarkdownEditor');
+  // ...
+};
+```
+
+En React/Next, `lazy` + `Suspense` :
+
+```tsx
+const Editor = lazy(() => import('./MarkdownEditor'));
+
+<Suspense fallback={<Skeleton/>}>
+  <Editor />
+</Suspense>
+```
+
+### Tree-shaking et imports nominaux
+
+```ts
+// ❌ Importe TOUTE la lib (~70 KB)
+import _ from 'lodash';
+_.debounce(fn, 200);
+
+// ✅ ~2 KB
+import debounce from 'lodash/debounce';
+debounce(fn, 200);
+
+// ✅ Mieux encore : lodash-es ou la fonction native
+```
+
+Inspecte ton bundle :
+
+```bash
+npx vite-bundle-visualizer    # Vite
+npx @next/bundle-analyzer     # Next.js
+```
+
+### React Server Components & Islands
+
+Deux paradigmes 2026 pour réduire **drastiquement** le JS envoyé :
+
+**RSC (Next.js 16 App Router, Remix, etc.)**
+Le composant rend côté serveur, le HTML arrive **sans** son JS. Seuls les composants marqués `'use client'` sont hydratés.
+
+```tsx
+// app/page.tsx — Server Component (défaut Next.js)
+import { db } from '@/db';
+
+export default async function Home() {
+  const posts = await db.posts.findAll();
+  return <PostList posts={posts} />;   // 0 JS shippé
+}
+```
+
+**Astro Islands**
+Astro envoie **0 JS par défaut**. Tu opt-in par composant :
+
+```astro
+---
+import Counter from './Counter.svelte';
+---
+<Counter client:visible />
+<!-- chargé seulement quand l'élément entre dans le viewport -->
+```
+
+| Directive Astro | Quand l'hydrater |
+|-----------------|------------------|
+| `client:load` | Au chargement |
+| `client:idle` | Quand le main thread est libre |
+| `client:visible` | Quand visible (IntersectionObserver) |
+| `client:media` | Selon une media query |
+| `client:only` | Skip le SSR, rend uniquement côté client |
+
+<Aside type="tip" title="Vue 3.6 Vapor & Svelte 5 runes">
+**Vue 3.6 Vapor Mode** et **Svelte 5 (runes)** réduisent encore le runtime JS expédié. Vapor compile les composants directement en DOM impératif (sans virtual DOM) → bundle ~50 % plus petit. Sur les apps fortement interactives, c'est un levier en plus.
+</Aside>
+
+### Long tasks → casser ou différer
+
+Le main thread doit rendre la main aux interactions toutes les 50 ms. Si tu as un calcul lourd :
+
+```ts
+// ❌ Bloque 200 ms — INP catastrophique
+function processItems(items) {
+  for (const item of items) heavyWork(item);
+}
+
+// ✅ Yield au navigateur entre chaque batch
+async function processItems(items) {
+  for (let i = 0; i < items.length; i++) {
+    heavyWork(items[i]);
+    if (i % 50 === 0) await scheduler.yield(); // API native 2026
+  }
+}
+```
+
+Pour des calculs vraiment lourds, **Web Worker** :
+
+```ts
+const worker = new Worker(new URL('./calc.ts', import.meta.url), { type: 'module' });
+worker.postMessage(data);
+worker.onmessage = (e) => setResult(e.data);
+```
+
+---
+
+## Préchargements — `preload`, `preconnect`, `prefetch`
+
+```html
+<!-- DNS + TLS handshake en avance vers un domaine critique -->
+<link rel="preconnect" href="https://api.example" crossorigin>
+
+<!-- Ressource utilisée DANS la page courante, prioritaire -->
+<link rel="preload" href="/hero.avif" as="image" fetchpriority="high">
+
+<!-- Ressource utilisée par la PROCHAINE page (faible priorité) -->
+<link rel="prefetch" href="/dashboard.js">
+```
+
+| Hint | Quand |
+|------|-------|
+| `preconnect` | API critique, CDN, fonts externes |
+| `dns-prefetch` | Idem mais sans TLS (cas rares) |
+| `preload` | Asset critique chargé en async (font, hero image, script crucial) |
+| `prefetch` | Page de destination probable (ex: lien hover) |
+| `modulepreload` | Module ESM critique |
+
+**Ne pas en abuser.** 10 `preload` au lieu de 1 = bottleneck CPU/réseau.
+
+---
+
+## CDN edge & cache HTTP
+
+### Cache HTTP correct
+
+```http
+# Asset versionné (hash dans l'URL) → immuable
+Cache-Control: public, max-age=31536000, immutable
+
+# HTML → court, revalidation rapide
+Cache-Control: public, max-age=0, must-revalidate
+ETag: "abc123"
+
+# Réponse API qui change rarement → SWR
+Cache-Control: public, max-age=60, stale-while-revalidate=600
+```
+
+`stale-while-revalidate` est le meilleur ami du LCP : on sert le cache **immédiatement** et on revalide en arrière-plan.
+
+### Edge — Cloudflare, Vercel, Cloudflare Workers
+
+Faire tourner le serveur **proche de l'utilisateur** divise le TTFB par 3-5 sur les zones lointaines.
+
+```ts
+// Vercel Edge / Cloudflare Workers
+export const runtime = 'edge';
+
+export default async function handler(req: Request) {
+  const data = await fetch('https://api.example/posts', {
+    next: { revalidate: 60 },  // ISR Next.js
+  });
+  return Response.json(await data.json());
+}
+```
+
+| Pattern | Quand utiliser |
+|---------|----------------|
+| **SSG** (Static Site Generation) | Contenu identique pour tous (blog, marketing) |
+| **ISR** (Incremental Static Regeneration) | Contenu qui change toutes les X min (catalogue produits) |
+| **SSR Edge** | Contenu personnalisé léger (dashboard, A/B test) |
+| **CSR** (Client-Side Rendering) | Apps internes, dashboards très interactifs |
+
+---
+
+## Compression — Brotli > gzip
+
+Active **Brotli** sur ton CDN/serveur :
+
+| Format | Réduction texte/JSON | Universel ? |
+|--------|----------------------|-------------|
+| **Brotli (br)** | ~20 % de mieux que gzip | Quasi (sauf navigateurs très anciens) |
+| **gzip** | Référence | Universal |
+
+Brotli avec niveau 4 dynamique + niveau 11 statique (assets pré-compressés au build) est la norme 2026.
+
+---
+
+## HTTP/3 et early hints
+
+| Levier | Effet |
+|--------|-------|
+| **HTTP/3 (QUIC)** | Évite le head-of-line blocking sur réseaux mobiles |
+| **Early Hints (103)** | Le serveur push des `preload` *avant* la réponse complète |
+| **Service Worker** | Cache offline + asset shell |
+
+Ton CDN (Cloudflare, Fastly, Vercel) les active en quelques clics.
+
+---
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu as une image hero 4000×3000 servie en JPEG (1,8 MB) sans srcset. Quel est le levier qui aura le plus d'impact sur LCP ?"
+  options={[
+    'Ajouter font-display: swap',
+    'Convertir en AVIF + srcset adaptatif + fetchpriority="high"',
+    'Activer Brotli',
+    'Préconnecter au CDN'
+  ]}
+  answerIndex={1}
+  explanation="L'image hero est ton LCP element. La passer en AVIF (~80 KB), avec srcset (mobile reçoit 800px, pas 4000px) et fetchpriority='high' attaque directement la cause. Les autres leviers sont marginaux à côté."
+/>
+
+<Quiz
+  question="Tu vois un long task de 380 ms dans Performance lors du clic sur un bouton. INP catastrophique. Quelle stratégie ?"
+  options={[
+    'Ajouter loading="lazy" sur les images',
+    'Casser la tâche en chunks avec scheduler.yield() ou Web Worker',
+    'Augmenter la taille du cache navigateur',
+    'Migrer en HTTP/3'
+  ]}
+  answerIndex={1}
+  explanation="Une long task bloque le main thread, ce qui dégrade INP. Casser en chunks avec yield() libère le main thread entre les batches ; un Web Worker déporte le calcul complètement. Les autres options ne touchent pas le main thread."
+/>
+
+<Quiz
+  question="Tu utilises Next.js avec `<Image>` automatique. Sur quel pattern faut-il rester vigilant ?"
+  options={[
+    'Mettre fetchpriority="high" sur le bon LCP element (souvent le hero) — sinon Next priorise mal',
+    'Désactiver le composant Image, c\'est trop lourd',
+    'Utiliser uniquement des PNG',
+    'Charger toutes les images en eager'
+  ]}
+  answerIndex={0}
+  explanation="Le composant Image de Next gère la majorité du travail mais ne devine pas toujours quel élément est ton LCP. Ajouter `priority` (Next) ou `fetchpriority='high'` sur le hero garantit qu'il télécharge avec la bonne priorité. Eager partout est exactement le contre-pattern (gaspille la bande passante)."
+/>
+
+<Quiz
+  question="Tu hésites entre RSC (Next.js) et Astro Islands pour un site marketing très peu interactif. Lequel choisir et pourquoi ?"
+  options={[
+    'Next.js — RSC sont plus modernes',
+    'Astro — il envoie 0 JS par défaut, idéal pour un contenu majoritairement statique',
+    'CSR pur — Single Page App',
+    'Indifférent : la perf est identique'
+  ]}
+  answerIndex={1}
+  explanation="Pour un site très peu interactif, Astro est imbattable : 0 JS sur la majorité des pages, opt-in par île seulement quand nécessaire. Next.js RSC reste excellent mais embarque toujours un runtime client. CSR est le pire choix ici."
+/>
+
+---
+
+## Pour aller plus loin
+
+- *web.dev / fast* — [web.dev/fast](https://web.dev/fast/) — guide officiel
+- *Image Optimization* — Addy Osmani (gratuit en ligne)
+- *Speed Patterns* — patterns.dev
+- *Astro Islands* — [docs.astro.build/concepts/islands](https://docs.astro.build/en/concepts/islands/)
+- *Next.js Optimization* — [nextjs.org/docs/app/building-your-application/optimizing](https://nextjs.org/docs/app/building-your-application/optimizing)
+
+---
+
+**Suite** : [13.3 — Optimisations backend](/13-performance-a11y/03-backend/) pour s'attaquer au TTFB et aux requêtes.

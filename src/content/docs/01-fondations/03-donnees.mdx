@@ -1,0 +1,315 @@
+---
+title: 1.3 — Représentation des données
+description: Bits, octets, encodages, formats — comprendre ce qu'il y a vraiment dans un fichier.
+sidebar:
+  order: 3
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside, Code } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : démystifier ce que veulent dire « UTF-8 », « JSON », « base64 ». À la fin, tu sauras lire un dump hexadécimal et comprendre pourquoi un emoji peut casser ta base de données.
+
+<ObjectiveList items={[
+  "Convertir entre binaire, décimal et hexadécimal",
+  "Comprendre la différence entre un caractère et un octet (UTF-8)",
+  "Choisir entre JSON, YAML, XML, CSV, TOML pour un cas donné",
+  "Lire un dump hex et reconnaître un fichier par ses premiers octets"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="aucun" />
+
+
+## Bits et octets
+
+Un **bit** = 0 ou 1. Un **octet** (byte) = 8 bits.
+
+Avec 8 bits, on peut représenter 2⁸ = 256 valeurs (de 0 à 255).
+
+```
+0 0 0 0 0 0 0 0  =  0
+0 0 0 0 0 0 0 1  =  1
+0 0 0 0 0 0 1 0  =  2
+0 0 0 0 0 0 1 1  =  3
+...
+1 1 1 1 1 1 1 1  =  255
+```
+
+### Hexadécimal : un raccourci pratique
+
+Le binaire est lourd à écrire. L'**hexadécimal (base 16)** groupe 4 bits en un seul caractère :
+
+| Binaire | Hex | Décimal |
+|---------|-----|---------|
+| `0000` | `0` | 0 |
+| `0001` | `1` | 1 |
+| `1001` | `9` | 9 |
+| `1010` | `a` | 10 |
+| `1111` | `f` | 15 |
+
+**Un octet = 2 caractères hex.** Donc `0xff` = `11111111` = 255.
+
+Tu reconnais l'hex à son préfixe `0x` (en programmation) ou `#` (en CSS pour les couleurs : `#ff0000` = rouge pur, soit RGB(255, 0, 0)).
+
+### Conversions
+
+```bash
+# En bash
+printf '%d\n' 0xff      # 255
+printf '%x\n' 255       # ff
+printf '%b\n' '\x41'    # A (l'octet 0x41 = caractère ASCII A)
+```
+
+```js
+// En JavaScript
+parseInt('ff', 16)        // 255
+(255).toString(16)         // 'ff'
+(255).toString(2)          // '11111111'
+```
+
+## Du caractère à l'octet : les encodages
+
+Un ordinateur ne stocke que des octets. Le texte, ce sont des **conventions** qui associent caractères ↔ octets.
+
+### ASCII (1963)
+
+Les 128 premiers caractères : lettres latines, chiffres, ponctuation. Un caractère = un octet (le bit de poids fort est inutilisé).
+
+```
+'A' = 0x41 = 65
+'a' = 0x61 = 97
+'0' = 0x30 = 48
+' ' = 0x20 = 32
+'\n' = 0x0a = 10
+```
+
+**Limite** : pas d'accents, pas de caractères chinois, etc.
+
+### Latin-1 (ISO-8859-1)
+
+Étend ASCII avec les 128 caractères européens (é, à, ñ, ü…). Toujours 1 octet par caractère, **mais ne peut pas représenter `€`, `é` *et* `あ` simultanément**. Plusieurs encodages incompatibles ont coexisté → beaucoup de `Ã©` au lieu de `é` dans les vieilles bases.
+
+### Unicode et UTF-8 (la solution moderne)
+
+**Unicode** est un catalogue universel : chaque caractère a un *code point* (un numéro).
+
+- `'A'` = U+0041
+- `'é'` = U+00E9
+- `'€'` = U+20AC
+- `'😀'` = U+1F600
+
+**UTF-8** est l'encodage qui transforme ces code points en octets, de façon astucieuse :
+
+| Code point | Octets en UTF-8 |
+|------------|-----------------|
+| U+0000 → U+007F (ASCII) | 1 octet |
+| U+0080 → U+07FF | 2 octets |
+| U+0800 → U+FFFF | 3 octets |
+| U+10000 → U+10FFFF | 4 octets |
+
+**Conséquences pratiques** :
+- Un texte ASCII pur reste valide en UTF-8 (compatibilité totale).
+- `'é'` = 2 octets, `'€'` = 3, `'😀'` = 4.
+- `string.length` en JavaScript compte des **unités UTF-16**, pas toujours des caractères humains : `'😀'.length === 2`.
+
+<Diagram
+  caption="L'octet, le code point, le caractère"
+  code={`
+    flowchart LR
+      Octets["Octets en UTF-8<br/>0xC3 0xA9"] --> Decode[Décodage UTF-8]
+      Decode --> CP["Code point Unicode<br/>U+00E9"]
+      CP --> Glyph["Glyphe rendu<br/>é"]
+  `}
+/>
+
+<Aside type="tip" title="Toujours UTF-8, partout">
+- Sauve tes fichiers source en UTF-8 (sans BOM si possible — le BOM peut casser des outils).
+- Configure ta base de données en `utf8mb4` (MySQL) ou UTF-8 (Postgres par défaut).
+- HTML : `<meta charset="utf-8">`.
+- HTTP : `Content-Type: application/json; charset=utf-8`.
+
+Le jour où un client chinois s'inscrit ou qu'un utilisateur met un emoji dans son nom, tu verras qui a oublié.
+</Aside>
+
+### Lire un dump hex
+
+`xxd` (Linux/macOS) montre le contenu binaire d'un fichier :
+
+```bash
+echo -n "Café 😀" | xxd
+# 00000000: 4361 66c3 a920 f09f 9880                 Caf.. ....
+```
+
+- `43` = `C`, `61` = `a`, `66` = `f`
+- `c3 a9` = `é` (2 octets UTF-8)
+- `20` = espace
+- `f0 9f 98 80` = `😀` (4 octets UTF-8)
+
+## Les nombres aussi sont encodés
+
+### Entiers
+
+Sur 32 bits non signés : 0 à 4 294 967 295. Sur 32 bits signés (complément à deux) : -2 147 483 648 à 2 147 483 647.
+
+**Piège classique** : multiplier deux entiers 32 bits dont le produit dépasse cette limite → **overflow**, le résultat est faux. C'est ainsi qu'on a perdu une fusée Ariane 5 en 1996.
+
+### Flottants (IEEE 754)
+
+Les nombres décimaux sont approximés en binaire :
+
+```js
+0.1 + 0.2 === 0.3      // false
+0.1 + 0.2              // 0.30000000000000004
+```
+
+**Conséquence** : ne stocke jamais de l'argent en `float`. Utilise des entiers (centimes) ou un type décimal exact (`DECIMAL` en SQL, `BigDecimal` en Java).
+
+## Formats d'échange
+
+Quand tu envoies des données entre programmes, tu choisis un **format**.
+
+### JSON — le format de l'internet moderne
+
+```json
+{
+  "nom": "Alice",
+  "age": 30,
+  "skills": ["js", "python"],
+  "actif": true,
+  "manager": null
+}
+```
+
+**Forces** : universel, simple, parseur natif partout (`JSON.parse`), bon support outils.
+**Limites** : pas de commentaires, pas de dates natives (string ISO 8601 par convention), verbeux.
+
+### YAML — JSON pour humains
+
+```yaml
+nom: Alice
+age: 30
+skills:
+  - js
+  - python
+actif: true
+manager: null
+```
+
+**Forces** : lisible, supporte les commentaires, idéal pour les fichiers de config.
+**Limites** : indentation sensible (un espace de trop = bug), syntaxe surprenante (`Norway problem` : `NO` lu comme `false`).
+
+### XML — vénérable, encore en entreprise
+
+```xml
+<personne>
+  <nom>Alice</nom>
+  <age>30</age>
+  <skills>
+    <skill>js</skill>
+    <skill>python</skill>
+  </skills>
+</personne>
+```
+
+**Forces** : schémas (XSD), validation forte, attributs.
+**Limites** : verbeux, pénible à lire et à écrire.
+
+### CSV — le tableur
+
+```csv
+nom,age,ville
+Alice,30,Paris
+Bob,25,"Lyon, France"
+```
+
+**Forces** : minimal, lisible par Excel.
+**Limites** : pas standardisé (séparateur `,` ou `;` selon la locale), gestion des virgules dans les valeurs problématique.
+
+### TOML — pour les fichiers de config
+
+```toml
+[serveur]
+host = "localhost"
+port = 5432
+
+[db]
+url = "postgres://..."
+```
+
+**Forces** : sans piège, lisible, sections claires. Utilisé par Cargo (Rust), pyproject.toml, Hugo.
+**Limites** : moins répandu hors écosystèmes spécifiques.
+
+### Comparaison synthétique
+
+| Format | Lisibilité | Strict | Cas typique |
+|--------|------------|--------|-------------|
+| JSON | ⭐⭐ | ⭐⭐⭐ | API, données |
+| YAML | ⭐⭐⭐ | ⭐ | Config (avec précaution), Kubernetes |
+| XML | ⭐ | ⭐⭐⭐⭐ | Entreprise, SOAP |
+| CSV | ⭐⭐ | ⭐ | Échanges tabulaires, exports |
+| TOML | ⭐⭐⭐ | ⭐⭐⭐ | Config sans piège |
+
+## Encodage Base64
+
+Un encodage qui transforme **n'importe quels octets** en texte ASCII (utile pour transmettre du binaire dans du JSON, par email, dans une URL).
+
+```bash
+echo -n "Hello" | base64
+# SGVsbG8=
+
+echo -n "SGVsbG8=" | base64 -d
+# Hello
+```
+
+**Coût** : ~33 % de taille en plus. À ne pas confondre avec un chiffrement (Base64 est trivialement réversible).
+
+## Auto-évaluation
+
+<Quiz
+  question="Combien d'octets occupe la chaîne 'café' encodée en UTF-8 ?"
+  options={[
+    '4 octets',
+    '5 octets',
+    '8 octets',
+    'Ça dépend du système d\'exploitation'
+  ]}
+  answerIndex={1}
+  explanation="c, a, f sont en ASCII (1 octet chacun, total 3). é est en U+00E9 et prend 2 octets en UTF-8. Total : 5 octets."
+/>
+
+<Quiz
+  question="En JavaScript, '😀'.length vaut..."
+  options={[
+    '1',
+    '2',
+    '4',
+    'undefined'
+  ]}
+  answerIndex={1}
+  explanation="JavaScript stocke les chaînes en UTF-16. Les emojis hors du BMP (Basic Multilingual Plane) sont représentés par 2 unités UTF-16 (paire de surrogates). length compte ces unités, pas les caractères humains."
+/>
+
+<Quiz
+  question="Tu dois stocker un montant monétaire (ex. 19,99 €). Quel type ?"
+  options={[
+    'float',
+    'double',
+    'DECIMAL ou un entier en centimes',
+    'string'
+  ]}
+  answerIndex={2}
+  explanation="Les flottants (float/double) sont approximatifs en binaire. 0.1 + 0.2 ≠ 0.3. Utilise DECIMAL (SQL) ou stocke en centimes en entier (1999 pour 19,99 €)."
+/>
+
+## Pour aller plus loin
+
+- *Joel on Software — The Absolute Minimum Every Software Developer Must Know About Unicode* (lecture culte).
+- *What every computer scientist should know about floating-point arithmetic* — David Goldberg.
+- *RFC 8259* — la spec officielle JSON (4 pages, lisible !).
+
+---
+
+**Suite** : [1.4 — Algorithmie & complexité](/01-fondations/04-algorithmie/) pour le dernier morceau des fondations.

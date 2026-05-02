@@ -1,0 +1,80 @@
+---
+title: Axe 12 — Sécurité applicative
+description: OWASP Top 10, hashs, headers, gestion des secrets, RGPD.
+sidebar:
+  order: 0
+---
+
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import ExerciseDownload from '../../../components/ExerciseDownload.astro';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+> 🎯 **Objectif global** : connaître les vulnérabilités courantes du web et savoir les prévenir au quotidien.
+
+<Aside type="note" title="Sécurité dans les axes précédents — où est la frontière">
+Tu as déjà vu des sujets sécurité dans les axes 8 (hashing argon2id, JWT, cookies HttpOnly), 10 (RLS Supabase, Firestore Rules), 13 (CSP). Pas de doublons inutiles : ici on **systématise**.
+
+- **Axes 8/10** : sécu **par produit** — comment sécuriser TON taskly-api ou TON SaaS.
+- **Axe 12 (ici)** : sécu **par catégorie** — la grille OWASP Top 10, les patterns d'audit, les outils (semgrep, gitleaks, Snyk), les processus (responsible disclosure, security.txt, RGPD).
+
+C'est l'axe pour devenir **auditeur** de ton propre code, pas juste implémenteur.
+</Aside>
+
+## Prérequis
+
+Axes 2, 6, 8.
+
+## Objectifs
+
+<ObjectiveList items={[
+  "Identifier les 10 vulnérabilités les plus courantes (OWASP Top 10)",
+  "Hasher correctement un mot de passe (argon2id)",
+  "Configurer CORS, CSP, HSTS, SameSite cookies, X-Frame-Options",
+  "Prévenir XSS, CSRF, SQL Injection, IDOR, SSRF",
+  "Gérer secrets et clés (vault, .env, jamais en repo)",
+  "Mettre en place un scan de dépendances continu (Dependabot, Snyk)"
+]} />
+
+## Contenu de l'axe
+
+<CardGrid>
+  <LinkCard
+    title="12.1 — OWASP Top 10"
+    href="/12-securite/01-owasp/"
+    description="Les 10 catégories de vulnérabilités web les plus critiques — exemple, impact, prévention pour chacune."
+  />
+  <LinkCard
+    title="12.2 — Sécurité frontend"
+    href="/12-securite/02-frontend/"
+    description="XSS (stocké, réfléchi, DOM), CSRF, CSP avec nonce, X-Frame-Options, SRI, mixed content."
+  />
+  <LinkCard
+    title="12.3 — Sécurité backend"
+    href="/12-securite/03-backend/"
+    description="Injections SQL/NoSQL/command, IDOR, hashs argon2id, secrets, rate-limit, SSRF, audit log."
+  />
+  <LinkCard
+    title="12.4 — Pratiques continues"
+    href="/12-securite/04-pratiques-continues/"
+    description="Dependabot, Snyk, SAST/DAST, gitleaks, pentest, bug bounty, security.txt, RGPD."
+  />
+</CardGrid>
+
+## Projet de l'axe
+
+**Audit OWASP — VulnTasks API** — une mini-API Hono volontairement trouée avec **10 vulnérabilités OWASP Top 10** à identifier, exploiter (preuve `curl`), corriger, et documenter dans un rapport pro. Tu apprends la discipline du pentester : preuve d'exploit avant correctif, test de régression avant commit.
+
+<ExerciseDownload
+  axe="12-securite"
+  slug="01-audit-owasp"
+  title="Audit OWASP — VulnTasks API"
+  description="Pré-requis : Node ≥ 20 + curl. Tu vis 10 vulnérabilités plantées (SQLi, MD5, brute force, IDOR, secrets hardcodés, cookies non-sûrs, CORS *, headers manquants, SSRF, logs absents). Correction validée : 8/8 tests de régression Vitest + AUDIT_REPORT.md complet."
+/>
+
+## Ressources clés
+
+- *OWASP Top 10* — [owasp.org/www-project-top-ten](https://owasp.org/www-project-top-ten/)
+- *OWASP Cheat Sheet Series* — [cheatsheetseries.owasp.org](https://cheatsheetseries.owasp.org/)
+- *PortSwigger Web Security Academy* — exercices pratiques gratuits
+- *RGPD CNIL — Guide développeur*
+- *Snyk Vulnerability DB* — [security.snyk.io](https://security.snyk.io/)

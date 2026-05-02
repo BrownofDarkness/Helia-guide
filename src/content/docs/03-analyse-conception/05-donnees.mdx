@@ -1,0 +1,347 @@
+---
+title: 3.5 — Modélisation de données
+description: MCD, MLD, MPD, normalisation, dénormalisation, modélisation aggregate-driven en NoSQL.
+sidebar:
+  order: 5
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ObjectiveList from '../../../components/ObjectiveList.astro';
+import Quiz from '../../../components/Quiz.astro';
+import { Aside } from '@astrojs/starlight/components';
+import Level from '../../../components/Level.astro';
+
+> 🎯 **Objectif** : passer d'un domaine métier à un schéma de base saine, sans tomber dans les pièges classiques. Comprendre quand normaliser, quand dénormaliser, et quand un modèle NoSQL est plus adapté.
+
+<ObjectiveList items={[
+  "Construire un MCD (entités, associations, cardinalités) à partir d'un brief",
+  "Passer du MCD au MLD (clés étrangères) puis au MPD (types SQL concrets)",
+  "Appliquer 1NF, 2NF, 3NF — et savoir quand violer ces règles",
+  "Choisir entre relationnel et NoSQL document",
+  "Modéliser un domaine NoSQL en aggregate-driven"
+]} />
+
+<Level value="débutant" reading="10 min" prereq="aucun (parallélisable avec axe 1)" />
+
+
+## Les 3 niveaux MERISE
+
+La méthode MERISE (française, années 80) reste utile par sa progression :
+
+| Niveau | Concerne | Exemple |
+|--------|----------|---------|
+| **MCD** Modèle Conceptuel | Le métier, abstrait | « Un Client passe des Commandes » |
+| **MLD** Modèle Logique | Tables et clés étrangères | `CLIENT(id), COMMANDE(id, client_id)` |
+| **MPD** Modèle Physique | SQL concret avec types | `client_id INT NOT NULL REFERENCES client(id)` |
+
+### Le MCD avec Mermaid
+
+Mermaid ne dessine pas du MERISE pur, mais le format **ER diagram** est très proche :
+
+<Diagram
+  caption="MCD — système de bibliothèque"
+  code={`
+    erDiagram
+      MEMBRE ||--o{ EMPRUNT : effectue
+      LIVRE ||--o{ EMPRUNT : concerne
+      AUTEUR ||--o{ LIVRE : ecrit
+      CATEGORIE ||--o{ LIVRE : classe
+
+      MEMBRE {
+        int id PK
+        string nom
+        string email
+        date inscription
+      }
+      LIVRE {
+        int id PK
+        string isbn UK
+        string titre
+        int auteur_id FK
+        int categorie_id FK
+      }
+      EMPRUNT {
+        int id PK
+        int membre_id FK
+        int livre_id FK
+        date emprunte_le
+        date rendu_le
+      }
+      AUTEUR {
+        int id PK
+        string nom
+      }
+      CATEGORIE {
+        int id PK
+        string nom UK
+      }
+  `}
+/>
+
+### Cardinalités — vocabulaire à maîtriser
+
+Notations Mermaid pour les associations (lecture gauche → droite) :
+
+- **un et un seul** des deux côtés : `pipe pipe -- pipe pipe` (en Mermaid : <code>&vert;&vert;--&vert;&vert;</code>)
+- **un, et zéro ou plusieurs** : <code>&vert;&vert;--o&lcub;</code>
+- **zéro ou plusieurs** des deux côtés (table de jointure) : <code>&rcub;o--o&lcub;</code>
+- **un, et zéro ou un** : <code>&vert;&vert;--o&vert;</code>
+
+> Astuce : dans la pratique, on lit les associations dans les deux sens. Une cardinalité « 1-N » revient à dire « 1 d'un côté, 0..n de l'autre ».
+
+**Toujours questionner les cardinalités** :
+- Un livre a-t-il **un seul** auteur ? (les co-auteurs disent non)
+- Un membre peut-il **emprunter plusieurs fois le même livre** ? (oui généralement, à des dates différentes)
+- Une catégorie peut-elle être **vide** ? (oui)
+
+## Du MCD au MLD
+
+Trois règles de transformation :
+
+### 1. Une entité → une table
+
+Chaque entité du MCD devient une table avec sa clé primaire.
+
+```sql
+CREATE TABLE membre (
+  id SERIAL PRIMARY KEY,
+  nom TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  inscription DATE NOT NULL DEFAULT CURRENT_DATE
+);
+```
+
+### 2. Une association 1-N → clé étrangère côté N
+
+```sql
+-- Un livre a UN auteur, un auteur a PLUSIEURS livres
+ALTER TABLE livre ADD COLUMN auteur_id INT NOT NULL REFERENCES auteur(id);
+```
+
+### 3. Une association N-N → table de jointure
+
+```sql
+-- Un livre a PLUSIEURS auteurs, un auteur a PLUSIEURS livres
+CREATE TABLE livre_auteur (
+  livre_id INT NOT NULL REFERENCES livre(id),
+  auteur_id INT NOT NULL REFERENCES auteur(id),
+  contribution TEXT,  -- on peut ajouter des attributs à la jointure
+  PRIMARY KEY (livre_id, auteur_id)
+);
+```
+
+## La normalisation — 1NF, 2NF, 3NF
+
+### 1NF — Atomicité
+
+**Chaque cellule contient une valeur atomique.** Pas de listes ou tableaux dans un champ.
+
+| ❌ Non 1NF | ✅ 1NF |
+|-----------|--------|
+| `tags: "js, ts, web"` | `tags(post_id, tag)` table de jointure |
+| `phones: "06... ; 07..."` | `phone(member_id, number)` |
+
+### 2NF — Pas de dépendance partielle
+
+**Chaque attribut non-clé dépend de la clé entière.** Pertinent uniquement pour les clés composites.
+
+```sql
+-- ❌ Non 2NF : nom_produit dépend de produit_id seul
+CREATE TABLE order_line (
+  order_id INT,
+  produit_id INT,
+  nom_produit TEXT,  -- ← dépend de produit_id, pas de la clé composite
+  quantite INT,
+  PRIMARY KEY (order_id, produit_id)
+);
+
+-- ✅ 2NF
+CREATE TABLE order_line (
+  order_id INT,
+  produit_id INT,
+  quantite INT,
+  PRIMARY KEY (order_id, produit_id)
+);
+-- nom_produit reste dans la table produit
+```
+
+### 3NF — Pas de dépendance transitive
+
+**Aucun attribut non-clé n'en détermine un autre.**
+
+```sql
+-- ❌ Non 3NF : ville détermine code_postal, mais ce n'est pas la clé
+CREATE TABLE membre (
+  id SERIAL PRIMARY KEY,
+  nom TEXT,
+  ville TEXT,
+  code_postal TEXT  -- ← dépend de ville, pas de id
+);
+
+-- ✅ 3NF
+CREATE TABLE ville (
+  nom TEXT PRIMARY KEY,
+  code_postal TEXT
+);
+CREATE TABLE membre (
+  id SERIAL PRIMARY KEY,
+  nom TEXT,
+  ville_nom TEXT REFERENCES ville(nom)
+);
+```
+
+### En pratique
+
+**3NF est la cible** pour 95 % des projets web. Au-delà (BCNF, 4NF, 5NF), c'est rarement utile sauf pour des datawarehouses académiques.
+
+## La dénormalisation maîtrisée
+
+Parfois tu **violes** la 3NF intentionnellement, pour la performance.
+
+### Cas 1 — Compteur dénormalisé
+
+```sql
+-- Au lieu de SELECT COUNT(*) à chaque affichage de profil
+CREATE TABLE author (
+  id SERIAL PRIMARY KEY,
+  name TEXT,
+  posts_count INT DEFAULT 0  -- ← dénormalisé, mais évite des COUNT()
+);
+```
+
+**Coût** : il faut maintenir le compteur à jour avec un trigger ou une transaction.
+
+### Cas 2 — Champ calculé matérialisé
+
+```sql
+-- Vue matérialisée pour les top vendeurs
+CREATE MATERIALIZED VIEW top_sellers AS
+SELECT seller_id, SUM(amount) AS total
+FROM orders
+WHERE status = 'completed'
+GROUP BY seller_id
+ORDER BY total DESC;
+
+REFRESH MATERIALIZED VIEW top_sellers;  -- périodiquement
+```
+
+### Règle d'or
+
+> Normalize until it hurts, denormalize until it works.
+
+D'abord 3NF par défaut. Si une requête est lente, **mesure** (EXPLAIN) avant de dénormaliser. La dénormalisation prématurée est aussi mauvaise que l'optimisation prématurée.
+
+## Modélisation NoSQL — l'approche aggregate-driven
+
+En NoSQL document (MongoDB, Firestore, DynamoDB), tu modélises **par cas d'accès**, pas par entités.
+
+### Question centrale
+
+> *« Quelles sont mes requêtes principales, et combien de fois par seconde ? »*
+
+### Exemple — un blog
+
+**Approche relationnelle (3NF)** :
+
+```
+posts(id, title, body, author_id)
+authors(id, name)
+comments(id, post_id, body, author_name)
+tags(id, name)
+post_tags(post_id, tag_id)
+```
+
+Pour afficher un post avec ses commentaires et tags : 3 requêtes minimum (ou 1 grosse jointure).
+
+**Approche aggregate (NoSQL)** :
+
+```js
+// Collection "posts"
+{
+  _id: "abc",
+  title: "Mon post",
+  body: "...",
+  author: { id: "u42", name: "Alice" },   // dénormalisé
+  tags: ["js", "web"],                     // tableau imbriqué
+  comments: [
+    { author: "Bob", body: "Super !", at: "2026-01-10" },
+    ...
+  ]
+}
+```
+
+Une seule requête `db.posts.findOne({_id})` te donne tout.
+
+### Trade-offs NoSQL
+
+✅ Lectures rapides (1 requête).
+✅ Bon pour les agrégats qui changent ensemble.
+❌ Si l'auteur change de nom, il faut le mettre à jour dans **tous les posts** (write fan-out).
+❌ Recherches transverses (« tous les commentaires d'un user ») peuvent demander un index spécial ou de la duplication.
+
+### Aggregate Design — les 3 questions
+
+1. **Qui est l'agrégat racine ?** (Order, Post, Customer…) — la racine de la cohérence.
+2. **Qu'est-ce qui change ensemble ?** (Order + lignes = oui. Order + adresse client = non, l'adresse vit ailleurs).
+3. **Qu'est-ce qu'on lit ensemble ?** Si la réponse est *« toujours »*, dénormaliser dans l'agrégat.
+
+<Aside type="tip" title="Quand SQL, quand NoSQL ?">
+| | SQL (Postgres) | NoSQL (Mongo, Firestore) |
+|---|----|----|
+| Schéma | Rigide, vérifié | Flexible |
+| Cohérence | ACID transverse | Souvent par document |
+| Jointures | Natives, performantes | À éviter ou limitées |
+| Requêtes ad-hoc | Excellentes | Limitées si pas d'index |
+| Volumes massifs | Scaling vertical + sharding manuel | Sharding natif |
+
+**Verdict 2026** : pour 80 % des projets web, **PostgreSQL est le bon défaut**. Il a JSONB, full-text search, partitionnement — il fait largement le travail d'un Mongo « moderne ». Choisis NoSQL pour des cas spécifiques (volumes massifs, schéma vraiment instable, cas d'accès très simples).
+</Aside>
+
+## Auto-évaluation
+
+<Quiz
+  question="Tu modélises une table users avec une colonne `phone_numbers TEXT` contenant des numéros séparés par virgule. Cela viole quelle forme normale ?"
+  options={[
+    '1NF — pas d\'atomicité (plusieurs valeurs dans une cellule)',
+    '2NF',
+    '3NF',
+    'Aucune — c\'est une optimisation'
+  ]}
+  answerIndex={0}
+  explanation="1NF exige une valeur atomique par cellule. Stocker 'XXX, YYY' dans un champ texte rend impossible : recherche par numéro, contrainte d'unicité, validation… Préfère une table phone_number(user_id, number)."
+/>
+
+<Quiz
+  question="Tu vois un compteur posts_count dans la table author. Que penses-tu ?"
+  options={[
+    'C\'est une violation de 3NF, à supprimer immédiatement',
+    'C\'est une dénormalisation potentiellement justifiée pour la perf — elle doit être maintenue (trigger ou transaction)',
+    'C\'est obligatoire en SQL',
+    'Cela n\'a rien à voir avec la normalisation'
+  ]}
+  answerIndex={1}
+  explanation="C'est une dénormalisation classique. Pertinente si on lit ce compteur 1000× plus souvent qu'on insère un post. Le coût : il faut maintenir la cohérence (trigger ou logique applicative dans une transaction)."
+/>
+
+<Quiz
+  question="Tu construis un blog avec posts, commentaires, tags. 90 % des requêtes affichent un post avec ses commentaires. Quelle modélisation ?"
+  options={[
+    '5 tables relationnelles strictement normalisées',
+    'Document NoSQL avec post + commentaires imbriqués + tags en tableau',
+    'PostgreSQL avec colonne JSONB pour tout',
+    'Cela dépend des contraintes : volumes, recherches transverses, équipe — il faut peser les options'
+  ]}
+  answerIndex={3}
+  explanation="Pas de réponse universelle. Petit blog perso : NoSQL document marche très bien. Plateforme avec recherche full-text, modération, threads complexes : Postgres + JSONB pour les commentaires peut combiner les deux mondes. La question à poser : volumes, requêtes secondaires, contraintes de cohérence."
+/>
+
+## Pour aller plus loin
+
+- *Database Design for Mere Mortals* — Michael Hernandez (le manuel accessible)
+- *Designing Data-Intensive Applications* — Martin Kleppmann (le bouquin de référence)
+- *NoSQL Distilled* — Pramod Sadalage & Martin Fowler
+- *PostgreSQL Up and Running* — Regina Obe & Leo Hsu
+
+---
+
+**Suite** : [3.6 — UX/UI & maquettage](/03-analyse-conception/06-ux-ui/) — concevoir l'interface avant le code.
