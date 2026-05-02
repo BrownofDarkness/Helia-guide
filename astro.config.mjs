@@ -3,7 +3,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
-  site: 'https://helia.local',
+  site: 'https://helia-52w.pages.dev',
   integrations: [
     starlight({
       title: 'Helia',
