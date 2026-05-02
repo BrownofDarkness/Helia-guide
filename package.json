@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
-    "prebuild": "node scripts/build-exercise-zips.mjs",
+    "prebuild": "node scripts/build-exercise-zips.mjs && node scripts/generate-og-image.mjs",
     "build": "astro check && astro build",
     "preview": "astro preview",
     "astro": "astro",

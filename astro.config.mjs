@@ -24,6 +24,27 @@ export default defineConfig({
           tag: 'link',
           attrs: { rel: 'icon', href: '/favicon.svg?v=2', type: 'image/svg+xml' },
         },
+        // OG image — carte riche au partage social (Twitter/X, LinkedIn, Discord, ...)
+        {
+          tag: 'meta',
+          attrs: { property: 'og:image', content: 'https://helia-52w.pages.dev/og-image.png' },
+        },
+        {
+          tag: 'meta',
+          attrs: { property: 'og:image:width', content: '1200' },
+        },
+        {
+          tag: 'meta',
+          attrs: { property: 'og:image:height', content: '630' },
+        },
+        {
+          tag: 'meta',
+          attrs: { property: 'og:image:alt', content: 'Helia — guide francophone du développeur web' },
+        },
+        {
+          tag: 'meta',
+          attrs: { name: 'twitter:image', content: 'https://helia-52w.pages.dev/og-image.png' },
+        },
       ],
       lastUpdated: true,
       pagination: true,
