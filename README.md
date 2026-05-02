@@ -1,5 +1,13 @@
 # Helia — guide du développeur web
 
+[![License: MIT](https://img.shields.io/github/license/BrownofDarkness/Helia-guide?color=blue)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/BrownofDarkness/Helia-guide)](https://github.com/BrownofDarkness/Helia-guide/commits/main)
+[![Stars](https://img.shields.io/github/stars/BrownofDarkness/Helia-guide?style=flat&logo=github)](https://github.com/BrownofDarkness/Helia-guide/stargazers)
+[![Astro](https://img.shields.io/badge/Astro-6-FF5D01?logo=astro&logoColor=white)](https://astro.build)
+[![Starlight](https://img.shields.io/badge/Starlight-0.38-7E8FFF?logo=astro&logoColor=white)](https://starlight.astro.build)
+[![Langue](https://img.shields.io/badge/langue-Français-blue)](#)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/BrownofDarkness/Helia-guide/pulls)
+
 **Helia** est un site statique pédagogique en français qui couvre l'ensemble du développement web moderne — des fondations informatiques jusqu'à la mise en production et la carrière. **17 axes**, **5 parcours fil-rouge** narratifs, **280 termes** au glossaire, **32 pièges réels** documentés. Construit avec **Astro + Starlight**.
 
 ## Démarrage rapide
