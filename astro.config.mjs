@@ -4,6 +4,12 @@ import starlight from '@astrojs/starlight';
 
 export default defineConfig({
   site: 'https://helia-52w.pages.dev',
+  // Pré-charge les pages au survol des liens — élimine le FOUC du HTML
+  // qui apparaît avant le CSS lors des transitions ClientRouter.
+  prefetch: {
+    prefetchAll: true,
+    defaultStrategy: 'hover',
+  },
   integrations: [
     starlight({
       title: 'Helia',
