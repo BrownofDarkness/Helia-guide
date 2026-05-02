@@ -54,25 +54,29 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" widt
   <!-- TEXTE à droite -->
   <g font-family="'Segoe UI', Roboto, system-ui, -apple-system, sans-serif" fill="#ffffff">
     <!-- Helia (très gros) -->
-    <text x="510" y="270" font-size="128" font-weight="700" letter-spacing="-3">Helia</text>
+    <text x="510" y="230" font-size="128" font-weight="700" letter-spacing="-3">Helia</text>
 
     <!-- Tagline -->
-    <text x="510" y="332" font-size="34" font-weight="400" fill="#a3a3a3">Guide francophone du développeur web</text>
+    <text x="510" y="290" font-size="34" font-weight="400" fill="#a3a3a3">Guide francophone du développeur web</text>
 
     <!-- Stats — séparateurs middle dot -->
-    <text x="510" y="412" font-size="24" font-weight="500" fill="#737373" letter-spacing="0.5">17 axes  ·  5 parcours  ·  280 termes  ·  32 pièges</text>
+    <text x="510" y="362" font-size="24" font-weight="500" fill="#737373" letter-spacing="0.5">17 axes  ·  5 parcours  ·  280 termes  ·  32 pièges</text>
 
-    <!-- 5 dots des personas -->
+    <!-- 5 dots des personas + noms juste en dessous -->
     <g>
-      <circle cx="520" cy="488" r="11" fill="#c97744"/>
-      <circle cx="552" cy="488" r="11" fill="#4a8aaf"/>
-      <circle cx="584" cy="488" r="11" fill="#5a9469"/>
-      <circle cx="616" cy="488" r="11" fill="#b974a8"/>
-      <circle cx="648" cy="488" r="11" fill="#7569a5"/>
+      <circle cx="520" cy="430" r="10" fill="#c97744"/>
+      <circle cx="552" cy="430" r="10" fill="#4a8aaf"/>
+      <circle cx="584" cy="430" r="10" fill="#5a9469"/>
+      <circle cx="616" cy="430" r="10" fill="#b974a8"/>
+      <circle cx="648" cy="430" r="10" fill="#7569a5"/>
     </g>
+    <text x="510" y="470" font-size="16" font-weight="400" fill="#525252" letter-spacing="0.3">Marie  ·  Hugo  ·  Sami  ·  Léa  ·  Yanis</text>
 
-    <!-- Ligne sous les dots : noms personas -->
-    <text x="510" y="548" font-size="18" font-weight="400" fill="#525252" letter-spacing="0.3">Marie  ·  Hugo  ·  Sami  ·  Léa  ·  Yanis</text>
+    <!-- CTA — bouton ambre arrondi qui appelle au clic -->
+    <g>
+      <rect x="510" y="510" width="265" height="58" rx="29" fill="#fbbf24"/>
+      <text x="642" y="548" font-size="24" font-weight="700" fill="#0a0a0d" text-anchor="middle" letter-spacing="0.2">Démarrer  →</text>
+    </g>
   </g>
 
   <!-- URL bas-droite (signature discrète) -->
